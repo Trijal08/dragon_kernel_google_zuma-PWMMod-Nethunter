@@ -3,5 +3,8 @@ M ?= $(shell pwd)
 
 KBUILD_OPTIONS := CONFIG_NITROUS=m
 
+include $(KERNEL_SRC)/../gs/kernel/device-modules/Makefile.include
+
 modules modules_install clean:
-	$(MAKE) -C $(KERNEL_SRC) M=$(M) W=1 $(KBUILD_OPTIONS) $(@)
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) W=1 \
+	$(KBUILD_OPTIONS) EXTRA_CFLAGS="$(EXTRA_CFLAGS)" KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)" $(@)
