@@ -247,6 +247,7 @@ static int nitrous_proc_show(struct seq_file *m, void *v)
 	struct nitrous_lpm_proc *data = m->private;
 	struct nitrous_bt_lpm *lpm = data->lpm;
 	ktime_t timestamp;
+	unsigned int ret;
 
 	switch (data->operation) {
 	case PROC_BTWAKE:
@@ -264,7 +265,11 @@ static int nitrous_proc_show(struct seq_file *m, void *v)
 			   (lpm->is_suspended ? "asleep" : "awake"));
 		break;
 	case PROC_TIMESYNC:
-		kfifo_out(&lpm->timestamp_queue, &timestamp, sizeof(ktime_t));
+		ret = kfifo_out(&lpm->timestamp_queue, &timestamp, sizeof(ktime_t));
+		if (ret != sizeof(ktime_t)) {
+			dev_err(lpm->dev, "failed to get the timestamp, ret=%u\n", ret);
+			return -EINVAL;
+		}
 		seq_printf(m, "%lld", ktime_to_us(timestamp));
 		break;
 	default:
