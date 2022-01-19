@@ -3,7 +3,7 @@ M ?= $(shell pwd)
 
 KBUILD_OPTIONS := CONFIG_NITROUS=m
 
-include $(KERNEL_SRC)/../gs/kernel/device-modules/Makefile.include
+include $(KERNEL_SRC)/../gs/google-modules/soc-modules/Makefile.include
 
 modules modules_install clean:
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) W=1 \
