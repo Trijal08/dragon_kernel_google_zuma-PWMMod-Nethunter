@@ -9,7 +9,7 @@ M ?= $(shell pwd)
 KBUILD_OPTIONS += CONFIG_NFC_ST21NFC=m CONFIG_NFC_ST21NFC_NO_CRYSTAL=y \
 		  CONFIG_ESE_ST54=m CONFIG_ESE_ST33=m
 
-include $(KERNEL_SRC)/../gs/kernel/device-modules/Makefile.include
+include $(KERNEL_SRC)/../gs/google-modules/soc-modules/Makefile.include
 
 modules modules_install clean:
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) W=1 \
