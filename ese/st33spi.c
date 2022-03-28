@@ -35,7 +35,7 @@
 #include <linux/of_gpio.h>
 
 #include <linux/uaccess.h>
-#include <linux/platform_data/spi-s3c64xx.h>
+#include <linux/platform_data/spi-s3c64xx-gs.h>
 
 #undef ST33NFC_QCOM
 
