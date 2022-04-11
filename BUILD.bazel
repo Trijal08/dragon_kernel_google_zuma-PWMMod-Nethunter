@@ -12,7 +12,7 @@ filegroup(
         "*.h",
     ]),
     visibility = [
-        "//gs/google-modules/aoc:__subpackages__",
+        "//private/google-modules/aoc:__subpackages__",
     ],
 )
 
@@ -23,6 +23,6 @@ filegroup(
         "*.h",
     ]),
     visibility = [
-        "//gs/google-modules/aoc:__subpackages__",
+        "//private/google-modules/aoc:__subpackages__",
     ],
 )
