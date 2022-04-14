@@ -247,6 +247,7 @@ static int nitrous_proc_show(struct seq_file *m, void *v)
 	struct nitrous_lpm_proc *data = m->private;
 	struct nitrous_bt_lpm *lpm = data->lpm;
 	ktime_t timestamp;
+	unsigned int ret;
 
 	switch (data->operation) {
 	case PROC_BTWAKE:
@@ -264,7 +265,11 @@ static int nitrous_proc_show(struct seq_file *m, void *v)
 			   (lpm->is_suspended ? "asleep" : "awake"));
 		break;
 	case PROC_TIMESYNC:
-		kfifo_out(&lpm->timestamp_queue, &timestamp, sizeof(ktime_t));
+		ret = kfifo_out(&lpm->timestamp_queue, &timestamp, sizeof(ktime_t));
+		if (ret != sizeof(ktime_t)) {
+			dev_err(lpm->dev, "failed to get the timestamp, ret=%u\n", ret);
+			return -EINVAL;
+		}
 		seq_printf(m, "%lld", ktime_to_us(timestamp));
 		break;
 	default:
@@ -275,13 +280,13 @@ static int nitrous_proc_show(struct seq_file *m, void *v)
 
 static int nitrous_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, nitrous_proc_show, PDE_DATA(inode));
+	return single_open(file, nitrous_proc_show, pde_data(inode));
 }
 
 static ssize_t nitrous_proc_write(struct file *file, const char *buf,
 	size_t count, loff_t *pos)
 {
-	struct nitrous_lpm_proc *data = PDE_DATA(file_inode(file));
+	struct nitrous_lpm_proc *data = pde_data(file_inode(file));
 	struct nitrous_bt_lpm *lpm = data->lpm;
 	struct timespec64 ts;
 	char lbuf[4];
