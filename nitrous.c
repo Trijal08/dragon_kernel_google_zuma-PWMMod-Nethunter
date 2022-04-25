@@ -266,10 +266,8 @@ static int nitrous_proc_show(struct seq_file *m, void *v)
 		break;
 	case PROC_TIMESYNC:
 		ret = kfifo_out(&lpm->timestamp_queue, &timestamp, sizeof(ktime_t));
-		if (ret != sizeof(ktime_t)) {
-			dev_err(lpm->dev, "failed to get the timestamp, ret=%u\n", ret);
-			return -EINVAL;
-		}
+		if (ret != sizeof(ktime_t))
+			timestamp = 0;
 		seq_printf(m, "%lld", ktime_to_us(timestamp));
 		break;
 	default:
