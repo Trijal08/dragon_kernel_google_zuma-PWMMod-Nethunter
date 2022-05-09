@@ -290,13 +290,13 @@ static int nitrous_proc_show(struct seq_file *m, void *v)
 
 static int nitrous_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, nitrous_proc_show, pde_data(inode));
+	return single_open(file, nitrous_proc_show, PDE_DATA(inode));
 }
 
 static ssize_t nitrous_proc_write(struct file *file, const char *buf,
 	size_t count, loff_t *pos)
 {
-	struct nitrous_lpm_proc *data = pde_data(file_inode(file));
+	struct nitrous_lpm_proc *data = PDE_DATA(file_inode(file));
 	struct nitrous_bt_lpm *lpm = data->lpm;
 	struct timespec64 ts;
 	char lbuf[4];
