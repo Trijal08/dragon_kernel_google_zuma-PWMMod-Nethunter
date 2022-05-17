@@ -11,7 +11,7 @@ load("//build/kleaf:kernel.bzl", "kernel_module")
 kernel_module(
     name = "gchips.cloudripper",
     outs = [
-        "bigocean.ko",
+        "bigwave.ko",
     ],
     kernel_build = "//private/gs-google:cloudripper",
     visibility = [

@@ -68,10 +68,12 @@ static inline void bigo_set_freq(struct bigo_core *core, u32 freq)
 	if (core->debugfs.set_freq)
 		freq = core->debugfs.set_freq;
 
+#if 0
 	if (!exynos_pm_qos_request_active(&core->pm.qos_bigo))
 		exynos_pm_qos_add_request(&core->pm.qos_bigo, PM_QOS_BO_THROUGHPUT, freq);
 	else
 		exynos_pm_qos_update_request(&core->pm.qos_bigo, freq);
+#endif
 }
 
 static void bigo_scale_freq(struct bigo_core *core)
