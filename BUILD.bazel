@@ -6,22 +6,28 @@
 # unless you have coordinated with the team managing the Soong to Bazel
 # migration.
 
-load("//build/kleaf:kernel.bzl", "kernel_module")
+load("//build/kernel/kleaf:kernel.bzl", "kernel_module")
 
 kernel_module(
     name = "nfc.slider",
     srcs = glob([
         "**/*.c",
         "**/*.h",
-        "ese/Makefile",
-    ]),
+        "Kbuild",
+        "ese/Kbuild",
+    ]) + [
+        "//gs/google-modules/soc-modules:gs101_soc_headers",
+    ],
     outs = [
         "ese/st33spi.ko",
         "ese/st54spi.ko",
         "st21nfc.ko",
     ],
-    kernel_build = "//private/gs-google:slider",
+    kernel_build = "//gs/google-modules/soc-modules:slider",
+    kernel_module_deps = [
+        "//gs/google-modules/soc-modules:gs101_soc",
+    ],
     visibility = [
-        "//private/gs-google:__pkg__",
+        "//gs/google-modules/soc-modules:__pkg__",
     ],
 )
