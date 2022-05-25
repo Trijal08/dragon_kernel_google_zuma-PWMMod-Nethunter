@@ -35,7 +35,7 @@
 #include <linux/of_gpio.h>
 
 #include <linux/uaccess.h>
-#include <linux/platform_data/spi-s3c64xx.h>
+#include <linux/platform_data/spi-s3c64xx-gs.h>
 
 #undef ST33NFC_QCOM
 
@@ -168,11 +168,12 @@ static ssize_t st33spi_state_show(struct device *dev,
 		return -ENODEV;
 
 	st33spi = spi_get_drvdata(spi);
-	if (st33spi == NULL)
+	if (st33spi == NULL || st33spi->spi == NULL ||
+	    st33spi->spi->cs_gpiod == NULL)
 		return -ENODEV;
 
 	return scnprintf(buf, PAGE_SIZE, "state:%d, st33spi_cs:%d\n",
-			st33spi->spi_state, gpio_get_value(st33spi->st33spi_csinfo->line));
+			st33spi->spi_state, gpiod_get_raw_value_cansleep(st33spi->spi->cs_gpiod));
 }
 
 static ssize_t st33spi_state_store(struct device *dev,
@@ -287,7 +288,10 @@ static ssize_t st33spi_read(struct file *filp, char __user *buf, size_t count,
 
 	st33spi = filp->private_data;
 
-	if (st33spi == NULL || !st33spi->spi_state) {
+	if (st33spi == NULL)
+		return -ENODEV;
+
+	if (!st33spi->spi_state) {
 		dev_warn(&st33spi->spi->dev, "st33spi: spi is not enabled, abort read process\n");
 		return -EFAULT;
 	}
@@ -326,7 +330,10 @@ static ssize_t st33spi_write(struct file *filp, const char __user *buf,
 
 	st33spi = filp->private_data;
 
-	if (st33spi == NULL || !st33spi->spi_state) {
+	if (st33spi == NULL)
+		return -ENODEV;
+
+	if (!st33spi->spi_state) {
 		dev_warn(&st33spi->spi->dev, "st33spi: spi is not enabled, abort write process\n");
 		return -EFAULT;
 	}
@@ -797,7 +804,7 @@ static long st33spi_compat_ioctl(struct file *filp, unsigned int cmd,
 
 static int st33spi_open(struct inode *inode, struct file *filp)
 {
-	struct st33spi_data *st33spi;
+	struct st33spi_data *st33spi = NULL;
 	int status = -ENXIO;
 
 	mutex_lock(&device_list_lock);
@@ -809,13 +816,16 @@ static int st33spi_open(struct inode *inode, struct file *filp)
 		}
 	}
 
+	if (st33spi == NULL)
+		return -ENODEV;
+
 	if (status) {
 		dev_dbg(&st33spi->spi->dev, "st33spi: nothing for minor %d\n",
 			iminor(inode));
 		goto err_find_dev;
 	}
 
-	if (st33spi == NULL || !st33spi->spi_state) {
+	if (!st33spi->spi_state) {
 		dev_warn(&st33spi->spi->dev,
 				"st33spi: spi is not enabled, abort open process\n");
 		mutex_unlock(&device_list_lock);
@@ -1161,7 +1171,7 @@ static int st33spi_probe(struct spi_device *spi)
 	return status;
 }
 
-static int st33spi_remove(struct spi_device *spi)
+static void st33spi_remove(struct spi_device *spi)
 {
 	struct st33spi_data *st33spi = spi_get_drvdata(spi);
 
@@ -1184,8 +1194,6 @@ static int st33spi_remove(struct spi_device *spi)
 #endif
 	}
 	mutex_unlock(&device_list_lock);
-
-	return 0;
 }
 
 static struct spi_driver st33spi_spi_driver = {
