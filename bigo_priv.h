@@ -41,7 +41,7 @@ struct bufinfo {
 struct bigo_opp {
 	struct list_head list;
 	u32 freq_khz;
-	u32 load_pps;
+	u64 load_pps;
 };
 
 struct bigo_bw {
@@ -57,7 +57,7 @@ struct power_manager {
 	struct exynos_pm_qos_request qos_bigo;
 	struct list_head opps;
 	struct list_head bw;
-	u32 max_load;
+	u64 max_load;
 };
 
 struct slc_manager {

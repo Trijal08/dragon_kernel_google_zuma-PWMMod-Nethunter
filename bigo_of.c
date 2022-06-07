@@ -23,10 +23,10 @@ static int bigo_of_get_resource(struct bigo_core *core)
 	struct resource *res;
 	int rc = 0;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "bo");
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "bw");
 	if (IS_ERR_OR_NULL(res)) {
 		rc = PTR_ERR(res);
-		pr_err("Failed to find bo register base: %d\n", rc);
+		pr_err("Failed to find bw register base: %d\n", rc);
 		goto err;
 	}
 	core->base = devm_ioremap_resource(&pdev->dev, res);
@@ -34,13 +34,15 @@ static int bigo_of_get_resource(struct bigo_core *core)
 		rc = PTR_ERR(core->base);
 		if (rc == 0)
 			rc = -EIO;
-		pr_err("Failed to map bo register base: %d\n", rc);
+		pr_err("Failed to map bw register base: %d\n", rc);
 		core->base = NULL;
 		goto err;
 	}
 	core->regs_size = res->end - res->start + 1;
 	core->paddr = (phys_addr_t)res->start;
 
+	/* TODO ON SILICON*/
+	#if 0
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ssmt_bo_pid");
 	if (IS_ERR_OR_NULL(res)) {
 		rc = PTR_ERR(res);
@@ -53,7 +55,7 @@ static int bigo_of_get_resource(struct bigo_core *core)
 			PTR_ERR(core->slc.ssmt_pid_base));
 		core->slc.ssmt_pid_base = NULL;
 	}
-
+	#endif
 	core->irq = platform_get_irq(pdev, 0);
 
 	if (core->irq < 0) {
@@ -182,6 +184,8 @@ int bigo_of_dt_parse(struct bigo_core *core)
 		goto err_get_res;
 	}
 
+	/* TODO ON SILICON*/
+	#if 0
 	rc = bigo_of_parse_opp_table(core);
 	if (rc < 0) {
 		pr_err("failed to parse bigocean OPP table\n");
@@ -199,7 +203,7 @@ int bigo_of_dt_parse(struct bigo_core *core)
 		rc = core->pm.bwindex;
 		goto err_bwindex;
 	}
-
+	#endif
 	return rc;
 err_bwindex:
 	bigo_of_remove_bw_table(core);
