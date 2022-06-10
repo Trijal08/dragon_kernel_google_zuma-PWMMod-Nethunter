@@ -41,8 +41,7 @@ static int bigo_of_get_resource(struct bigo_core *core)
 	core->regs_size = res->end - res->start + 1;
 	core->paddr = (phys_addr_t)res->start;
 
-	/* TODO ON SILICON*/
-	#if 0
+#ifndef BW_BRINGUP
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ssmt_bo_pid");
 	if (IS_ERR_OR_NULL(res)) {
 		rc = PTR_ERR(res);
@@ -55,7 +54,7 @@ static int bigo_of_get_resource(struct bigo_core *core)
 			PTR_ERR(core->slc.ssmt_pid_base));
 		core->slc.ssmt_pid_base = NULL;
 	}
-	#endif
+#endif
 	core->irq = platform_get_irq(pdev, 0);
 
 	if (core->irq < 0) {
@@ -78,6 +77,7 @@ static void bigo_of_remove_opp_table(struct bigo_core *core)
 	}
 }
 
+#ifndef BW_BRINGUP
 static void bigo_of_remove_bw_table(struct bigo_core *core)
 {
 	struct bigo_bw *bw, *tmp;
@@ -173,6 +173,7 @@ err_entry:
 err_add_table:
 	return rc;
 }
+#endif
 
 int bigo_of_dt_parse(struct bigo_core *core)
 {
@@ -184,8 +185,7 @@ int bigo_of_dt_parse(struct bigo_core *core)
 		goto err_get_res;
 	}
 
-	/* TODO ON SILICON*/
-	#if 0
+#ifndef BW_BRINGUP
 	rc = bigo_of_parse_opp_table(core);
 	if (rc < 0) {
 		pr_err("failed to parse bigocean OPP table\n");
@@ -203,13 +203,13 @@ int bigo_of_dt_parse(struct bigo_core *core)
 		rc = core->pm.bwindex;
 		goto err_bwindex;
 	}
-	#endif
 	return rc;
 err_bwindex:
 	bigo_of_remove_bw_table(core);
 err_parse_bw_table:
 	bigo_of_remove_opp_table(core);
 err_parse_opp_table:
+#endif
 err_get_res:
 	return rc;
 }

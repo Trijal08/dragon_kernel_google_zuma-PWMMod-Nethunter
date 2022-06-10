@@ -21,6 +21,7 @@
 #include <soc/google/pt.h>
 #endif
 
+#define BW_BRINGUP
 
 #define AVG_CNT 30
 #define PEAK_CNT 5

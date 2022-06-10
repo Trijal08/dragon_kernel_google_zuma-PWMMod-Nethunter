@@ -645,14 +645,13 @@ static int bigo_probe(struct platform_device *pdev)
 		goto err_io;
 	}
 
-	/* TODO ON SILICON*/
-	#if 0
+#ifndef BW_BRINGUP
 	rc = iommu_register_device_fault_handler(&pdev->dev, bigo_iommu_fault_handler, core);
 	if (rc) {
 		pr_err("failed to register iommu fault handler: %d\n", rc);
 		goto err_fault_handler;
 	}
-	#endif
+#endif
 	rc = bigo_pt_client_register(pdev->dev.of_node, core);
 	if (rc == -EPROBE_DEFER) {
 		pr_warn("pt_client returns -EPROBE_DEFER, try again later\n");
@@ -670,8 +669,10 @@ static int bigo_probe(struct platform_device *pdev)
 
 err_pt_client:
 	iommu_unregister_device_fault_handler(&pdev->dev);
+#ifndef BW_BRINGUP
 err_fault_handler:
 	pm_runtime_disable(&pdev->dev);
+#endif
 err_io:
 	bigo_of_dt_release(core);
 err_dt_parse:

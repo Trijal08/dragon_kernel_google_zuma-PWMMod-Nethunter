@@ -67,15 +67,15 @@ static inline void bigo_set_freq(struct bigo_core *core, u32 freq)
 {
 	if (core->debugfs.set_freq)
 		freq = core->debugfs.set_freq;
-	/* TODO ON SILICON*/
-	#if 0
+#ifndef BW_BRINGUP
 	if (!exynos_pm_qos_request_active(&core->pm.qos_bigo))
 		exynos_pm_qos_add_request(&core->pm.qos_bigo, PM_QOS_BO_THROUGHPUT, freq);
 	else
 		exynos_pm_qos_update_request(&core->pm.qos_bigo, freq);
-	#endif
+#endif
 }
 
+#ifndef BW_BRINGUP
 static void bigo_scale_freq(struct bigo_core *core)
 {
 	u64 load = bigo_get_total_load(core);
@@ -102,12 +102,12 @@ static int bigo_scale_bw(struct bigo_core *core)
 	bigo_get_bw(core, &bw);
 	return bts_update_bw(core->pm.bwindex, bw);
 }
+#endif
 
 void bigo_update_qos(struct bigo_core *core)
 {
 	pr_warn("%s is not supported\n", __func__);
-	/* TODO ON SILICON*/
-	#if 0
+#ifndef BW_BRINGUP
 	int rc;
 
 	mutex_lock(&core->lock);
@@ -118,7 +118,7 @@ void bigo_update_qos(struct bigo_core *core)
 
 	bigo_scale_freq(core);
 	mutex_unlock(&core->lock);
-	#endif
+#endif
 }
 
 /*
