@@ -36,6 +36,7 @@
 #define DEFAULT_FPS 60
 #define BIGO_SMC_ID 0xd
 #define BIGO_MAX_INST_NUM 16
+#define BIGO_HBD_BIT BIT(17)
 
 static int bigo_worker_thread(void *data);
 
@@ -147,6 +148,7 @@ static int bigo_open(struct inode *inode, struct file *file)
 	inst->height = DEFAULT_WIDTH;
 	inst->width = DEFAULT_HEIGHT;
 	inst->fps = DEFAULT_FPS;
+	inst->bpp = 1;
 	inst->core = core;
 	inst->job.regs_size = core->regs_size;
 	inst->job.regs = kzalloc(core->regs_size, GFP_KERNEL);
@@ -377,10 +379,19 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 		struct bigo_ioc_regs desc;
 		struct bigo_job *job = &inst->job;
 		long ret;
+		u32 hbd;
+		u32 bpp;
 
 		if (copy_regs_from_user(core, &desc, user_desc, job)) {
 			pr_err("Failed to copy regs from user\n");
 			return -EFAULT;
+		}
+
+		hbd = (((u32*)job->regs)[3]) & BIGO_HBD_BIT;
+		bpp = hbd ? 2:1;
+		if (bpp != inst->bpp) {
+			inst->bpp = bpp;
+			bigo_update_qos(core);
 		}
 
 		if(enqueue_prioq(core, inst)) {
