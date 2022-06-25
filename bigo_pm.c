@@ -115,12 +115,16 @@ static void bigo_scale_freq(struct bigo_core *core)
 static void bigo_get_bw(struct bigo_core *core, struct bts_bw *bw)
 {
 	u32 load = bigo_get_total_load(core);
-	struct bigo_bw *bandwidth = bigo_get_target_bw(core, load);
 
-	bw->read = bandwidth->rd_bw;
-	bw->write = bandwidth->wr_bw;
-	bw->peak = bandwidth->pk_bw;
-	pr_debug("BW: load: %llu, rd: %u, wr: %u, pk: %u", load, bw->read, bw->write, bw->peak);
+	if (load) {
+		struct bigo_bw *bandwidth = bigo_get_target_bw(core, load);
+		bw->read = bandwidth->rd_bw;
+		bw->write = bandwidth->wr_bw;
+		bw->peak = bandwidth->pk_bw;
+	} else {
+		memset(bw, 0, sizeof(*bw));
+	}
+	pr_debug("BW: load: %u, rd: %u, wr: %u, pk: %u", load, bw->read, bw->write, bw->peak);
 }
 
 static int bigo_scale_bw(struct bigo_core *core)
