@@ -24,7 +24,6 @@ int enqueue_prioq(struct bigo_core *core, struct bigo_inst *inst)
 	set_bit(inst->priority, &core->prioq.bitmap);
 	mutex_unlock(&core->prioq.lock);
 
-	kref_get(&inst->refcount);
 	wake_up(&core->worker);
 	return 0;
 }
@@ -61,6 +60,22 @@ exit:
 	mutex_unlock(&core->prioq.lock);
 	*job = j;
 	return *job != NULL;
+}
+
+void clear_job_from_prioq(struct bigo_core *core, struct bigo_inst *inst)
+{
+	int i;
+	struct bigo_job *curr, *next;
+	struct bigo_inst *curr_inst;
+	mutex_lock(&core->prioq.lock);
+	for (i = 0; i < BO_MAX_PRIO; i++) {
+		list_for_each_entry_safe(curr, next, &core->prioq.queue[i], list) {
+			curr_inst = container_of(curr, struct bigo_inst, job);
+			if (inst == curr_inst)
+				list_del(&curr->list);
+		}
+	}
+	mutex_unlock(&core->prioq.lock);
 }
 
 MODULE_LICENSE("GPL");

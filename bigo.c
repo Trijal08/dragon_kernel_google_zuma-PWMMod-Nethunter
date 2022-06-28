@@ -187,17 +187,15 @@ err:
 static void bigo_close(struct kref *ref)
 {
 	struct bigo_inst *inst = container_of(ref, struct bigo_inst, refcount);
-	struct bigo_core *core = inst->core;
 
-	if (!inst || !core) {
-		pr_err("No instance or core\n");
-		return;
+	if (inst && inst->core) {
+		clear_job_from_prioq(inst->core, inst);
+		bigo_unmap_all(inst);
+		bigo_update_qos(inst->core);
+		kfree(inst->job.regs);
+		kfree(inst);
+		pr_info("closed instance\n");
 	}
-	bigo_unmap_all(inst);
-	kfree(inst->job.regs);
-	kfree(inst);
-	bigo_update_qos(core);
-	pr_info("closed instance\n");
 }
 
 static int bigo_release(struct inode *inode, struct file *file)
@@ -342,6 +340,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	struct bigo_ioc_mapping mapping;
 	struct bigo_ioc_frmsize frmsize;
 	struct bigo_cache_info cinfo;
+	struct bigo_inst *curr_inst;
+	bool found = false;
 	int rc = 0;
 
 	if (_IOC_TYPE(cmd) != BIGO_IOC_MAGIC) {
@@ -356,6 +356,21 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 		pr_err("No instance or core\n");
 		return -EINVAL;
 	}
+	mutex_lock(&core->lock);
+	list_for_each_entry(curr_inst, &core->instances, list) {
+		if (curr_inst == inst) {
+			found = true;
+			break;
+		}
+	}
+
+	if (!found) {
+		mutex_unlock(&core->lock);
+		pr_err("this instance is invalid");
+		return -EINVAL;
+	}
+	kref_get(&inst->refcount);
+	mutex_unlock(&core->lock);
 	switch (cmd) {
 	case BIGO_IOCX_PROCESS:
 	{
@@ -378,6 +393,7 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 			msecs_to_jiffies(JOB_COMPLETE_TIMEOUT_MS * 16));
 		if (!ret) {
 			pr_err("timed out waiting for HW: %d\n", rc);
+			clear_job_from_prioq(core, inst);
 			rc = -ETIMEDOUT;
 		} else {
 			rc = (ret > 0) ? 0 : ret;
@@ -463,6 +479,7 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 		break;
 	}
 
+	kref_put(&inst->refcount, bigo_close);
 	return rc;
 }
 
@@ -600,7 +617,6 @@ static int bigo_worker_thread(void *data)
 	done:
 		job->status = rc;
 		complete(&inst->job_comp);
-		kref_put(&inst->refcount, bigo_close);
 	}
 	return 0;
 }
