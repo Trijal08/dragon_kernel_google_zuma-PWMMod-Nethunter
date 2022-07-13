@@ -11,8 +11,7 @@ bigwave-$(CONFIG_DEBUG_FS) += bigo_debug.o
 KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
 M ?= $(shell pwd)
 
-KBUILD_OPTIONS += CONFIG_BIGWAVE=m CONFIG_SLC_PARTITION_MANAGER=n \
-		  CONFIG_DEBUG_FS=m
+KBUILD_OPTIONS += CONFIG_BIGWAVE=m
 
 include $(KERNEL_SRC)/../private/google-modules/soc/gs/Makefile.include
 
