@@ -21,8 +21,6 @@
 #include <soc/google/pt.h>
 #endif
 
-#define BW_BRINGUP
-
 #define AVG_CNT 30
 #define PEAK_CNT 5
 #define BUS_WIDTH 16
@@ -42,7 +40,7 @@ struct bufinfo {
 struct bigo_opp {
 	struct list_head list;
 	u32 freq_khz;
-	u64 load_pps;
+	u32 load_pps;
 };
 
 struct bigo_bw {
@@ -58,7 +56,7 @@ struct power_manager {
 	struct exynos_pm_qos_request qos_bigo;
 	struct list_head opps;
 	struct list_head bw;
-	u64 max_load;
+	u32 max_load;
 };
 
 struct slc_manager {

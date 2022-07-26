@@ -41,7 +41,7 @@ static int bigo_of_get_resource(struct bigo_core *core)
 	core->regs_size = res->end - res->start + 1;
 	core->paddr = (phys_addr_t)res->start;
 
-#ifndef BW_BRINGUP
+#if IS_ENABLED(ENABLE_SLC)
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ssmt_bo_pid");
 	if (IS_ERR_OR_NULL(res)) {
 		rc = PTR_ERR(res);
@@ -77,7 +77,6 @@ static void bigo_of_remove_opp_table(struct bigo_core *core)
 	}
 }
 
-#ifndef BW_BRINGUP
 static void bigo_of_remove_bw_table(struct bigo_core *core)
 {
 	struct bigo_bw *bw, *tmp;
@@ -95,7 +94,7 @@ static int bigo_of_parse_opp_table(struct bigo_core *core)
 	struct bigo_opp *opp;
 
 	struct device_node *opp_np =
-		of_parse_phandle(core->dev->of_node, "bigo-opp-table", 0);
+		of_parse_phandle(core->dev->of_node, "bigw-opp-table", 0);
 	if (!opp_np) {
 		return -ENOENT;
 		goto err_add_table;
@@ -134,7 +133,7 @@ static int bigo_of_parse_bw_table(struct bigo_core *core)
 	struct bigo_bw *bw;
 
 	struct device_node *bw_np =
-		of_parse_phandle(core->dev->of_node, "bigo-bw-table", 0);
+		of_parse_phandle(core->dev->of_node, "bigw-bw-table", 0);
 	if (!bw_np) {
 		return -ENOENT;
 		goto err_add_table;
@@ -173,7 +172,6 @@ err_entry:
 err_add_table:
 	return rc;
 }
-#endif
 
 int bigo_of_dt_parse(struct bigo_core *core)
 {
@@ -185,7 +183,6 @@ int bigo_of_dt_parse(struct bigo_core *core)
 		goto err_get_res;
 	}
 
-#ifndef BW_BRINGUP
 	rc = bigo_of_parse_opp_table(core);
 	if (rc < 0) {
 		pr_err("failed to parse bigocean OPP table\n");
@@ -209,7 +206,6 @@ err_bwindex:
 err_parse_bw_table:
 	bigo_of_remove_opp_table(core);
 err_parse_opp_table:
-#endif
 err_get_res:
 	return rc;
 }
