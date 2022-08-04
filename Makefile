@@ -23,3 +23,5 @@ modules modules_install headers_install clean:
 	EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
 	KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)" \
 	$(@)
+
+modules_install: headers_install
