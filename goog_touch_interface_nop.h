@@ -15,6 +15,11 @@ enum gti_cmd_type : u32{
 	GTI_CMD_NOP,
 };
 
+enum gti_vendor_dev_pm_state : u32 {
+	GTI_VENDOR_DEV_RESUME = 0,
+	GTI_VENDOR_DEV_SUSPEND,
+};
+
 struct gti_union_cmd_data {
 	u32 nop_cmd;
 };

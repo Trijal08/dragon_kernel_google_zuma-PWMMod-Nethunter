@@ -30,6 +30,9 @@ static irqreturn_t tbn_aoc2ap_irq_thread(int irq, void *ptr)
 {
 	struct tbn_context *tbn = ptr;
 
+	dev_info(tbn_context->dev, "%s: bus_released:%d bus_requested:%d.\n", __func__,
+		completion_done(&tbn->bus_released), completion_done(&tbn->bus_requested));
+
 	if (completion_done(&tbn->bus_released) && completion_done(&tbn->bus_requested))
 		return IRQ_HANDLED;
 
@@ -96,7 +99,8 @@ int tbn_handshaking(struct tbn_context *tbn, enum tbn_operation operation)
 		gpio_direction_output(tbn->ap2aoc_gpio, bus_owner);
 		if (wait_for_completion_timeout(wait_for_completion,
 						 msecs_to_jiffies(timeout)) == 0) {
-			dev_err(tbn->dev, "AP %s bus ... timeout!\n", msg);
+			dev_err(tbn->dev, "AP %s bus ... timeout!, aoc2ap_gpio=%d\n",
+				msg, gpio_get_value(tbn->aoc2ap_gpio));
 			complete_all(wait_for_completion);
 			ret = -ETIMEDOUT;
 		} else
