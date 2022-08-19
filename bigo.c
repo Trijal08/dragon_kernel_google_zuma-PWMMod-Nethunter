@@ -38,6 +38,8 @@
 #define BIGO_MAX_INST_NUM 16
 #define BIGO_HBD_BIT BIT(17)
 
+#define BIGO_IDLE_TIMEOUT_MS 1000
+
 static int bigo_worker_thread(void *data);
 
 static struct sscd_platform_data bigo_sscd_platdata;
@@ -174,7 +176,7 @@ static int bigo_open(struct inode *inode, struct file *file)
 	}
 	list_add_tail(&inst->list, &core->instances);
 	mutex_unlock(&core->lock);
-	bigo_update_qos(core);
+	bigo_mark_qos_dirty(core);
 	pr_info("opened instance\n");
 	return rc;
 
@@ -193,6 +195,7 @@ static void bigo_close(struct kref *ref)
 	if (inst && inst->core) {
 		clear_job_from_prioq(inst->core, inst);
 		bigo_unmap_all(inst);
+		bigo_mark_qos_dirty(inst->core);
 		bigo_update_qos(inst->core);
 		kfree(inst->job.regs);
 		kfree(inst);
@@ -268,7 +271,7 @@ inline void bigo_config_frmrate(struct bigo_inst *inst, __u32 frmrate)
 	mutex_lock(&inst->lock);
 	inst->fps = frmrate;
 	mutex_unlock(&inst->lock);
-	bigo_update_qos(inst->core);
+	bigo_mark_qos_dirty(inst->core);
 }
 
 inline void bigo_config_frmsize(struct bigo_inst *inst,
@@ -278,7 +281,7 @@ inline void bigo_config_frmsize(struct bigo_inst *inst,
 	inst->height = frmsize->height;
 	inst->width = frmsize->width;
 	mutex_unlock(&inst->lock);
-	bigo_update_qos(inst->core);
+	bigo_mark_qos_dirty(inst->core);
 }
 
 inline void bigo_config_secure(struct bigo_inst *inst, __u32 is_secure)
@@ -391,7 +394,7 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 		bpp = hbd ? 2:1;
 		if (bpp != inst->bpp) {
 			inst->bpp = bpp;
-			bigo_update_qos(core);
+			bigo_mark_qos_dirty(core);
 		}
 
 		if(enqueue_prioq(core, inst)) {
@@ -581,11 +584,20 @@ static void deinit_chardev(struct bigo_core *core)
 	unregister_chrdev_region(core->devno, 1);
 }
 
+static inline void mark_instances_idle(struct bigo_core *core)
+{
+	struct bigo_inst *curr_inst;
+	mutex_lock(&core->lock);
+	list_for_each_entry(curr_inst, &core->instances, list)
+		curr_inst->idle = true;
+	mutex_unlock(&core->lock);
+}
+
 static int bigo_worker_thread(void *data)
 {
 	struct bigo_core *core = (struct bigo_core *)data;
 	struct bigo_inst *inst;
-	struct bigo_job *job;
+	struct bigo_job *job = NULL;
 	bool should_stop;
 	int rc;
 
@@ -593,8 +605,21 @@ static int bigo_worker_thread(void *data)
 		return -ENOMEM;
 
 	while(1) {
-		wait_event(core->worker,
-			dequeue_prioq(core, &job, &should_stop));
+		rc = wait_event_timeout(core->worker,
+			dequeue_prioq(core, &job, &should_stop),
+			msecs_to_jiffies(BIGO_IDLE_TIMEOUT_MS));
+		if (!rc && !should_stop) {
+			/* Mark all instances as IDLE since none of these
+			 * instances queued a job for BIGO_IDLE_TIMEOUT_MS
+			 */
+			mark_instances_idle(core);
+			bigo_clocks_off(core);
+			bigo_mark_qos_dirty(core);
+			pr_info("bigocean entered idle state\n");
+			wait_event(core->worker,
+				dequeue_prioq(core, &job, &should_stop));
+			pr_info("bigocean resumed to work\n");
+		}
 		if(should_stop) {
 			pr_info("worker thread received stop signal, exit\n");
 			return 0;
@@ -603,6 +628,8 @@ static int bigo_worker_thread(void *data)
 			continue;
 
 		inst = container_of(job, struct bigo_inst, job);
+		inst->idle = false;
+		bigo_update_qos(core);
 		if (inst->is_secure) {
 			rc = exynos_smc(SMC_PROTECTION_SET, 0, BIGO_SMC_ID,
 					SMC_PROTECTION_ENABLE);

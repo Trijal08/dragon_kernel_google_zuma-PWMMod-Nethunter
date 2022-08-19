@@ -30,6 +30,8 @@ static inline u32 bigo_get_total_load(struct bigo_core *core)
 		return 0;
 
 	list_for_each_entry(inst, &core->instances, list) {
+		if (inst->idle)
+			continue;
 		curr_load = (u64)inst->width * inst->height * inst->fps / 1024;
 		if (curr_load < core->pm.max_load - load) {
 			load += curr_load;
@@ -52,6 +54,8 @@ static inline void update_mif_floor(struct bigo_core *core)
 
 	if (!list_empty(&core->instances)) {
 		list_for_each_entry(inst, &core->instances, list) {
+			if (inst->idle)
+				continue;
 			curr_load = inst->width * inst->height * inst->fps * inst->bpp / 1024;
 			load += curr_load;
 		}
@@ -135,18 +139,39 @@ static int bigo_scale_bw(struct bigo_core *core)
 	return bts_update_bw(core->pm.bwindex, bw);
 }
 
+void bigo_mark_qos_dirty(struct bigo_core *core)
+{
+	mutex_lock(&core->lock);
+	core->qos_dirty = true;
+	mutex_unlock(&core->lock);
+}
+
 void bigo_update_qos(struct bigo_core *core)
 {
 	int rc;
 
 	mutex_lock(&core->lock);
-	rc = bigo_scale_bw(core);
+	if (core->qos_dirty) {
+		rc = bigo_scale_bw(core);
+		if (rc)
+			pr_warn("%s: failed to scale bandwidth: %d\n", __func__, rc);
 
-	if (rc)
-		pr_warn("%s: failed to scale bandwidth: %d\n", __func__, rc);
+		update_mif_floor(core);
+		bigo_scale_freq(core);
+		core->qos_dirty = false;
+	}
+	mutex_unlock(&core->lock);
+}
 
-	update_mif_floor(core);
-	bigo_scale_freq(core);
+void bigo_clocks_off(struct bigo_core *core)
+{
+	struct bts_bw bw;
+
+	memset(&bw, 0, sizeof(struct bts_bw));
+
+	mutex_lock(&core->lock);
+	bts_update_bw(core->pm.bwindex, bw);
+	bigo_set_freq(core, bigo_get_target_freq(core, 0));
 	mutex_unlock(&core->lock);
 }
 

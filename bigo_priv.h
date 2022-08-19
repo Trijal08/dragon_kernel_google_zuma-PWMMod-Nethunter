@@ -112,6 +112,7 @@ struct bigo_core {
 	struct task_struct *worker_thread;
 	wait_queue_head_t worker;
 	struct bigo_prio_array prioq;
+	u32 qos_dirty;
 };
 
 struct bigo_inst {
@@ -134,6 +135,7 @@ struct bigo_inst {
 	struct bigo_job job;
 	/* bytes per pixel */
 	u32 bpp;
+	bool idle;
 };
 
 inline void set_curr_inst(struct bigo_core *core, struct bigo_inst *inst);
