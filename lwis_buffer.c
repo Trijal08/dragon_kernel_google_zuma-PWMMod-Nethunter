@@ -116,6 +116,15 @@ int lwis_buffer_alloc(struct lwis_client *lwis_client, struct lwis_alloc_buffer_
 			return -ENOMEM;
 		}
 
+		/*
+		 * Increment refcount of the fd to 1 first before dma_buf_fd()
+		 * which is increment refcount of the fd to 2.
+		 * Both userspace's close(fd) and kernel's lwis_buffer_free()
+		 * will decrement the refcount by 1. Whoever reaches 0 refcount
+		 * frees the buffer.
+		 */
+		get_dma_buf(dma_buf);
+
 		alloc_info->dma_fd = dma_buf_fd(dma_buf, O_CLOEXEC);
 		if (alloc_info->dma_fd < 0) {
 			pr_err("dma_buf_fd failed (%d)\n", alloc_info->dma_fd);
@@ -124,13 +133,6 @@ int lwis_buffer_alloc(struct lwis_client *lwis_client, struct lwis_alloc_buffer_
 		}
 
 		alloc_info->partition_id = PT_PTID_INVALID;
-
-		/*
-		 * Increment refcount of the fd to 2. Both userspace's close(fd)
-		 * and kernel's lwis_buffer_free() will decrement the refcount
-		 * by 1. Whoever reaches 0 refcount frees the buffer.
-		 */
-		get_dma_buf(dma_buf);
 	}
 
 	buffer->fd = alloc_info->dma_fd;

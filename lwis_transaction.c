@@ -127,10 +127,6 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 						   /*use_write_barrier=*/true);
 	}
 
-	if (!in_irq) {
-		mutex_lock(&lwis_dev->reg_rw_lock);
-	}
-
 	for (i = 0; i < info->num_io_entries; ++i) {
 		entry = &info->io_entries[i];
 		if (entry->type == LWIS_IO_ENTRY_WRITE ||
@@ -222,10 +218,6 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 			break;
 		}
 		resp->completion_index = i;
-	}
-
-	if (!in_irq) {
-		mutex_unlock(&lwis_dev->reg_rw_lock);
 	}
 
 	process_duration_ns = ktime_to_ns(lwis_get_time() - process_timestamp);

@@ -646,10 +646,14 @@ static int lwis_dev_power_up_by_default(struct lwis_device *lwis_dev)
 int lwis_dev_power_up_locked(struct lwis_device *lwis_dev)
 {
 	int ret;
+	struct lwis_i2c_device *i2c_dev = NULL;
 
-	if (lwis_dev->group_i2c_lock == NULL) {
-		dev_err(lwis_dev->dev, "group_i2c_lock is NULL. Abort power up.\n");
-		return -EINVAL;
+	if (lwis_dev->type == DEVICE_TYPE_I2C) {
+		i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
+		if (i2c_dev->group_i2c_lock == NULL) {
+			dev_err(lwis_dev->dev, "group_i2c_lock is NULL. Abort power up.\n");
+			return -EINVAL;
+		}
 	}
 
 	/* Let's do the platform-specific enable call */
@@ -669,14 +673,14 @@ int lwis_dev_power_up_locked(struct lwis_device *lwis_dev)
 	}
 
 	if (lwis_dev->type == DEVICE_TYPE_I2C) {
-		mutex_lock(lwis_dev->group_i2c_lock);
+		mutex_lock(i2c_dev->group_i2c_lock);
 	}
 	if (lwis_dev->power_up_seqs_present) {
 		ret = lwis_dev_power_up_by_seqs(lwis_dev);
 		if (ret) {
 			dev_err(lwis_dev->dev, "Error lwis_dev_power_up_by_seqs (%d)\n", ret);
 			if (lwis_dev->type == DEVICE_TYPE_I2C) {
-				mutex_unlock(lwis_dev->group_i2c_lock);
+				mutex_unlock(i2c_dev->group_i2c_lock);
 			}
 			goto error_power_up;
 		}
@@ -685,13 +689,13 @@ int lwis_dev_power_up_locked(struct lwis_device *lwis_dev)
 		if (ret) {
 			dev_err(lwis_dev->dev, "Error lwis_dev_power_up_by_default (%d)\n", ret);
 			if (lwis_dev->type == DEVICE_TYPE_I2C) {
-				mutex_unlock(lwis_dev->group_i2c_lock);
+				mutex_unlock(i2c_dev->group_i2c_lock);
 			}
 			goto error_power_up;
 		}
 	}
 	if (lwis_dev->type == DEVICE_TYPE_I2C) {
-		mutex_unlock(lwis_dev->group_i2c_lock);
+		mutex_unlock(i2c_dev->group_i2c_lock);
 	}
 
 	if (lwis_dev->phys) {
@@ -953,6 +957,15 @@ int lwis_dev_power_down_locked(struct lwis_device *lwis_dev)
 {
 	int ret;
 	int last_error = 0;
+	struct lwis_i2c_device *i2c_dev = NULL;
+
+	if (lwis_dev->type == DEVICE_TYPE_I2C) {
+		i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
+		if (i2c_dev->group_i2c_lock == NULL) {
+			dev_err(lwis_dev->dev, "group_i2c_lock is NULL. Abort power up.\n");
+			return -EINVAL;
+		}
+	}
 
 	if (lwis_dev->vops.device_disable) {
 		ret = lwis_dev->vops.device_disable(lwis_dev);
@@ -972,8 +985,8 @@ int lwis_dev_power_down_locked(struct lwis_device *lwis_dev)
 		}
 	}
 
-	if (lwis_dev->type == DEVICE_TYPE_I2C && lwis_dev->group_i2c_lock != NULL) {
-		mutex_lock(lwis_dev->group_i2c_lock);
+	if (lwis_dev->type == DEVICE_TYPE_I2C) {
+		mutex_lock(i2c_dev->group_i2c_lock);
 	}
 	if (lwis_dev->power_down_seqs_present) {
 		ret = lwis_dev_power_down_by_seqs(lwis_dev);
@@ -988,8 +1001,8 @@ int lwis_dev_power_down_locked(struct lwis_device *lwis_dev)
 			last_error = ret;
 		}
 	}
-	if (lwis_dev->type == DEVICE_TYPE_I2C && lwis_dev->group_i2c_lock != NULL) {
-		mutex_unlock(lwis_dev->group_i2c_lock);
+	if (lwis_dev->type == DEVICE_TYPE_I2C) {
+		mutex_unlock(i2c_dev->group_i2c_lock);
 	}
 
 	if (lwis_dev->clocks) {
@@ -1123,11 +1136,12 @@ bool lwis_i2c_dev_is_in_use(struct lwis_device *lwis_dev)
 		return false;
 	}
 
-	i2c_dev = (struct lwis_i2c_device *)lwis_dev;
+	i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
 	mutex_lock(&core.lock);
 	list_for_each_entry (lwis_dev_it, &core.lwis_dev_list, dev_list) {
 		if (lwis_dev_it->type == DEVICE_TYPE_I2C) {
-			struct lwis_i2c_device *i2c_dev_it = (struct lwis_i2c_device *)lwis_dev_it;
+			struct lwis_i2c_device *i2c_dev_it =
+				container_of(lwis_dev_it, struct lwis_i2c_device, base_dev);
 			/* Look up if i2c bus are still in use by other device*/
 			if ((i2c_dev_it->state_pinctrl == i2c_dev->state_pinctrl) &&
 			    (i2c_dev_it != i2c_dev) && lwis_dev_it->enabled) {
@@ -1178,9 +1192,6 @@ int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_d
 	/* Initialize client mutex */
 	mutex_init(&lwis_dev->client_lock);
 
-	/* Initialize register access mutex */
-	mutex_init(&lwis_dev->reg_rw_lock);
-
 	/* Initialize an empty list of clients */
 	INIT_LIST_HEAD(&lwis_dev->clients);
 
@@ -1211,9 +1222,6 @@ int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_d
 		pr_err("Error initializing LWIS device\n");
 		goto error_init;
 	}
-
-	/* Initialize device i2c lock */
-	lwis_dev->group_i2c_lock = &core.group_i2c_lock[lwis_dev->i2c_lock_group_id];
 
 	/* Upon success initialization, create device for this instance */
 	lwis_dev->dev = device_create(core.dev_class, NULL, MKDEV(core.device_major, lwis_dev->id),
@@ -1428,16 +1436,12 @@ static void lwis_unregister_base_device(void)
 static int __init lwis_base_device_init(void)
 {
 	int ret = 0;
-	int i;
 
 	pr_info("LWIS device initialization\n");
 
 	/* Initialize the core struct */
 	memset(&core, 0, sizeof(struct lwis_core));
 	mutex_init(&core.lock);
-	for (i = 0; i < MAX_I2C_LOCK_NUM; ++i) {
-		mutex_init(&core.group_i2c_lock[i]);
-	}
 
 	ret = lwis_register_base_device();
 	if (ret) {
@@ -1497,7 +1501,6 @@ static void __exit lwis_driver_exit(void)
 {
 	struct lwis_device *lwis_dev, *temp;
 	struct lwis_client *client, *client_temp;
-	struct lwis_i2c_device *i2c_dev;
 
 	pr_info("%s Clean up LWIS devices.\n", __func__);
 	list_for_each_entry_safe (lwis_dev, temp, &core.lwis_dev_list, dev_list) {
@@ -1506,7 +1509,8 @@ static void __exit lwis_driver_exit(void)
 		/* Disable lwis device events */
 		lwis_device_event_enable(lwis_dev, LWIS_EVENT_ID_HEARTBEAT, false);
 		if (lwis_dev->type == DEVICE_TYPE_I2C) {
-			i2c_dev = (struct lwis_i2c_device *)lwis_dev;
+			struct lwis_i2c_device *i2c_dev;
+			i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
 			i2c_unregister_device(i2c_dev->client);
 		}
 		/* Relase each client registered with dev */

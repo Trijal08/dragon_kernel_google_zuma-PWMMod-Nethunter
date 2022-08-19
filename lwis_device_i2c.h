@@ -16,6 +16,8 @@
 
 #include "lwis_device.h"
 
+#define MAX_I2C_LOCK_NUM 8
+
 /*
  *  struct lwis_i2c_device
  *  "Derived" lwis_device struct, with added i2c related elements.
@@ -27,6 +29,10 @@ struct lwis_i2c_device {
 	struct i2c_client *client;
 	struct pinctrl *state_pinctrl;
 	bool pinctrl_default_state_only;
+	/* Group id for I2C lock */
+	u32 i2c_lock_group_id;
+	/* Mutex shared by the same group id's I2C devices */
+	struct mutex *group_i2c_lock;
 };
 
 int lwis_i2c_device_deinit(void);

@@ -552,6 +552,9 @@ static int lwis_client_event_push_back(struct lwis_client *lwis_client,
 				       struct lwis_event_entry *event)
 {
 	unsigned long flags;
+	int64_t timestamp_diff;
+	int64_t current_timestamp;
+	struct lwis_event_entry *first_event;
 
 	if (!event) {
 		dev_err(lwis_client->lwis_dev->dev, "NULL event provided\n");
@@ -561,6 +564,14 @@ static int lwis_client_event_push_back(struct lwis_client *lwis_client,
 	spin_lock_irqsave(&lwis_client->event_lock, flags);
 
 	if (lwis_client->event_queue_size >= MAX_NUM_PENDING_EVENTS) {
+		/* Get the front of the list */
+		first_event =
+			list_first_entry(&lwis_client->event_queue, struct lwis_event_entry, node);
+		current_timestamp = lwis_get_time();
+		timestamp_diff = ktime_sub(current_timestamp, first_event->event_info.timestamp_ns);
+		lwis_dev_err_ratelimited(lwis_client->lwis_dev->dev,
+			"First event in queue ID: 0x%llx, current timestamp %lld ns, diff: %lld ns\n",
+			event->event_info.event_id, current_timestamp, timestamp_diff);
 		spin_unlock_irqrestore(&lwis_client->event_lock, flags);
 		/* Send an error event to userspace to handle the overflow */
 		lwis_device_error_event_emit(lwis_client->lwis_dev,

@@ -40,6 +40,8 @@
 #define I2C_ON_STRING "on_i2c"
 #define I2C_OFF_STRING "off_i2c"
 
+static struct mutex group_i2c_lock[MAX_I2C_LOCK_NUM];
+
 static int lwis_i2c_device_enable(struct lwis_device *lwis_dev);
 static int lwis_i2c_device_disable(struct lwis_device *lwis_dev);
 static int lwis_i2c_register_io(struct lwis_device *lwis_dev, struct lwis_io_entry *entry,
@@ -65,10 +67,11 @@ static struct lwis_event_subscribe_operations i2c_subscribe_ops = {
 static int lwis_i2c_device_enable(struct lwis_device *lwis_dev)
 {
 	int ret;
-	struct lwis_i2c_device *i2c_dev = (struct lwis_i2c_device *)lwis_dev;
+	struct lwis_i2c_device *i2c_dev;
+	i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
 
 	/* Enable the I2C bus */
-	mutex_lock(lwis_dev->group_i2c_lock);
+	mutex_lock(i2c_dev->group_i2c_lock);
 
 #if IS_ENABLED(CONFIG_INPUT_STMVL53L1)
 	if (is_shared_i2c_with_stmvl53l1(i2c_dev->state_pinctrl))
@@ -81,7 +84,7 @@ static int lwis_i2c_device_enable(struct lwis_device *lwis_dev)
 	ret = lwis_i2c_set_state(i2c_dev, I2C_ON_STRING);
 #endif
 
-	mutex_unlock(lwis_dev->group_i2c_lock);
+	mutex_unlock(i2c_dev->group_i2c_lock);
 	if (ret) {
 		dev_err(lwis_dev->dev, "Error enabling i2c bus (%d)\n", ret);
 		return ret;
@@ -93,16 +96,17 @@ static int lwis_i2c_device_enable(struct lwis_device *lwis_dev)
 static int lwis_i2c_device_disable(struct lwis_device *lwis_dev)
 {
 	int ret;
-	struct lwis_i2c_device *i2c_dev = (struct lwis_i2c_device *)lwis_dev;
+	struct lwis_i2c_device *i2c_dev;
+	i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
 
 #if IS_ENABLED(CONFIG_INPUT_STMVL53L1)
 	if (is_shared_i2c_with_stmvl53l1(i2c_dev->state_pinctrl)) {
 		/* Disable the shared i2c bus */
-		mutex_lock(lwis_dev->group_i2c_lock);
+		mutex_lock(i2c_dev->group_i2c_lock);
 		ret = shared_i2c_set_state(&i2c_dev->client->dev,
 					   i2c_dev->state_pinctrl,
 					   I2C_OFF_STRING);
-		mutex_unlock(lwis_dev->group_i2c_lock);
+		mutex_unlock(i2c_dev->group_i2c_lock);
 		if (ret) {
 			dev_err(lwis_dev->dev, "Error disabling i2c bus (%d)\n",
 				ret);
@@ -113,9 +117,9 @@ static int lwis_i2c_device_disable(struct lwis_device *lwis_dev)
 
 	if (!lwis_i2c_dev_is_in_use(lwis_dev)) {
 		/* Disable the I2C bus */
-		mutex_lock(lwis_dev->group_i2c_lock);
+		mutex_lock(i2c_dev->group_i2c_lock);
 		ret = lwis_i2c_set_state(i2c_dev, I2C_OFF_STRING);
-		mutex_unlock(lwis_dev->group_i2c_lock);
+		mutex_unlock(i2c_dev->group_i2c_lock);
 		if (ret) {
 			dev_err(lwis_dev->dev, "Error disabling i2c bus (%d)\n", ret);
 			return ret;
@@ -128,11 +132,14 @@ static int lwis_i2c_device_disable(struct lwis_device *lwis_dev)
 static int lwis_i2c_register_io(struct lwis_device *lwis_dev, struct lwis_io_entry *entry,
 				int access_size)
 {
+	struct lwis_i2c_device *i2c_dev;
+	i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
+
 	/* Running in interrupt context is not supported as i2c driver might sleep */
 	if (in_interrupt()) {
 		return -EAGAIN;
 	}
-	return lwis_i2c_io_entry_rw((struct lwis_i2c_device *)lwis_dev, entry);
+	return lwis_i2c_io_entry_rw(i2c_dev, entry);
 }
 
 static int lwis_i2c_addr_matcher(struct device *dev, void *data)
@@ -168,6 +175,9 @@ static int lwis_i2c_device_setup(struct lwis_i2c_device *i2c_dev)
 	/* Non-device-tree init: Save for future implementation */
 	return -ENOSYS;
 #endif
+
+	/* Initialize device i2c lock */
+	i2c_dev->group_i2c_lock = &group_i2c_lock[i2c_dev->i2c_lock_group_id];
 
 	info.addr = i2c_dev->address;
 
@@ -256,8 +266,7 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 	}
 
 	/* Create associated kworker threads */
-	ret = lwis_create_kthread_workers(&i2c_dev->base_dev, "lwis_i2c_trans_kthread",
-					 "lwis_i2c_prd_io_kthread");
+	ret = lwis_create_kthread_workers(&i2c_dev->base_dev);
 	if (ret) {
 		dev_err(i2c_dev->base_dev.dev,"Failed to create lwis_i2c_kthread");
 		lwis_base_unprobe(&i2c_dev->base_dev);
@@ -408,12 +417,17 @@ static struct platform_driver lwis_driver = { .probe = lwis_i2c_device_probe,
 int __init lwis_i2c_device_init(void)
 {
 	int ret = 0;
+	int i;
 
 	pr_info("I2C device initialization\n");
 
 	ret = platform_driver_register(&lwis_driver);
 	if (ret) {
 		pr_err("platform_driver_register failed: %d\n", ret);
+	}
+
+	for (i = 0; i < MAX_I2C_LOCK_NUM; ++i) {
+		mutex_init(&group_i2c_lock[i]);
 	}
 
 	return ret;

@@ -671,12 +671,12 @@ static void parse_bitwidths(struct lwis_device *lwis_dev)
 
 	of_property_read_u32(dev_node, "reg-addr-bitwidth", &addr_bitwidth);
 #ifdef LWIS_DT_DEBUG
-	pr_info("Addr bitwidth set to%s: %d\n", ret ? " default" : "", addr_bitwidth);
+	pr_info("Addr bitwidth set to: %d\n", addr_bitwidth);
 #endif
 
 	of_property_read_u32(dev_node, "reg-value-bitwidth", &value_bitwidth);
 #ifdef LWIS_DT_DEBUG
-	pr_info("Value bitwidth set to%s: %d\n", ret ? " default" : "", value_bitwidth);
+	pr_info("Value bitwidth set to: %d\n", value_bitwidth);
 #endif
 
 	lwis_dev->native_addr_bitwidth = addr_bitwidth;
@@ -960,16 +960,16 @@ static int parse_thread_priority(struct lwis_device *lwis_dev)
 	return 0;
 }
 
-static int parse_i2c_lock_group_id(struct lwis_device *lwis_dev)
+static int parse_i2c_lock_group_id(struct lwis_i2c_device *i2c_dev)
 {
 	struct device_node *dev_node;
 	int ret;
 
-	dev_node = lwis_dev->plat_dev->dev.of_node;
+	dev_node = i2c_dev->base_dev.plat_dev->dev.of_node;
 	/* Set i2c_lock_group_id value to default */
-	lwis_dev->i2c_lock_group_id = MAX_I2C_LOCK_NUM - 1;
+	i2c_dev->i2c_lock_group_id = MAX_I2C_LOCK_NUM - 1;
 
-	ret = of_property_read_u32(dev_node, "i2c-lock-group-id", &lwis_dev->i2c_lock_group_id);
+	ret = of_property_read_u32(dev_node, "i2c-lock-group-id", &i2c_dev->i2c_lock_group_id);
 	/* If no property in device tree, just return to use default */
 	if (ret == -EINVAL) {
 		return 0;
@@ -978,7 +978,7 @@ static int parse_i2c_lock_group_id(struct lwis_device *lwis_dev)
 		pr_err("i2c-lock-group-id value wrong\n");
 		return ret;
 	}
-	if (lwis_dev->i2c_lock_group_id >= MAX_I2C_LOCK_NUM - 1) {
+	if (i2c_dev->i2c_lock_group_id >= MAX_I2C_LOCK_NUM - 1) {
 		pr_err("i2c-lock-group-id need smaller than MAX_I2C_LOCK_NUM - 1\n");
 		return -EOVERFLOW;
 	}
@@ -1090,12 +1090,6 @@ int lwis_base_parse_dt(struct lwis_device *lwis_dev)
 		return ret;
 	}
 
-	ret = parse_i2c_lock_group_id(lwis_dev);
-	if (ret) {
-		pr_err("Error parsing i2c lock group id\n");
-		return ret;
-	}
-
 	parse_access_mode(lwis_dev);
 	parse_thread_priority(lwis_dev);
 	parse_bitwidths(lwis_dev);
@@ -1133,6 +1127,12 @@ int lwis_i2c_device_parse_dt(struct lwis_i2c_device *i2c_dev)
 	ret = of_property_read_u32(dev_node, "i2c-addr", (u32 *)&i2c_dev->address);
 	if (ret) {
 		dev_err(i2c_dev->base_dev.dev, "Failed to read i2c-addr\n");
+		return ret;
+	}
+
+	ret = parse_i2c_lock_group_id(i2c_dev);
+	if (ret) {
+		dev_err(i2c_dev->base_dev.dev, "Error parsing i2c lock group id\n");
 		return ret;
 	}
 
