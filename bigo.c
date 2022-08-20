@@ -415,6 +415,17 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 		if (rc)
 			pr_err("Error un-mapping: %d\n", mapping.fd);
 		break;
+	case BIGO_IOCX_DMA_SYNC: {
+		struct bigo_buf_sync sync;
+		if (copy_from_user(&sync, user_desc, sizeof(sync))) {
+			pr_err("Failed to copy from user\n");
+			return -EFAULT;
+		}
+		rc = bigo_dma_sync(&sync);
+		if (rc)
+			pr_err("Error dma sync: %d\n", sync.fd);
+		break;
+	}
 	case BIGO_IOCX_CONFIG_FRMRATE: {
 		u32 frmrate = (u32)arg;
 
