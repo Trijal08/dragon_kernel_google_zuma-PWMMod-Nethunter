@@ -152,6 +152,7 @@ static int bigo_open(struct inode *inode, struct file *file)
 	inst->fps = DEFAULT_FPS;
 	inst->bpp = 1;
 	inst->core = core;
+	inst->idle = true;
 	inst->job.regs_size = core->regs_size;
 	inst->job.regs = kzalloc(core->regs_size, GFP_KERNEL);
 	if (!inst->job.regs) {
@@ -628,7 +629,12 @@ static int bigo_worker_thread(void *data)
 			continue;
 
 		inst = container_of(job, struct bigo_inst, job);
-		inst->idle = false;
+
+		if (inst->idle) {
+			inst->idle = false;
+			bigo_mark_qos_dirty(core);
+		}
+
 		bigo_update_qos(core);
 		if (inst->is_secure) {
 			rc = exynos_smc(SMC_PROTECTION_SET, 0, BIGO_SMC_ID,
