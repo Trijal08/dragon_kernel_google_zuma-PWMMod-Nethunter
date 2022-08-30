@@ -17,17 +17,17 @@
 #include "bigo_pm.h"
 #include "bigo_io.h"
 
-static inline u64 bigo_get_total_load(struct bigo_core *core)
+static inline u32 bigo_get_total_load(struct bigo_core *core)
 {
 	struct bigo_inst *inst;
-	u64 load = 0;
-	u64 curr_load = 0;
+	u32 load = 0;
+	u32 curr_load = 0;
 
 	if (list_empty(&core->instances))
 		return 0;
 
 	list_for_each_entry(inst, &core->instances, list) {
-		curr_load = inst->width * inst->height * inst->fps / 1024;
+		curr_load = (u64)inst->width * inst->height * inst->fps / 1024;
 		if (curr_load < core->pm.max_load - load) {
 			load += curr_load;
 		} else {
@@ -36,12 +36,12 @@ static inline u64 bigo_get_total_load(struct bigo_core *core)
 		}
 	}
 	/* 1 <= load <= core->pm.max_load */
-	load = max(1ULL, load);
+	load = max(1U, load);
 	load = min(load, core->pm.max_load);
 	return load;
 }
 
-static inline u32 bigo_get_target_freq(struct bigo_core *core, u64 load)
+static inline u32 bigo_get_target_freq(struct bigo_core *core, u32 load)
 {
 	struct bigo_opp *opp;
 
@@ -67,18 +67,16 @@ static inline void bigo_set_freq(struct bigo_core *core, u32 freq)
 {
 	if (core->debugfs.set_freq)
 		freq = core->debugfs.set_freq;
-#ifndef BW_BRINGUP
+
 	if (!exynos_pm_qos_request_active(&core->pm.qos_bigo))
-		exynos_pm_qos_add_request(&core->pm.qos_bigo, PM_QOS_BO_THROUGHPUT, freq);
+		exynos_pm_qos_add_request(&core->pm.qos_bigo, PM_QOS_BW_THROUGHPUT, freq);
 	else
 		exynos_pm_qos_update_request(&core->pm.qos_bigo, freq);
-#endif
 }
 
-#ifndef BW_BRINGUP
 static void bigo_scale_freq(struct bigo_core *core)
 {
-	u64 load = bigo_get_total_load(core);
+	u32 load = bigo_get_total_load(core);
 	u32 freq = bigo_get_target_freq(core, load);
 
 	bigo_set_freq(core, freq);
@@ -86,7 +84,7 @@ static void bigo_scale_freq(struct bigo_core *core)
 
 static void bigo_get_bw(struct bigo_core *core, struct bts_bw *bw)
 {
-	u64 load = bigo_get_total_load(core);
+	u32 load = bigo_get_total_load(core);
 	struct bigo_bw *bandwidth = bigo_get_target_bw(core, load);
 
 	bw->read = bandwidth->rd_bw;
@@ -102,12 +100,9 @@ static int bigo_scale_bw(struct bigo_core *core)
 	bigo_get_bw(core, &bw);
 	return bts_update_bw(core->pm.bwindex, bw);
 }
-#endif
 
 void bigo_update_qos(struct bigo_core *core)
 {
-	pr_warn("%s is not supported\n", __func__);
-#ifndef BW_BRINGUP
 	int rc;
 
 	mutex_lock(&core->lock);
@@ -118,7 +113,6 @@ void bigo_update_qos(struct bigo_core *core)
 
 	bigo_scale_freq(core);
 	mutex_unlock(&core->lock);
-#endif
 }
 
 /*
