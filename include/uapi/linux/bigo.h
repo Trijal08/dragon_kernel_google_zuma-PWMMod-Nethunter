@@ -46,6 +46,16 @@ struct bigo_cache_info {
 	__u32 pid;
 };
 
+/**
+ * @flags: Set of access flags defined in uapi/linux/dma-buf.h
+ */
+struct bigo_buf_sync {
+	int fd;
+	__u32 offset;
+	__u32 size;
+	__u64 flags;
+};
+
 /*
  * Helpers for defining command identifiers. User space should not
  * use these macros directly.
@@ -69,6 +79,7 @@ enum bigo_cmd_id {
 	BIGO_CMD_GET_CACHE_INFO,
 	BIGO_CMD_CONFIG_SECURE,
 	BIGO_CMD_CONFIG_PRIORITY,
+	BIGO_CMD_DMA_SYNC,
 	BIGO_CMD_MAXNR,
 };
 /* <END OF HELPERS> */
@@ -84,5 +95,6 @@ enum bigo_cmd_id {
 #define BIGO_IOCX_ABORT _BIGO_IO(BIGO_CMD_ABORT)
 #define BIGO_IOCX_CONFIG_SECURE _BIGO_IOW(BIGO_CMD_CONFIG_SECURE, __u32)
 #define BIGO_IOCX_CONFIG_PRIORITY _BIGO_IOW(BIGO_CMD_CONFIG_PRIORITY, __s32)
+#define BIGO_IOCX_DMA_SYNC _BIGO_IOW(BIGO_CMD_DMA_SYNC, struct bigo_buf_sync)
 
 #endif /* _UAPI_BIGO_H_ */
