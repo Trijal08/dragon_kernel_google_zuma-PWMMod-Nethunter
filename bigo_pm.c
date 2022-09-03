@@ -17,6 +17,8 @@
 #include "bigo_pm.h"
 #include "bigo_io.h"
 
+#define BIGW_A0_CSR_PROG_FREQ 166000
+
 static inline u32 bigo_get_total_load(struct bigo_core *core)
 {
 	struct bigo_inst *inst;
@@ -67,6 +69,10 @@ static inline void bigo_set_freq(struct bigo_core *core, u32 freq)
 {
 	if (core->debugfs.set_freq)
 		freq = core->debugfs.set_freq;
+
+	/* HW bug workaround: see b/215390692 */
+	if (freq > BIGW_A0_CSR_PROG_FREQ)
+		freq = BIGW_A0_CSR_PROG_FREQ;
 
 	if (!exynos_pm_qos_request_active(&core->pm.qos_bigo))
 		exynos_pm_qos_add_request(&core->pm.qos_bigo, PM_QOS_BW_THROUGHPUT, freq);
