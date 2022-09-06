@@ -1950,11 +1950,11 @@ single_modpost: $(single-no-ko) modules_prepare
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
 	$(Q)rm -f $(MODORDER)
 
-export KBUILD_SINGLE_TARGETS := $(addprefix $(extmod_prefix), $(single-no-ko))
+single-goals := $(addprefix $(extmod_prefix), $(single-no-ko))
 
 # trim unrelated directories
 build-dirs := $(foreach d, $(build-dirs), \
-			$(if $(filter $(d)/%, $(KBUILD_SINGLE_TARGETS)), $(d)))
+			$(if $(filter $d/%, $(single-goals)), $d))
 
 KBUILD_MODULES := 1
 
@@ -1969,8 +1969,8 @@ PHONY += descend $(build-dirs)
 descend: $(build-dirs)
 $(build-dirs): prepare
 	$(Q)$(MAKE) $(build)=$@ \
-	single-build=$(if $(filter-out $@/, $(filter $@/%, $(KBUILD_SINGLE_TARGETS))),1) \
-	$(if $(KBUILD_MIXED_TREE),,need-builtin=1) need-modorder=1
+	$(if $(KBUILD_MIXED_TREE),,need-builtin=1) need-modorder=1 \
+	$(filter $@/%, $(single-goals))
 
 clean-dirs := $(addprefix _clean_, $(clean-dirs))
 PHONY += $(clean-dirs) clean
