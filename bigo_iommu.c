@@ -202,6 +202,20 @@ int bigo_dma_sync(struct bigo_buf_sync *sync)
 
 int bigo_iommu_fault_handler(struct iommu_fault *fault, void *param)
 {
+	struct bigo_core *core = (struct bigo_core*)param;
+	struct bufinfo *binfo;
+	struct bigo_inst *inst;
+
+	/* Don't try to mutex_lock core->lock here since worker thread
+	 * already has the lock */
+	pr_info("mapped iova list:\n");
+	list_for_each_entry(inst, &core->instances, list) {
+		mutex_lock(&inst->lock);
+		list_for_each_entry(binfo, &inst->buffers, list)
+			pr_info("iova: 0x%llx size: %lld", binfo->iova, binfo->size);
+		mutex_unlock(&inst->lock);
+	}
+
 	return NOTIFY_OK;
 }
 
