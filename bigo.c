@@ -231,8 +231,10 @@ static int bigo_run_job(struct bigo_core *core, struct bigo_job *job)
 	int rc = 0;
 	u32 status = 0;
 	unsigned long flags;
+	struct bigo_inst* inst;
 
-	bigo_bypass_ssmt_pid(core);
+	inst = container_of(job, struct bigo_inst, job);
+	bigo_bypass_ssmt_pid(core, inst->is_decoder_usage);
 	bigo_push_regs(core, job->regs);
 	bigo_core_enable(core);
 	ret = wait_for_completion_timeout(&core->frame_done,
@@ -397,6 +399,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 			inst->bpp = bpp;
 			bigo_mark_qos_dirty(core);
 		}
+
+                inst->is_decoder_usage = !!(((uint8_t*)job->regs)[BIGO_REG_STAT]&BIGO_STAT_MODE);
 
 		if(enqueue_prioq(core, inst)) {
 			pr_err("Failed enqueue frame\n");

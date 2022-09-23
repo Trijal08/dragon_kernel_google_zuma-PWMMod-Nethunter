@@ -136,6 +136,7 @@ struct bigo_inst {
 	/* bytes per pixel */
 	u32 bpp;
 	bool idle;
+        bool is_decoder_usage;
 };
 
 inline void set_curr_inst(struct bigo_core *core, struct bigo_inst *inst);
