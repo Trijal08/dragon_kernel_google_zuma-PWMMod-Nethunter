@@ -31,6 +31,8 @@
 #define TIMESYNC_NOT_SUPPORTED		0
 #define TIMESYNC_SUPPORTED 		1
 #define TIMESYNC_ENABLED		2
+#define DBO_NOT_SUPPORTED		0
+#define DBO_SUPPORTED			1
 
 struct nitrous_lpm_proc;
 
@@ -41,6 +43,7 @@ struct nitrous_bt_lpm {
 	struct gpio_desc *gpio_host_wake;    /* Dev -> Host WAKE GPIO */
 	struct gpio_desc *gpio_power;        /* GPIO to control power */
 	struct gpio_desc *gpio_timesync;     /* GPIO for timesync */
+	struct gpio_desc *gpio_ble_dbo;      /* GPIO for dbo */
 	int irq_host_wake;           /* IRQ associated with HOST_WAKE GPIO */
 	int wake_polarity;           /* 0: active low; 1: active high */
 
@@ -50,6 +53,9 @@ struct nitrous_bt_lpm {
 	int irq_timesync;            /* IRQ associated with TIMESYNC GPIO*/
 	int timesync_state;
 	struct kfifo timestamp_queue;
+
+	int dbo_state;
+	bool off_mode_latch;
 
 	struct device *dev;
 	struct rfkill *rfkill;
@@ -526,6 +532,22 @@ static void toggle_timesync(struct nitrous_bt_lpm *lpm, bool enable) {
 }
 
 /*
+ * Toggle ble_dbo GPIO for Flip-Flop design
+ */
+static void toggle_dbo_ff(struct nitrous_bt_lpm *lpm)
+{
+	if (!lpm->off_mode_latch) {
+		if (lpm->dbo_state) {
+			gpiod_set_value_cansleep(lpm->gpio_ble_dbo, false);
+			udelay(1);
+			gpiod_set_value_cansleep(lpm->gpio_ble_dbo, true);
+			udelay(1);
+			gpiod_set_value_cansleep(lpm->gpio_ble_dbo, false);
+		}
+	}
+}
+
+/*
  * Set BT power on/off (blocked is true: OFF; blocked is false: ON)
  */
 static int nitrous_rfkill_set_power(void *data, bool blocked)
@@ -557,12 +579,13 @@ static int nitrous_rfkill_set_power(void *data, bool blocked)
 		logbuffer_log(lpm->log, "Power up BT chip %ptTt", &ts);
 		dev_dbg(lpm->dev, "REG_ON: Low");
 		gpiod_set_value_cansleep(lpm->gpio_power, false);
+		toggle_dbo_ff(lpm);
 		msleep(30);
 		exynos_update_ip_idle_status(lpm->idle_bt_tx_ip_index, STATUS_BUSY);
 		exynos_update_ip_idle_status(lpm->idle_bt_rx_ip_index, STATUS_BUSY);
 		dev_dbg(lpm->dev, "REG_ON: High");
 		gpiod_set_value_cansleep(lpm->gpio_power, true);
-
+		toggle_dbo_ff(lpm);
 		/* Set DEV_WAKE to High as part of the power sequence */
 		dev_dbg(lpm->dev, "DEV_WAKE: High - Power sequence");
 		gpiod_set_value_cansleep(lpm->gpio_dev_wake, true);
@@ -575,6 +598,7 @@ static int nitrous_rfkill_set_power(void *data, bool blocked)
 		logbuffer_log(lpm->log, "Power down BT chip %ptTt", &ts);
 		dev_dbg(lpm->dev, "REG_ON: Low");
 		gpiod_set_value_cansleep(lpm->gpio_power, false);
+		toggle_dbo_ff(lpm);
 		exynos_update_ip_idle_status(lpm->idle_bt_tx_ip_index, STATUS_IDLE);
 		exynos_update_ip_idle_status(lpm->idle_bt_rx_ip_index, STATUS_IDLE);
 	}
@@ -678,6 +702,17 @@ static int nitrous_probe(struct platform_device *pdev)
 		lpm->timesync_state = TIMESYNC_SUPPORTED;
 	}
 	dev_dbg(lpm->dev, "Timesync support: %x", lpm->timesync_state);
+
+	lpm->gpio_ble_dbo = devm_gpiod_get_optional(dev, "bt-ble-dbo-le", GPIOD_OUT_HIGH);
+	lpm->dbo_state = DBO_NOT_SUPPORTED;
+	if (IS_ERR(lpm->gpio_ble_dbo)) {
+		dev_warn(lpm->dev, "Can't get dbo GPIO descriptor\n");
+	} else if (lpm->gpio_ble_dbo) {
+		lpm->dbo_state = DBO_SUPPORTED;
+	}
+	dev_dbg(lpm->dev, "DBO support: %x", lpm->dbo_state);
+
+	lpm->off_mode_latch = device_property_read_bool(lpm->dev, "off-mode-latch");
 
 	lpm->log = logbuffer_register("btlpm");
 	if (IS_ERR_OR_NULL(lpm->log)) {
