@@ -34,10 +34,10 @@ kernel_module(
         "ftm5.ko",
     ],
     kernel_build = "//private/google-modules/soc/gs:slider",
-    kernel_module_deps = [
-        "//private/google-modules/touch/common:common.slider",
-    ],
     visibility = [
         "//private/google-modules/soc/gs:__pkg__",
+    ],
+    deps = [
+        "//private/google-modules/touch/common:common.slider",
     ],
 )
