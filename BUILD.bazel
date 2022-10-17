@@ -40,17 +40,17 @@ kernel_module(
         "//private/google-modules/display/include:headers",
     ],
     outs = [
+        "goog_touch_interface.ko",
         "heatmap.ko",
         "touch_bus_negotiator.ko",
         "touch_offload.ko",
-        "goog_touch_interface.ko",
     ],
     kernel_build = "//private/google-modules/soc/gs:slider",
-    kernel_module_deps = [
-        "//private/google-modules/soc/gs:gs101_soc",
-    ],
     visibility = [
-        "//private/google-modules/touch:__subpackages__",
         "//private/google-modules/soc/gs:__pkg__",
+        "//private/google-modules/touch:__subpackages__",
+    ],
+    deps = [
+        "//private/google-modules/soc/gs:gs101_soc",
     ],
 )
