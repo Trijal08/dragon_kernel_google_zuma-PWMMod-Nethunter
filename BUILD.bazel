@@ -24,10 +24,10 @@ kernel_module(
         "st21nfc.ko",
     ],
     kernel_build = "//private/google-modules/soc/gs:slider",
-    kernel_module_deps = [
-        "//private/google-modules/soc/gs:gs101_soc",
-    ],
     visibility = [
         "//private/google-modules/soc/gs:__pkg__",
+    ],
+    deps = [
+        "//private/google-modules/soc/gs:gs101_soc",
     ],
 )
