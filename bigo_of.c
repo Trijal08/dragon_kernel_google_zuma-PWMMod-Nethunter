@@ -42,7 +42,7 @@ static int bigo_of_get_resource(struct bigo_core *core)
 	core->paddr = (phys_addr_t)res->start;
 
 #if IS_ENABLED(ENABLE_SLC)
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ssmt_bo_pid");
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ssmt_bw_pid");
 	if (IS_ERR_OR_NULL(res)) {
 		rc = PTR_ERR(res);
 		pr_err("Failed to find ssmt_bo register base: %d\n", rc);

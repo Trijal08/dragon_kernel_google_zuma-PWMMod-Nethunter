@@ -11,11 +11,12 @@ bigwave-$(CONFIG_DEBUG_FS) += bigo_debug.o
 KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
 M ?= $(shell pwd)
 
-KBUILD_OPTIONS += CONFIG_BIGWAVE=m ENABLE_SLC=n
+KBUILD_OPTIONS += CONFIG_BIGWAVE=m ENABLE_SLC=y
 
 include $(KERNEL_SRC)/../private/google-modules/soc/gs/Makefile.include
 
 EXTRA_CFLAGS += -I$(KERNEL_SRC)/../private/google-modules/video/gchips/include
+EXTRA_CFLAGS += -DENABLE_SLC=1
 
 modules modules_install headers_install clean:
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) \

@@ -42,13 +42,6 @@ static int check_mapped_list(struct bigo_core *core, struct bigo_inst *inst,
 {
 	int found = -1;
 	struct bufinfo *binfo;
-	struct dma_buf *dmabuf;
-
-	dmabuf = dma_buf_get(mapping->fd);
-	if (IS_ERR(dmabuf)) {
-		pr_err("failed to get dma buf(%d)\n", mapping->fd);
-		return found;
-	}
 
 	mutex_lock(&inst->lock);
 	list_for_each_entry(binfo, &inst->buffers, list) {
@@ -56,14 +49,13 @@ static int check_mapped_list(struct bigo_core *core, struct bigo_inst *inst,
 		 * TODO(vinaykalia@): Do we need to check for size,
 		 * offset, etc?
 		 */
-		if (binfo->dmabuf == dmabuf) {
+		if (binfo->fd == mapping->fd) {
 			mapping->iova = binfo->iova;
 			found = 0;
 			break;
 		}
 	}
 	mutex_unlock(&inst->lock);
-	dma_buf_put(dmabuf);
 
 	return found;
 }
