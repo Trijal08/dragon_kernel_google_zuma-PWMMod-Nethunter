@@ -665,6 +665,39 @@ static int bigo_worker_thread(void *data)
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+static int bigo_itmon_notifier(struct notifier_block *nb, unsigned long action,
+				void *nb_data)
+{
+	struct bigo_core *core;
+	struct itmon_notifier *itmon_info = nb_data;
+	int is_bo_itmon = 0;
+	int ret = NOTIFY_OK;
+
+	core = container_of(nb, struct bigo_core, itmon_nb);
+
+	if (unlikely(!core) || IS_ERR_OR_NULL(itmon_info))
+		return ret;
+
+	if ((itmon_info->port && !strncmp("BW", itmon_info->port, 2))
+		|| (itmon_info->client && !strncmp("BW", itmon_info->client, 2))
+		|| (itmon_info->dest && !strncmp("BW", itmon_info->dest, 2))) {
+		is_bo_itmon = 1;
+	}
+
+	if (!is_bo_itmon)
+		return ret;
+
+	dev_err(core->dev, "port %s client %s dest %s\n", itmon_info->port,
+				itmon_info->client, itmon_info->dest);
+	ret = NOTIFY_BAD;
+
+	BUG();
+
+	return ret;
+}
+#endif
+
 static int bigo_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -734,6 +767,11 @@ static int bigo_probe(struct platform_device *pdev)
 		pr_warn("Failed to register bigo_sscd_dev.\n");
 
 	bigo_init_debugfs(core);
+
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+	core->itmon_nb.notifier_call = bigo_itmon_notifier;
+	itmon_notifier_chain_register(&core->itmon_nb);
+#endif
 
 	return rc;
 
