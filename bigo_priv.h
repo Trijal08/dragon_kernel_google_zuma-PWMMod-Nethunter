@@ -15,6 +15,10 @@
 #include <linux/platform_device.h>
 #include <soc/google/exynos_pm_qos.h>
 
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+#include <soc/google/exynos-itmon.h>
+#endif
+
 #include "uapi/linux/bigo.h"
 
 #if IS_ENABLED(CONFIG_SLC_PARTITION_MANAGER)
@@ -113,6 +117,9 @@ struct bigo_core {
 	wait_queue_head_t worker;
 	struct bigo_prio_array prioq;
 	u32 qos_dirty;
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+	struct notifier_block itmon_nb;
+#endif
 };
 
 struct bigo_inst {
