@@ -120,6 +120,7 @@ struct bigo_core {
 #if IS_ENABLED(CONFIG_EXYNOS_ITMON)
 	struct notifier_block itmon_nb;
 #endif
+	u32 ip_ver;
 };
 
 struct bigo_inst {
