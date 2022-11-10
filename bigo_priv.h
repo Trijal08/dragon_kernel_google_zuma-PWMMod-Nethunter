@@ -15,6 +15,10 @@
 #include <linux/platform_device.h>
 #include <soc/google/exynos_pm_qos.h>
 
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+#include <soc/google/exynos-itmon.h>
+#endif
+
 #include "uapi/linux/bigo.h"
 
 #if IS_ENABLED(CONFIG_SLC_PARTITION_MANAGER)
@@ -113,6 +117,10 @@ struct bigo_core {
 	wait_queue_head_t worker;
 	struct bigo_prio_array prioq;
 	u32 qos_dirty;
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+	struct notifier_block itmon_nb;
+#endif
+	u32 ip_ver;
 };
 
 struct bigo_inst {
@@ -136,6 +144,7 @@ struct bigo_inst {
 	/* bytes per pixel */
 	u32 bpp;
 	bool idle;
+        bool is_decoder_usage;
 };
 
 inline void set_curr_inst(struct bigo_core *core, struct bigo_inst *inst);

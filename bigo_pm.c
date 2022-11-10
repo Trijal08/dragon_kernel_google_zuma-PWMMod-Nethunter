@@ -99,7 +99,7 @@ static inline void bigo_set_freq(struct bigo_core *core, u32 freq)
 		freq = core->debugfs.set_freq;
 
 	/* HW bug workaround: see b/215390692 */
-	if (freq > BIGW_A0_CSR_PROG_FREQ)
+	if (core->ip_ver < 1 && freq > BIGW_A0_CSR_PROG_FREQ)
 		freq = BIGW_A0_CSR_PROG_FREQ;
 
 	if (!exynos_pm_qos_request_active(&core->pm.qos_bigo))

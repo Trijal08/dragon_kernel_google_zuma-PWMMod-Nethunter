@@ -63,6 +63,13 @@ static int bigo_of_get_resource(struct bigo_core *core)
 		goto err;
 	}
 
+	rc = of_property_read_u32(core->dev->of_node, "ip_ver", &core->ip_ver);
+	if (rc < 0) {
+		core->ip_ver = 0;
+		pr_info("ip_ver is not specified, default to A0\n");
+		rc = 0;
+	}
+
 err:
 	return rc;
 }
