@@ -449,8 +449,7 @@ static void st54spi_power_on(struct st54spi_data *st54spi)
 		usleep_range(5000, 5500);
 		dev_info(&st54spi->spi->dev, "%s : st54 set nReset to High\n",
 			 __func__);
-	} else if (st54spi->power_gpio_mode == POWER_MODE_ST54J_COMBO ||
-		   st54spi->power_gpio_mode == POWER_MODE_ST54L) {
+	} else if (st54spi->power_gpio_mode == POWER_MODE_ST54J_COMBO) {
 		/* Just a pulse on SPI_nRESET */
 		gpiod_set_value(st54spi->gpiod_se_reset, 1);
 		usleep_range(5000, 5500);
@@ -458,6 +457,13 @@ static void st54spi_power_on(struct st54spi_data *st54spi)
 		dev_info(&st54spi->spi->dev, "%s : st54 set nReset to Low\n",
 			 __func__);
 		usleep_range(3000, 4000);
+	} else if (st54spi->power_gpio_mode == POWER_MODE_ST54L) {
+		gpiod_set_value(st54spi->gpiod_se_reset, 0);
+		usleep_range(5000, 5500);
+		gpiod_set_value(st54spi->gpiod_se_reset, 1);
+		dev_info(&st54spi->spi->dev, "%s : st54 set nReset to High\n",
+			__func__);
+		usleep_range(10000, 11000);
 	}
 	st54spi->se_is_poweron = 1;
 }
@@ -957,8 +963,13 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 	if (pdata->power_gpio_mode == POWER_MODE_ST54J_COMBO ||
 	    pdata->power_gpio_mode == POWER_MODE_ST54J ||
 	    pdata->power_gpio_mode == POWER_MODE_ST54L) {
-		pdata->gpiod_se_reset =
-			devm_gpiod_get(dev, "esereset", GPIOD_OUT_LOW);
+		if (pdata->power_gpio_mode == POWER_MODE_ST54L) {
+			pdata->gpiod_se_reset =
+				devm_gpiod_get(dev, "esereset", GPIOD_OUT_HIGH);
+		} else {
+			pdata->gpiod_se_reset =
+				devm_gpiod_get(dev, "esereset", GPIOD_OUT_LOW);
+		}
 		if (IS_ERR(pdata->gpiod_se_reset)) {
 			dev_err(dev,
 				"%s : Unable to request esereset %d\n",
