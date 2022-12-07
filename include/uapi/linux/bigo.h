@@ -41,6 +41,15 @@ struct bigo_ioc_frmsize {
 	__u32 width;
 };
 
+struct bigo_ioc_misc {
+	__u32 cmd;
+	__u32 ret;
+	__u32 data0;
+	__u32 data1;
+	__u32 data2;
+	__u32 data3;
+};
+
 struct bigo_cache_info {
 	__u32 size;
 	__u32 pid;
@@ -80,6 +89,7 @@ enum bigo_cmd_id {
 	BIGO_CMD_CONFIG_SECURE,
 	BIGO_CMD_CONFIG_PRIORITY,
 	BIGO_CMD_DMA_SYNC,
+	BIGO_CMD_MISC,
 	BIGO_CMD_MAXNR,
 };
 /* <END OF HELPERS> */
@@ -96,5 +106,6 @@ enum bigo_cmd_id {
 #define BIGO_IOCX_CONFIG_SECURE _BIGO_IOW(BIGO_CMD_CONFIG_SECURE, __u32)
 #define BIGO_IOCX_CONFIG_PRIORITY _BIGO_IOW(BIGO_CMD_CONFIG_PRIORITY, __s32)
 #define BIGO_IOCX_DMA_SYNC _BIGO_IOW(BIGO_CMD_DMA_SYNC, struct bigo_buf_sync)
+#define BIGO_IOCX_MISC _BIGO_IOW(BIGO_CMD_MISC, struct bigo_ioc_misc)
 
 #endif /* _UAPI_BIGO_H_ */

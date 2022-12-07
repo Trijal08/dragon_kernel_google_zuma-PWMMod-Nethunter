@@ -18,6 +18,7 @@
 #include <linux/platform_data/sscoredump.h>
 #include <linux/soc/samsung/exynos-smc.h>
 #include <linux/kthread.h>
+#include <linux/arm-smccc.h>
 
 #include "bigo_io.h"
 #include "bigo_iommu.h"
@@ -39,6 +40,12 @@
 #define BIGO_HBD_BIT BIT(17)
 
 #define BIGO_IDLE_TIMEOUT_MS 1000
+
+#define SMC_DRM_GET_PADDING_SIZE        ((unsigned int)(0x8200211E))
+
+enum misc_command {
+     BIGO_GET_PADDING_SIZE,
+};
 
 static int bigo_worker_thread(void *data);
 
@@ -489,6 +496,38 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_CONFIG_PRIORITY: {
 		s32 priority = (s32)arg;
 		bigo_config_priority(inst, priority);
+		break;
+	}
+	case BIGO_IOCX_MISC: {
+		struct bigo_ioc_misc misc;
+		if (copy_from_user(&misc, user_desc, sizeof(misc))) {
+			pr_err("Failed to copy from user\n");
+			return -EFAULT;
+		}
+		switch (misc.cmd) {
+			case BIGO_GET_PADDING_SIZE: {
+				struct arm_smccc_res res;
+				uint64_t iova = (uint64_t)misc.data0;
+				uint64_t offset = (uint64_t)misc.data1;
+				int32_t size = (int32_t)misc.data2;
+
+				arm_smccc_smc(SMC_DRM_GET_PADDING_SIZE, iova, offset, size,
+								0, 0, 0, 0, &res);
+
+				misc.ret = res.a0;
+				misc.data0 = res.a1;
+
+				if (copy_to_user(user_desc, &misc, sizeof(misc))) {
+					pr_err("Failed to copy to user\n");
+					rc = -EFAULT;
+				}
+
+				break;
+			}
+			default:
+				rc = -EINVAL;
+				break;
+		}
 		break;
 	}
 	case BIGO_IOCX_ABORT:
