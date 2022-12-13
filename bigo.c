@@ -516,6 +516,8 @@ static irqreturn_t bigo_isr(int irq, void *arg)
 	spin_lock_irqsave(&core->status_lock, flags);
 	core->stat_with_irq = bigo_stat;
 	spin_unlock_irqrestore(&core->status_lock, flags);
+	bigo_stat &= ~BIGO_STAT_MODE;
+	bigo_stat &= ~BIGO_STAT_CODING_MODE;
 	bigo_stat &= ~BIGO_STAT_IRQMASK;
 	bigo_core_writel(core, BIGO_REG_STAT, bigo_stat);
 	complete(&core->frame_done);
