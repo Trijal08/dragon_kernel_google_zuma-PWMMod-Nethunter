@@ -48,6 +48,7 @@ kernel_module(
         "//private/google-modules/touch:__subpackages__",
     ],
     deps = [
+        "//private/google-modules/aoc",
         "//private/google-modules/soc/gs:gs_soc_module",
     ],
 )
