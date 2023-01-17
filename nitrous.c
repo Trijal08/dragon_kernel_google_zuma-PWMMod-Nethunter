@@ -33,6 +33,8 @@
 #define TIMESYNC_ENABLED		2
 #define DBO_NOT_SUPPORTED		0
 #define DBO_SUPPORTED			1
+#define DBO_NOT_CONFIGURED		0
+#define DBO_CONFIGURED			1
 
 struct nitrous_lpm_proc;
 
@@ -55,6 +57,7 @@ struct nitrous_bt_lpm {
 	struct kfifo timestamp_queue;
 
 	int dbo_state;
+	int dbo_config;
 	bool off_mode_latch;
 
 	struct device *dev;
@@ -554,6 +557,7 @@ static int nitrous_rfkill_set_power(void *data, bool blocked)
 {
 	struct nitrous_bt_lpm *lpm = data;
 	struct timespec64 ts;
+	int ret;
 
 	if (!lpm) {
 		return -EINVAL;
@@ -574,6 +578,16 @@ static int nitrous_rfkill_set_power(void *data, bool blocked)
 	/* Reset to make sure LPM is disabled */
 	nitrous_lpm_runtime_disable(lpm);
 	ktime_get_real_ts64(&ts);
+
+	if (!lpm->dbo_config) {
+		ret = gpiod_direction_output(lpm->gpio_ble_dbo, 1);
+		if (ret) {
+			dev_info(lpm->dev, "DBO: ret = %d", ret);
+		} else {
+			lpm->dbo_config = DBO_CONFIGURED;
+		}
+	}
+
 	if (!blocked) {
 		/* Power up the BT chip. delay between consecutive toggles. */
 		logbuffer_log(lpm->log, "Power up BT chip %ptTt", &ts);
@@ -703,7 +717,7 @@ static int nitrous_probe(struct platform_device *pdev)
 	}
 	dev_dbg(lpm->dev, "Timesync support: %x", lpm->timesync_state);
 
-	lpm->gpio_ble_dbo = devm_gpiod_get_optional(dev, "bt-ble-dbo-le", GPIOD_OUT_HIGH);
+	lpm->gpio_ble_dbo = devm_gpiod_get_optional(dev, "bt-ble-dbo-le", GPIOD_IN);
 	lpm->dbo_state = DBO_NOT_SUPPORTED;
 	if (IS_ERR(lpm->gpio_ble_dbo)) {
 		dev_warn(lpm->dev, "Can't get dbo GPIO descriptor\n");
@@ -742,6 +756,8 @@ static int nitrous_probe(struct platform_device *pdev)
 
 	lpm->idle_bt_rx_ip_index = exynos_get_idle_ip_index("bluetooth-rx");
 	exynos_update_ip_idle_status(lpm->idle_bt_rx_ip_index, STATUS_IDLE);
+
+	lpm->dbo_config = DBO_NOT_CONFIGURED;
 
 	logbuffer_log(lpm->log, "probe: successful");
 
