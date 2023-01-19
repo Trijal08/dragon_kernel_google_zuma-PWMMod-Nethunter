@@ -84,6 +84,7 @@ struct bigo_debugfs {
 	struct dentry *root;
 	u32 set_freq;
 	u32 trigger_ssr;
+	u32 timeout;
 };
 
 struct bigo_prio_array {

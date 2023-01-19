@@ -245,7 +245,7 @@ static int bigo_run_job(struct bigo_core *core, struct bigo_job *job)
 	bigo_push_regs(core, job->regs);
 	bigo_core_enable(core);
 	ret = wait_for_completion_timeout(&core->frame_done,
-			msecs_to_jiffies(JOB_COMPLETE_TIMEOUT_MS));
+			msecs_to_jiffies(core->debugfs.timeout));
 	if (!ret) {
 		pr_err("timed out waiting for HW\n");
 
