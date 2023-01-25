@@ -62,6 +62,8 @@ void bigo_core_disable(struct bigo_core *core)
 	u32 bigo_stat = bigo_core_readl(core, BIGO_REG_STAT);
 
 	bigo_stat &= ~BIGO_STAT_ENABLE;
+	bigo_stat &= ~BIGO_STAT_MODE;
+	bigo_stat &= ~BIGO_STAT_CODING_MODE;
 	bigo_core_writel(core, BIGO_REG_STAT, bigo_stat);
 	pr_debug("core disable\n");
 }
