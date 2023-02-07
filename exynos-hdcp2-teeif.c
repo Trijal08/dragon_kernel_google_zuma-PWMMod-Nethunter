@@ -8,8 +8,11 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-#include <soc/samsung/exynos-smc.h>
+#include <linux/device.h>
+#include <linux/jiffies.h>
+#include <linux/soc/samsung/exynos-smc.h>
 #include <linux/slab.h>
+#include <linux/trusty/trusty_ipc.h>
 #include <linux/module.h>
 #include <asm/cacheflush.h>
 #include <linux/dma-mapping.h>
@@ -18,98 +21,249 @@
 #include "exynos-hdcp2.h"
 #include "exynos-hdcp2-log.h"
 
-extern struct device *device_hdcp;
-extern void __dma_inv_area(const void *start, size_t size);
+#define TZ_CON_TIMEOUT  5000
+#define TZ_BUF_TIMEOUT 10000
+#define TZ_MSG_TIMEOUT 10000
+#define HDCP_TA_PORT "com.android.trusty.hdcp.auth"
 
-static struct hci_ctx hctx = {
-	.msg = NULL,
-	.state = HCI_DISCONNECTED
+struct hdcp_auth_req {
+	uint32_t cmd;
+	int32_t arg;
 };
+
+struct hdcp_auth_rsp {
+	uint32_t cmd;
+	int32_t err;
+	int32_t arg;
+};
+
+struct hdcp_tz_chan_ctx {
+	struct tipc_chan *chan;
+	struct mutex rsp_lock;
+	struct completion reply_comp;
+	struct hdcp_auth_rsp rsp;
+	struct hci_message **msg_ptr;
+};
+static struct hdcp_tz_chan_ctx hdcp_ta_ctx;
+
+static size_t deduce_num_payload(size_t msg_len)
+{
+	switch (msg_len) {
+	case (sizeof(struct hdcp_auth_rsp)):
+		return 1;
+	case (sizeof(struct hdcp_auth_rsp) + sizeof(struct hci_message)):
+		return 2;
+	default:
+		return 0;
+	}
+}
+static struct tipc_msg_buf *tz_srv_handle_msg(void *data,
+					      struct tipc_msg_buf* rxbuf)
+{
+	struct hdcp_tz_chan_ctx *ctx = data;
+	size_t len;
+	size_t payload_num;
+
+	len = mb_avail_data(rxbuf);
+	payload_num = deduce_num_payload(len);
+
+	if (payload_num == 0) {
+		hdcp_err("TZ: invalid RSP buffer size (%zd)\n", len);
+	}
+
+	if (payload_num > 0) {
+		memcpy(&ctx->rsp,
+		       mb_get_data(rxbuf, sizeof(struct hdcp_auth_rsp)),
+		       sizeof(struct hdcp_auth_rsp));
+	}
+	if (payload_num > 1 && ctx->msg_ptr) {
+		memcpy(*ctx->msg_ptr,
+		       mb_get_data(rxbuf, sizeof(struct hci_message)),
+		       sizeof(struct hci_message));
+	}
+
+	complete(&ctx->reply_comp);
+
+	return rxbuf;
+}
+
+static void tz_srv_handle_event(void *data, int event)
+{
+	struct hdcp_tz_chan_ctx *ctx = data;
+	complete(&ctx->reply_comp);
+}
+
+static const struct tipc_chan_ops tz_srv_ops = {
+	.handle_msg = tz_srv_handle_msg,
+	.handle_event = tz_srv_handle_event,
+};
+
+void hdcp_tee_init(void)
+{
+	init_completion(&hdcp_ta_ctx.reply_comp);
+	mutex_init(&hdcp_ta_ctx.rsp_lock);
+	hdcp_ta_ctx.msg_ptr = NULL;
+}
 
 int hdcp_tee_open(void)
 {
 	int ret = 0;
-	u64 phys_addr = 0;
+	struct tipc_chan *chan;
 
-	if (hctx.state == HCI_CONNECTED) {
+	if (hdcp_ta_ctx.chan) {
 		hdcp_info("HCI is already connected\n");
 		return 0;
 	}
 
-	/* Allocate WSM for HDCP commnad interface */
-	hctx.msg = (struct hci_message *)kzalloc(sizeof(struct hci_message), GFP_KERNEL);
-	if (!hctx.msg) {
-		hdcp_err("alloc wsm for HDCP SWd is failed\n");
-		return -ENOMEM;
+	chan = tipc_create_channel(NULL, &tz_srv_ops, &hdcp_ta_ctx);
+	if (IS_ERR(chan)) {
+		hdcp_err("TZ: failed (%ld) to create chan\n", PTR_ERR(chan));
+		return PTR_ERR(chan);
 	}
 
-	/* send WSM address to SWd */
-	phys_addr = virt_to_phys((void *)hctx.msg);
+	reinit_completion(&hdcp_ta_ctx.reply_comp);
 
-	ret = exynos_smc(SMC_HDCP_INIT, phys_addr, sizeof(struct hci_message), 0);
-	if (ret) {
-		hdcp_err("Fail to set up connection with SWd. ret(%d)\n", ret);
-		kfree(hctx.msg);
-		hctx.msg = NULL;
-		return -ECONNREFUSED;
+	ret = tipc_chan_connect(chan, HDCP_TA_PORT);
+	if (ret < 0) {
+		hdcp_err("TZ: failed (%d) to connect\n", ret);
+		tipc_chan_destroy(chan);
+		return ret;
 	}
 
-	hctx.state = HCI_CONNECTED;
-
-	return 0;
-}
-
-int hdcp_tee_close()
-{
-	int ret;
-
-	if (hctx.state == HCI_DISCONNECTED) {
-		hdcp_info("HCI is already disconnected\n");
-		return 0;
-	}
-
-	if (hctx.msg) {
-		kfree(hctx.msg);
-		hctx.msg = NULL;
-	}
-
-	/* send terminate command to SWd */
-	ret = exynos_smc(SMC_HDCP_TERMINATE, 0, 0, 0);
-	if (ret) {
-		hdcp_err("HDCP: Fail to set up connection with SWd. ret(%d)\n", ret);
-		return -EFAULT;
-	}
-
-	hctx.state = HCI_DISCONNECTED;
-
-	return 0;
-}
-
-int hdcp_tee_comm(struct hci_message *hci)
-{
-	int ret;
-
-	if (!hci)
-		return -EINVAL;
-
-	/**
-	 * kernel & TEE does not share cache.
-	 * So, cache should be flushed before sending data to TEE
-	 * and invalidate after come back to kernel
-	 */
-
-	// mark on 5.4 __flush_dcache_area((void *)hci, sizeof(struct hci_message));
-	dma_map_single(device_hdcp, (void *)hci, sizeof(struct hci_message), DMA_TO_DEVICE);
-	ret = exynos_smc(SMC_HDCP_PROT_MSG, 0, 0, 0);
-	// mark on 5.4 __inval_dcache_area((void *)hci, sizeof(struct hci_message));
-	dma_map_single(device_hdcp, (void *)hci, sizeof(struct hci_message), DMA_FROM_DEVICE);
-
-	if (ret) {
-		hdcp_info("SWd returned(%x)\n", ret);
+	hdcp_ta_ctx.chan = chan;
+	ret = wait_for_completion_timeout(&hdcp_ta_ctx.reply_comp,
+					  msecs_to_jiffies(TZ_CON_TIMEOUT));
+	if (ret <= 0) {
+		ret = (!ret) ? -ETIMEDOUT : ret;
+		hdcp_err("TZ: failed (%d) to wait for connect\n", ret);
+		hdcp_tee_close();
 		return ret;
 	}
 
 	return 0;
+}
+
+int hdcp_tee_close(void)
+{
+	if (!hdcp_ta_ctx.chan) {
+		hdcp_info("HCI is already disconnected\n");
+		return 0;
+	}
+
+	tipc_chan_shutdown(hdcp_ta_ctx.chan);
+	tipc_chan_destroy(hdcp_ta_ctx.chan);
+	hdcp_ta_ctx.chan = NULL;
+	return 0;
+}
+
+static int hdcp_tee_comm_xchg_internal(uint32_t cmd, int32_t arg,
+				       int32_t *rsp, struct hci_message *hci)
+{
+	int ret;
+	struct tipc_msg_buf *txbuf;
+	struct hdcp_auth_req auth_req;
+
+	ret = hdcp_tee_open();
+	if (ret)
+		return ret;
+
+	txbuf = tipc_chan_get_txbuf_timeout(hdcp_ta_ctx.chan, TZ_BUF_TIMEOUT);
+	if (IS_ERR(txbuf)) {
+		hdcp_err("TZ: failed (%ld) to get txbuf\n", PTR_ERR(txbuf));
+		return PTR_ERR(txbuf);
+	}
+
+	auth_req.cmd = cmd;
+	auth_req.arg = arg;
+	memcpy(mb_put_data(txbuf, sizeof(struct hdcp_auth_req)),
+	       &auth_req, sizeof(struct hdcp_auth_req));
+
+	if (hci) {
+		memcpy(mb_put_data(txbuf, sizeof(struct hci_message)),
+		       hci, sizeof(struct hci_message));
+		hdcp_ta_ctx.msg_ptr = &hci;
+	} else {
+		hdcp_ta_ctx.msg_ptr = NULL;
+	}
+
+	reinit_completion(&hdcp_ta_ctx.reply_comp);
+
+	ret = tipc_chan_queue_msg(hdcp_ta_ctx.chan, txbuf);
+	if (ret < 0) {
+		hdcp_err("TZ: failed(%d) to queue msg\n", ret);
+		tipc_chan_put_txbuf(hdcp_ta_ctx.chan, txbuf);
+		hdcp_tee_close();
+		return ret;
+	}
+
+	ret = wait_for_completion_timeout(&hdcp_ta_ctx.reply_comp,
+					  msecs_to_jiffies(TZ_MSG_TIMEOUT));
+	if (ret <= 0) {
+		ret = (!ret) ? -ETIMEDOUT : ret;
+		hdcp_err("TZ: failed (%d) to wait for reply\n", ret);
+		hdcp_tee_close();
+		return ret;
+	}
+
+	if (hdcp_ta_ctx.rsp.cmd != (cmd | HDCP_CMD_AUTH_RESP)) {
+		hdcp_err("TZ: hdcp had an unexpected rsp cmd (%x vs %x)",
+			 hdcp_ta_ctx.rsp.cmd, cmd | HDCP_CMD_AUTH_RESP);
+		return -EIO;
+	}
+
+	if (hdcp_ta_ctx.rsp.err) {
+		hdcp_err("TZ: hdcp had an unexpected rsp err (%d)",
+			 hdcp_ta_ctx.rsp.err);
+		return -EIO;
+	}
+
+	if (rsp)
+		*rsp = hdcp_ta_ctx.rsp.arg;
+	return 0;
+}
+
+static int hdcp_tee_comm_xchg(uint32_t cmd, int32_t arg, int32_t *rsp,
+			      struct hci_message *hci) {
+	int ret;
+	int retries = 2;
+
+	mutex_lock(&hdcp_ta_ctx.rsp_lock);
+	while (retries) {
+		retries--;
+		ret = hdcp_tee_comm_xchg_internal(cmd, arg, rsp, hci);
+		if (!ret) {
+			mutex_unlock(&hdcp_ta_ctx.rsp_lock);
+			return 0;
+		}
+	}
+	mutex_unlock(&hdcp_ta_ctx.rsp_lock);
+
+	return ret;
+}
+
+static irq_hw_number_t saved_hwirq = 0;
+
+int hdcp_tee_send_cmd(uint32_t cmd) {
+	if (HDCP_CMD_AUTH_START == cmd)
+		hdcp_tee_comm_xchg(HDCP_CMD_NOTIFY_INTR_NUM, saved_hwirq, NULL, NULL);
+	return hdcp_tee_comm_xchg(cmd, 0, NULL, NULL);
+}
+
+int hdcp_tee_check_protection(int* version) {
+	return hdcp_tee_comm_xchg(HDCP_CMD_PROTECTION_CHECK, 0, version, NULL);
+}
+
+int hdcp_tee_notify_intr_num(irq_hw_number_t hwirq) {
+	saved_hwirq = hwirq;
+	return 0;
+}
+
+int hdcp_tee_set_test_mode(bool enable) {
+	return hdcp_tee_comm_xchg(HDCP_CMD_SET_TEST_MODE, enable, NULL, NULL);
+}
+
+static int hdcp_tee_comm(struct hci_message *hci) {
+	return hdcp_tee_comm_xchg(HDCP_CMD_PROTOCOL, 0, NULL, hci);
 }
 
 int teei_gen_rtx(uint32_t lk_type,
@@ -117,7 +271,8 @@ int teei_gen_rtx(uint32_t lk_type,
 		uint8_t *caps, uint32_t caps_len)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 
 	/* todo: input check */
 
@@ -143,7 +298,8 @@ int teei_verify_cert(uint8_t *cert, size_t cert_len,
 		uint8_t *rx_caps, size_t rx_caps_len)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 	/* todo: input check */
 
 	/* Update TCI buffer */
@@ -165,7 +321,8 @@ int teei_verify_cert(uint8_t *cert, size_t cert_len,
 int teei_generate_master_key(uint32_t lk_type, uint8_t *emkey, size_t emkey_len)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 	/* todo: input check */
 
 	/* Update TCI buffer */
@@ -187,7 +344,8 @@ int teei_generate_master_key(uint32_t lk_type, uint8_t *emkey, size_t emkey_len)
 int teei_compare_ake_hmac(uint8_t *rx_hmac, size_t rx_hmac_len)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 	/* todo: input check */
 
 	/* Update TCI buffer */
@@ -204,7 +362,8 @@ int teei_compare_ake_hmac(uint8_t *rx_hmac, size_t rx_hmac_len)
 int teei_set_pairing_info(uint8_t *ekh_mkey, size_t ekh_mkey_len)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 
 	/* todo: input check */
 
@@ -220,10 +379,12 @@ int teei_set_pairing_info(uint8_t *ekh_mkey, size_t ekh_mkey_len)
 }
 
 int teei_get_pairing_info(uint8_t *ekh_mkey, size_t ekh_mkey_len,
-			uint8_t *m, size_t m_len)
+			  uint8_t *m, size_t m_len,
+			  int *found)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 
 	/* todo: input check */
 
@@ -236,6 +397,7 @@ int teei_get_pairing_info(uint8_t *ekh_mkey, size_t ekh_mkey_len,
 
 	memcpy(ekh_mkey, hci->getpairing.ekh_mkey, ekh_mkey_len);
 	memcpy(m, hci->getpairing.m, m_len);
+	*found = hci->getpairing.found ? 1 : 0;
 
 	return ret;
 }
@@ -243,7 +405,8 @@ int teei_get_pairing_info(uint8_t *ekh_mkey, size_t ekh_mkey_len,
 int teei_gen_rn(uint8_t *out, size_t len)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 
 	/* todo: input check */
 
@@ -264,7 +427,8 @@ int teei_gen_rn(uint8_t *out, size_t len)
 int teei_compare_lc_hmac(uint8_t *rx_hmac, size_t rx_hmac_len)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 	/* todo: input check */
 
 	/* Update TCI buffer */
@@ -281,7 +445,8 @@ int teei_compare_lc_hmac(uint8_t *rx_hmac, size_t rx_hmac_len)
 int teei_generate_riv(uint8_t *out, size_t len)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 
 	/* todo: input check */
 
@@ -304,7 +469,8 @@ int teei_generate_skey(uint32_t lk_type,
 		int share_skey)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 	/* todo: input check */
 
 	/* Update TCI buffer */
@@ -332,7 +498,8 @@ int teei_set_rcvlist_info(uint8_t *rx_info,
 		uint8_t *valid)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 	/* todo: input check */
 
 	hci->cmd_id = HDCP_TEEI_SET_RCV_ID_LIST;
@@ -364,7 +531,8 @@ int teei_gen_stream_manage(uint16_t stream_num,
 		uint8_t *streamid_type)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 	/* todo: input check */
 
 	/* Update TCI buffer */
@@ -389,7 +557,8 @@ int teei_gen_stream_manage(uint16_t stream_num,
 int teei_verify_m_prime(uint8_t *m_prime, uint8_t *input, size_t input_len)
 {
 	int ret = 0;
-	struct hci_message *hci = hctx.msg;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
 
 	hci->cmd_id = HDCP_TEEI_VERIFY_M_PRIME;
 	memcpy(hci->verifymprime.m_prime, m_prime, HDCP_RP_HMAC_M_LEN);
@@ -402,38 +571,3 @@ int teei_verify_m_prime(uint8_t *m_prime, uint8_t *input, size_t input_len)
 
 	return ret;
 }
-
-int teei_wrapped_key(uint8_t *key, uint32_t wrapped, uint32_t key_len)
-{
-	int ret = 0;
-	struct hci_message *hci = hctx.msg;
-
-	hci->cmd_id = HDCP_TEEI_WRAP_KEY;
-
-	if (key_len > (sizeof(hci->wrap_key.enc_key) - HDCP_WRAP_AUTH_TAG)) {
-		hdcp_err("(un)wraaping key size is wrong. 0x%x\n", key_len);
-		return HDCP_ERROR_WRONG_SIZE;
-	}
-
-	if (key_len < HDCP_WRAP_AUTH_TAG || key_len > HDCP_WRAP_MAX_SIZE - HDCP_WRAP_AUTH_TAG)
-		return HDCP_ERROR_WRONG_SIZE;
-
-	if (wrapped == UNWRAP)
-		memcpy(hci->wrap_key.enc_key, key, key_len + HDCP_WRAP_AUTH_TAG);
-	else
-		memcpy(hci->wrap_key.key, key, key_len);
-
-	hci->wrap_key.wrapped = wrapped;
-	hci->wrap_key.key_len = key_len;
-
-	if ((ret = hdcp_tee_comm(hci)) < 0)
-		return ret;
-
-	if (hci->wrap_key.wrapped == WRAP) {
-		memcpy(key, hci->wrap_key.enc_key, key_len + HDCP_WRAP_AUTH_TAG);
-	}
-
-	return ret;
-}
-
-MODULE_LICENSE("GPL");

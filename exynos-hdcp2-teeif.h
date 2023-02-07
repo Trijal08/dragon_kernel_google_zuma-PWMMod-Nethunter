@@ -33,7 +33,6 @@ enum {
 	HDCP_TEEI_COMPARE_LC_HMAC,
 	HDCP_TEEI_GEN_RIV,
 	HDCP_TEEI_GEN_SKEY,
-	HDCP_TEEI_ENC_PACKET,
 	HDCP_TEEI_SET_PAIRING_INFO,
 	HDCP_TEEI_GET_PAIRING_INFO,
 	HDCP_TEEI_SET_RCV_ID_LIST,
@@ -161,6 +160,7 @@ typedef struct {
 	uint32_t id;
 	uint8_t ekh_mkey[HDCP_AKE_EKH_MKEY_BYTE_LEN];
 	uint8_t m[HDCP_AKE_M_BYTE_LEN];
+	uint8_t found;
 } hci_getpairing_t;
 
 typedef struct {
@@ -251,9 +251,26 @@ struct hci_ctx {
 	uint8_t state;
 };
 
+enum hdcp_auth_cmd {
+	HDCP_CMD_AUTH_RESP = (1U << 31),
+	HDCP_CMD_REINIT = 0,
+	HDCP_CMD_PROTOCOL,
+	HDCP_CMD_NOTIFY_INTR_NUM,
+	HDCP_CMD_AUTH_START,
+	HDCP_CMD_AUTH_DONE,
+	HDCP_CMD_AUTH_CANCEL,
+	HDCP_CMD_PROTECTION_CHECK,
+	HDCP_CMD_SESSION_SET,
+	HDCP_CMD_SET_TEST_MODE,
+};
+
+void hdcp_tee_init(void);
 int hdcp_tee_open(void);
 int hdcp_tee_close(void);
-int hdcp_tee_comm(struct hci_message *hci);
+int hdcp_tee_send_cmd(uint32_t cmd);
+int hdcp_tee_notify_intr_num(irq_hw_number_t hwirq);
+int hdcp_tee_check_protection(int* version);
+int hdcp_tee_set_test_mode(bool enable);
 
 /* HDCP TEE interfaces */
 int teei_gen_rtx(uint32_t lk_type,
@@ -269,7 +286,7 @@ int teei_generate_master_key(uint32_t lk_type,
 int teei_compare_ake_hmac(uint8_t *hmac, size_t hamc_len);
 int teei_set_pairing_info(uint8_t *ekh_mkey, size_t ekh_mkey_len);
 int teei_get_pairing_info(uint8_t *ekh_mkey, size_t ekh_mkey_len,
-			uint8_t *m, size_t m_len);
+			uint8_t *m, size_t m_len, int* found);
 
 /* LC interface */
 int teei_gen_rn(uint8_t *out, size_t len);
@@ -292,5 +309,4 @@ int teei_gen_stream_manage(uint16_t stream_num,
 		uint8_t *k,
 		uint8_t *streamid_type);
 int teei_verify_m_prime(uint8_t *m_prime, uint8_t *input, size_t input_len);
-int teei_wrapped_key(uint8_t *key_str, uint32_t wrraped, uint32_t key_len);
 #endif

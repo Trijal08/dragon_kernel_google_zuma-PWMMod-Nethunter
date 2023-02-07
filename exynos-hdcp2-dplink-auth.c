@@ -10,7 +10,6 @@
 #include <linux/delay.h>
 #include <linux/module.h>
 #include "exynos-hdcp2.h"
-#include "exynos-hdcp2-misc.h"
 #include "exynos-hdcp2-log.h"
 #include "exynos-hdcp2-dplink-auth.h"
 #include "exynos-hdcp2-dplink-if.h"
@@ -177,7 +176,7 @@ static int dp_send_protocol_msg(struct hdcp_link_data *lk, uint8_t msg_id, struc
 	return TX_AUTH_SUCCESS;
 }
 
-int dp_recv_protocol_msg(struct hdcp_link_data *lk, uint8_t msg_id, struct hdcp_msg_info *msg_info)
+static int dp_recv_protocol_msg(struct hdcp_link_data *lk, uint8_t msg_id, struct hdcp_msg_info *msg_info)
 {
 	int ret = TX_AUTH_SUCCESS;
 
@@ -264,7 +263,7 @@ static int do_send_ake_init(struct hdcp_link_data *lk)
 	return 0;
 }
 
-void parse_rxcaps_info(uint8_t *rxcaps, struct hdcp_link_data *lk)
+static void parse_rxcaps_info(uint8_t *rxcaps, struct hdcp_link_data *lk)
 {
 	memcpy(lk->rx_ctx.caps, rxcaps, sizeof(lk->rx_ctx.caps));
 	if (rxcaps[2] & DP_RXCAPS_REPEATER) {
@@ -1166,5 +1165,3 @@ void dplink_clear_irqflag_all(void)
 	reauth_req = 0;
 	integrity_fail = 0;
 }
-
-MODULE_LICENSE("GPL");

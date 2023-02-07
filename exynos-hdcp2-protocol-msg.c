@@ -10,12 +10,10 @@
  */
 #include <linux/kernel.h>
 
-#include "exynos-hdcp2-config.h"
 #include "exynos-hdcp2-protocol-msg.h"
 #include "exynos-hdcp2-teeif.h"
 #include "exynos-hdcp2.h"
 #include "exynos-hdcp2-log.h"
-#include "exynos-hdcp2-misc.h"
 #include "exynos-hdcp2-dplink-protocol-msg.h"
 
 int ske_generate_sessionkey(uint32_t lk_type, uint8_t *enc_skey, int share_skey)
@@ -135,88 +133,12 @@ int ake_find_masterkey(int *found_km,
 {
 	int ret;
 
-	ret = teei_get_pairing_info(ekh_mkey, ekh_mkey_len, m, m_len);
+	ret = teei_get_pairing_info(ekh_mkey, ekh_mkey_len, m, m_len, found_km);
 	if (ret) {
-		if (ret == E_HDCP_PRO_INVALID_RCV_ID) {
-			hdcp_info("RCV id is not found\n");
-			*found_km = 0;
-			return 0;
-		} else {
-			*found_km = 0;
-			hdcp_err("teei_store_pairing_info() is failed with %x\n", ret);
-			return ERR_FIND_MASTERKEY;
-		}
+		*found_km = 0;
+		hdcp_err("teei_store_pairing_info() is failed with %x\n", ret);
+		return ERR_FIND_MASTERKEY;
 	}
-
-	*found_km = 1;
 
 	return 0;
 }
-
-int parse_rcvid_list(uint8_t *msg, struct hdcp_tx_ctx *tx_ctx)
-{
-        /* get PRE META values */
-        tx_ctx->rpauth_info.devs_exd = (uint8_t)*msg;
-        tx_ctx->rpauth_info.cascade_exd = (uint8_t)*(msg + 1);
-
-        /* get META values */
-        msg += HDCP_RP_RCV_LIST_PRE_META_LEN;
-        tx_ctx->rpauth_info.devs_count = (uint8_t)*msg;
-        tx_ctx->rpauth_info.depth = (uint8_t)*(msg + 1);
-        tx_ctx->rpauth_info.hdcp2_down = (uint8_t)*(msg + 2);
-        tx_ctx->rpauth_info.hdcp1_down = (uint8_t)*(msg + 3);
-        memcpy(tx_ctx->rpauth_info.seq_num_v, (uint8_t *)(msg + 4), 3);
-        memcpy(tx_ctx->rpauth_info.v_prime, (uint8_t *)(msg + 7), 16);
-
-        /* get receiver ID list */
-        msg += HDCP_RP_RCV_LIST_META_LEN;
-	if (tx_ctx->rpauth_info.devs_count > HDCP_RCV_DEVS_COUNT_MAX) {
-		hdcp_err("invalid DEVS count (%d)\n", tx_ctx->rpauth_info.devs_count);
-		return -1;
-	}
-
-        memcpy(tx_ctx->rpauth_info.u_rcvid.arr, msg, tx_ctx->rpauth_info.devs_count * HDCP_RCV_ID_LEN);
-
-	return 0;
-}
-
-void convert_rcvlist2authmsg(struct hdcp_rpauth_info *rpauth_info, uint8_t *src_msg, size_t *msg_len)
-{
-        int i;
-        *msg_len = 0;
-
-        for (i = 0; i < rpauth_info->devs_count; i++) {
-                memcpy(src_msg + *msg_len, rpauth_info->u_rcvid.arr[i], HDCP_RCV_ID_LEN);
-                *msg_len += HDCP_RCV_ID_LEN;
-        }
-
-        /* concatinate DEPTH */
-        memcpy(src_msg + *msg_len, &rpauth_info->depth, 1);
-        *msg_len += 1;
-
-        /* concatinate DEVICE COUNT */
-        memcpy(src_msg + *msg_len, &rpauth_info->devs_count, 1);
-        *msg_len += 1;
-
-        /* concatinate MAX DEVS EXCEEDED */
-        memcpy(src_msg + *msg_len, &rpauth_info->devs_exd, 1);
-        *msg_len += 1;
-
-        /* concatinate MAX CASCADE EXCEEDED */
-        memcpy(src_msg + *msg_len, &rpauth_info->cascade_exd, 1);
-        *msg_len += 1;
-
-        /* concatinate HDCP2 REPEATER DOWNSTREAM */
-        memcpy(src_msg + *msg_len, &rpauth_info->hdcp2_down, 1);
-        *msg_len += 1;
-
-        /* concatinate HDCP1 DEVICE DOWNSTREAM */
-        memcpy(src_msg + *msg_len, &rpauth_info->hdcp1_down, 1);
-        *msg_len += 1;
-
-        /* concatinate seq_num_v */
-        memcpy(src_msg + *msg_len, &rpauth_info->seq_num_v, 3);
-        *msg_len += 3;
-}
-
-MODULE_LICENSE("GPL");

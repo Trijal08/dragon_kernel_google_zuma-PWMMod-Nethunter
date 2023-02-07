@@ -1,9 +1,13 @@
-#
-# Exynos HDCP drivers
-#
+M ?= $(shell pwd)
 
-# HDCP
-hdcp2-objs := exynos-hdcp2.o exynos-hdcp2-teeif.o exynos-hdcp2-crypto.o exynos-hdcp2-session.o exynos-hdcp2-misc.o exynos-hdcp2-encrypt.o exynos-hdcp2-protocol-msg.o exynos-hdcp2-dplink-inter.o exynos-hdcp2-dplink.o exynos-hdcp2-dplink-if.o exynos-hdcp2-dplink-auth.o exynos-hdcp2-dplink-protocol-msg.o
-obj-$(CONFIG_EXYNOS_HDCP2)     += hdcp2.o
+KBASE_PATH_RELATIVE = $(M)
 
-hdcp2-$(CONFIG_HDCP2_EMULATION_MODE) += exynos-hdcp2-dplink-selftest.o
+EXTRA_CFLAGS += -Werror
+
+include $(KERNEL_SRC)/../private/google-modules/soc/gs/Makefile.include
+
+KBUILD_OPTIONS  += CONFIG_EXYNOS_HDCP2=m
+
+modules modules_install clean:
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) W=1 \
+	$(KBUILD_OPTIONS) EXTRA_CFLAGS="$(EXTRA_CFLAGS)" KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)" $(@)

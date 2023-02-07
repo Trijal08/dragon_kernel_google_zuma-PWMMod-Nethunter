@@ -12,10 +12,6 @@
 
 #include "exynos-hdcp2.h"
 
-#if defined(CONFIG_HDCP2_EMULATION_MODE)
-int dplink_emul_handler(int cmd);
-#endif
-
 enum auth_signal {
 	HDCP_DRM_OFF	= 0x100,
 	HDCP_DRM_ON	= 0x200,

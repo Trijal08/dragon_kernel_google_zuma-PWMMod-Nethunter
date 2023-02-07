@@ -514,5 +514,3 @@ void hdcp_link_list_destroy(struct hdcp_link_list *lk_list)
 	lk_head->prev = lk_head;
 	mutex_unlock(&lk_list->lk_mutex);
 }
-
-MODULE_LICENSE("GPL");

@@ -44,11 +44,11 @@ enum hdcp22_msg_name {
 #define DP_HDCP22_ENABLE	1
 #define DP_HPD_STATUS_ZERO	2
 
-int hdcp_dplink_init(void);
 void hdcp_dplink_config(int en);
 int hdcp_dplink_is_enabled_hdcp22(void);
 int hdcp_dplink_recv(uint32_t msg_name, uint8_t *data, uint32_t size);
 int hdcp_dplink_send(uint32_t msg_name, uint8_t *data, uint32_t size);
 int hdcp_dplink_get_stream_info(uint16_t *num, uint8_t *strm_id);
+void dp_register_func_for_hdcp22(void (*func0)(u32 en), int (*func1)(u32 address, u32 length, u8 *data), int (*func2)(u32 address, u32 length, u8 *data));
 
 #endif

@@ -18,122 +18,9 @@
 #include "exynos-hdcp2-dplink-reg.h"
 #include "exynos-hdcp2-dplink-if.h"
 
-#if IS_ENABLED(CONFIG_DRM_SAMSUNG_DP)
 static void (*pdp_hdcp22_enable)(u32 en);
 static int (*pdp_dpcd_read_for_hdcp22)(u32 address, u32 length, u8 *data);
 static int (*pdp_dpcd_write_for_hdcp22)(u32 address, u32 length, u8 *data);
-void dp_register_func_for_hdcp22(void (*func0)(u32 en), int (*func1)(u32 address, u32 length, u8 *data), int (*func2)(u32 address, u32 length, u8 *data));
-#else
-void pdp_hdcp22_enable(u32 en);
-int pdp_dpcd_read_for_hdcp22(u32 address, u32 length, u8 *data);
-int pdp_dpcd_write_for_hdcp22(u32 address, u32 length, u8 *data);
-#endif
-
-
-#if defined(CONFIG_HDCP2_EMULATION_MODE)
-#define NETLINK_HDCP 31
-#define SOCK_BUF_SIZE (1024 * 512)
-#define NETLINK_PORT 1000
-
-struct sock *nl_sk = NULL;
-struct sk_buff sk_buf;
-uint8_t dplink_wait;
-uint8_t *nl_data;
-struct nlmsghdr *nlh;
-
-void cb_hdcp_nl_recv_msg(struct sk_buff *skb);
-
-int hdcp_dplink_init(void)
-{
-	struct netlink_kernel_cfg cfg = {
-		.input	= cb_hdcp_nl_recv_msg,
-	};
-
-	nl_sk = netlink_kernel_create(&init_net, NETLINK_HDCP, &cfg);
-	if (!nl_sk) {
-		hdcp_err("Error creating socket.\n");
-		return -EINVAL;
-	}
-
-	nl_data = (uint8_t *)kzalloc(SOCK_BUF_SIZE, GFP_KERNEL);
-	if (!nl_data) {
-		hdcp_err("Netlink Socket buffer alloc fail\n");
-		return -EINVAL;
-	}
-
-	dplink_wait = 1;
-
-	return 0;
-}
-
-/* callback for netlink driver */
-void cb_hdcp_nl_recv_msg(struct sk_buff *skb)
-{
-	nlh = (struct nlmsghdr *)skb->data;
-
-	memcpy(nl_data, (uint8_t *)nlmsg_data(nlh), nlmsg_len(nlh));
-	dplink_wait = 0;
-}
-
-static void nl_recv_msg(uint8_t *data, uint32_t size)
-{
-	/* todo: change to not a busy wait */
-	while (dplink_wait) {
-		hdcp_err("wait dplink_wait\n");
-		msleep(1000);
-	}
-
-	memcpy(data, nl_data, size);
-
-	dplink_wait = 1;
-}
-
-int hdcp_dplink_recv(uint32_t msg_name, uint8_t *data, uint32_t size)
-{
-	nl_recv_msg(data, size);
-	return 0;
-}
-
-int hdcp_dplink_send(uint32_t msg_name, uint8_t *data, uint32_t size)
-{
-	struct sk_buff *skb_out;
-	int ret;
-
-	skb_out = nlmsg_new(size, 0);
-	if (!skb_out) {
-		hdcp_err("Failed to allocate new skb\n");
-		return -1;
-	}
-	nlh = nlmsg_put(skb_out, 0, 0, 2, size, NLM_F_REQUEST);
-	if (!nlh) {
-		hdcp_err("fail to nlmsg_put()\n");
-		return -1;
-	}
-
-	NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
-	memcpy(nlmsg_data(nlh), data, size);
-
-	ret = nlmsg_unicast(nl_sk, skb_out, NETLINK_PORT);
-	if (ret < 0) {
-		hdcp_err("Error while sending bak to user\n");
-		return -1;
-	}
-
-	return 0;
-}
-
-int hdcp_dplink_is_enabled_hdcp22(void)
-{
-	/* todo: check hdcp22 enable */
-	return 1;
-}
-
-void hdcp_dplink_config(int en)
-{
-	/* dummy function */
-}
-#else
-
 
 /* Address define for HDCP within DPCD address space */
 static uint32_t dpcd_addr[NUM_HDCP22_MSG_NAME] = {
@@ -164,12 +51,6 @@ static uint32_t dpcd_addr[NUM_HDCP22_MSG_NAME] = {
 	DPCD_ADDR_HDCP22_RxStatus,
 	DPCD_ADDR_HDCP22_Type,
 };
-
-int hdcp_dplink_init(void)
-{
-	/* todo */
-	return 0;
-}
 
 void hdcp_dplink_config(int en)
 {
@@ -248,9 +129,7 @@ int hdcp_dplink_send(uint32_t msg_name, uint8_t *data, uint32_t size)
 	else
 		return pdp_dpcd_write_for_hdcp22(dpcd_addr[msg_name], size, data);
 }
-#endif
 
-#if IS_ENABLED(CONFIG_DRM_SAMSUNG_DP)
 void dp_register_func_for_hdcp22(void (*func0)(u32 en), int (*func1)(u32 address, u32 length, u8 *data), int (*func2)(u32 address, u32 length, u8 *data))
 {
 	pdp_hdcp22_enable = func0;
@@ -258,19 +137,3 @@ void dp_register_func_for_hdcp22(void (*func0)(u32 en), int (*func1)(u32 address
 	pdp_dpcd_write_for_hdcp22 = func2;
 }
 EXPORT_SYMBOL_GPL(dp_register_func_for_hdcp22);
-#else
-int pdp_dpcd_read_for_hdcp22(u32 address, u32 length, u8 *data)
-{
-       return 0;
-}
-int pdp_dpcd_write_for_hdcp22(u32 address, u32 length, u8 *data)
-{
-       return 0;
-}
-void pdp_hdcp22_enable(u32 en)
-{
-       return;
-}
-#endif
-
-MODULE_LICENSE("GPL");

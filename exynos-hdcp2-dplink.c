@@ -13,7 +13,7 @@
 #include <linux/uaccess.h>
 #include <linux/smc.h>
 #include <asm/cacheflush.h>
-#include <soc/samsung/exynos-smc.h>
+#include <linux/soc/samsung/exynos-smc.h>
 #include <linux/types.h>
 #include <linux/delay.h>
 
@@ -23,17 +23,10 @@
 #include "exynos-hdcp2-dplink-if.h"
 #include "exynos-hdcp2-dplink-auth.h"
 #include "exynos-hdcp2-dplink-inter.h"
+#include "exynos-hdcp2-teeif.h"
 
 #define HDCP_AUTH_RETRY_COUNT	5
 #define RECVID_WAIT_RETRY_COUNT	5
-
-#if defined(CONFIG_HDCP2_EMULATION_MODE)
-int dplink_emul_handler(int cmd)
-{
-	/* todo: support hdcp22 emulator */
-	return 0;
-}
-#endif
 
 static DEFINE_MUTEX(hdcp_auth_mutex);
 /* current link data */
@@ -141,13 +134,8 @@ int do_dplink_auth(struct hdcp_link_info *lk_handle)
 			if (dplink_evaluate_repeater(lk_data) == TRUE) {
 				/* if it is a repeater, verify Rcv ID list */
 				UPDATE_LINK_STATE(lk_data, LINK_ST_A6_WAIT_RECEIVER_ID_LIST);
-#if defined(CONFIG_HDCP2_FUNC_TEST_MODE)
-				hdcp_enabled = 1;
-				hdcp_info("it`s func test mode.\n");
-#else
 				hdcp_info("It`s repeater link !\n");
 				hdcp_enabled = 0;
-#endif
 			} else {
 				/* if it is not a repeater, complete authentication */
 				UPDATE_LINK_STATE(lk_data, LINK_ST_A5_AUTHENTICATED);
@@ -161,7 +149,7 @@ int do_dplink_auth(struct hdcp_link_info *lk_handle)
 			if (hdcp_enabled)
 				hdcp_dplink_config(DP_HDCP22_ENABLE);
 			/* Transmitter has completed the authentication protocol */
-			ret = exynos_smc(SMC_DRM_HDCP_AUTH_INFO, DP_HDCP22_ENABLE, 0, 0);
+			ret = hdcp_tee_send_cmd(HDCP_CMD_AUTH_DONE);
 			return HDCP_SUCCESS;
 		case LINK_ST_A6_WAIT_RECEIVER_ID_LIST:
 			rval = dplink_wait_for_receiver_id_list(lk_data);
@@ -293,5 +281,3 @@ int hdcp_dplink_stream_manage(void)
 	/* todo: update stream manage information */
 	return 0;
 }
-
-MODULE_LICENSE("GPL");

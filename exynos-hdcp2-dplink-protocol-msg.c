@@ -12,10 +12,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 
-#include "exynos-hdcp2-config.h"
 #include "exynos-hdcp2-protocol-msg.h"
 #include "exynos-hdcp2.h"
-#include "exynos-hdcp2-misc.h"
 #include "exynos-hdcp2-log.h"
 #include "exynos-hdcp2-dplink-protocol-msg.h"
 #include "exynos-hdcp2-dplink-if.h"
@@ -492,5 +490,3 @@ int dp_decap_protocol_msg(uint8_t msg_id,
 	else
 		return -1;
 }
-
-MODULE_LICENSE("GPL");

@@ -13,14 +13,13 @@
 #include <linux/uaccess.h>
 #include <linux/smc.h>
 #include <asm/cacheflush.h>
-#include <soc/samsung/exynos-smc.h>
+#include <linux/soc/samsung/exynos-smc.h>
 #include "exynos-hdcp2-teeif.h"
-#include "exynos-hdcp2-encrypt.h"
 #include "exynos-hdcp2-log.h"
 #include "exynos-hdcp2-dplink-if.h"
 #include "exynos-hdcp2-dplink.h"
-#include "exynos-hdcp2-dplink-selftest.h"
 #include "exynos-hdcp2-dplink-inter.h"
+#include "exynos-hdcp2-selftest.h"
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
@@ -33,7 +32,6 @@
 static struct miscdevice hdcp;
 struct device *device_hdcp;
 static DEFINE_MUTEX(hdcp_lock);
-enum hdcp_result hdcp_link_ioc_authenticate(void);
 extern enum dp_state dp_hdcp_state;
 
 struct hdcp_ctx {
@@ -48,43 +46,17 @@ struct hdcp_ctx {
 static struct hdcp_ctx h_ctx;
 static uint32_t inst_num;
 
-static long hdcp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+static ssize_t hdcp_write(struct file *file, const char __user *buf,
+			  size_t len, loff_t *ppos)
 {
-	int rval;
+	hdcp_info("Kicking off selftest\n");
+	dp_hdcp_protocol_self_test();
+	return len;
+}
 
-	switch (cmd) {
-#if defined(CONFIG_HDCP2_EMULATION_MODE)
-	case (uint32_t)HDCP_IOC_EMUL_DPLINK_TX:
-	{
-		uint32_t emul_cmd;
-
-		if (copy_from_user(&emul_cmd, (void __user *)arg, sizeof(uint32_t)))
-			return -EINVAL;
-
-		return dplink_emul_handler(emul_cmd);
-	}
-#endif
-	case (uint32_t)HDCP_IOC_DPLINK_TX_AUTH:
-	{
-#if defined(CONFIG_HDCP2_EMULATION_MODE)
-#if defined(CONFIG_HDCP2_DP_ENABLE)
-		rval = dp_hdcp_protocol_self_test();
-		if (rval) {
-			hdcp_err("DP self_test fail. errno(%d)\n", rval);
-			return rval;
-		}
-		hdcp_err("DP self_test success!!\n");
-#endif
-#endif
-		rval = 0;
-		return rval;
-	}
-
-	default:
-		hdcp_err("HDCP: Invalid IOC num(%d)\n", cmd);
-		return -ENOTTY;
-	}
-
+static ssize_t hdcp_read(struct file *filp, char __user *buf,
+			 size_t count, loff_t *f_pos)
+{
 	return 0;
 }
 
@@ -125,15 +97,13 @@ static int hdcp_release(struct inode *inode, struct file *file)
 
 static void exynos_hdcp_worker(struct work_struct *work)
 {
-	int ret;
-
 	if (dp_hdcp_state == DP_DISCONNECT) {
 		hdcp_err("dp_disconnected\n");
 		return;
 	}
 
 	hdcp_info("Exynos HDCP interrupt occur by LDFW.\n");
-	ret = hdcp_dplink_auth_check(HDCP_DRM_ON);
+	hdcp_dplink_auth_check(HDCP_DRM_ON);
 }
 
 static irqreturn_t exynos_hdcp_irq_handler(int irq, void *dev_id)
@@ -188,9 +158,10 @@ static int exynos_hdcp_probe(struct platform_device *pdev)
 	/* Set workqueue for Secure log as bottom half */
 	INIT_DELAYED_WORK(&h_ctx.work, exynos_hdcp_worker);
 	h_ctx.enabled = true;
-	err = exynos_smc(SMC_HDCP_NOTIFY_INTR_NUM, 0, 0, hwirq);
-	hdcp_info("Exynos HDCP driver probe done! (%d)\n", err);
 
+	err = hdcp_tee_notify_intr_num(hwirq);
+
+	hdcp_info("Exynos HDCP driver probe done! (%d)\n", err);
 	return err;
 }
 
@@ -222,17 +193,7 @@ static int __init hdcp_init(void)
 	}
 
 	hdcp_session_list_init();
-#if defined(CONFIG_HDCP2_DP_ENABLE)
-	if (hdcp_dplink_init() < 0) {
-		hdcp_err("hdcp_dplink_init fail\n");
-		return -EINVAL;
-	}
-#endif
-	ret = hdcp_tee_open();
-	if (ret) {
-		hdcp_err("hdcp_tee_open fail\n");
-		return -EINVAL;
-	}
+	hdcp_tee_init();
 
 	return platform_driver_register(&exynos_hdcp_driver);
 }
@@ -250,10 +211,10 @@ static void __exit hdcp_exit(void)
 
 static const struct file_operations hdcp_fops = {
 	.owner		= THIS_MODULE,
+	.write 		= hdcp_write,
+	.read 		= hdcp_read,
 	.open		= hdcp_open,
 	.release	= hdcp_release,
-	.compat_ioctl = hdcp_ioctl,
-	.unlocked_ioctl = hdcp_ioctl,
 };
 
 static struct miscdevice hdcp = {
@@ -267,4 +228,4 @@ module_exit(hdcp_exit);
 
 MODULE_DESCRIPTION("Exynos Secure hdcp driver");
 MODULE_AUTHOR("<hakmin_1.kim@samsung.com>");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");
