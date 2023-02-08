@@ -881,7 +881,7 @@ poweroff:
 	return ret;
 }
 
-static int qm35_remove(struct spi_device *spi)
+static void qm35_remove(struct spi_device *spi)
 {
 	struct qm35_ctx *qm35_hdl = spi_get_drvdata(spi);
 
@@ -904,7 +904,6 @@ static int qm35_remove(struct spi_device *spi)
 
 	dev_info(&spi->dev, "Deregistered: [%s] misc device\n",
 		 qm35_hdl->uci_dev.name);
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP

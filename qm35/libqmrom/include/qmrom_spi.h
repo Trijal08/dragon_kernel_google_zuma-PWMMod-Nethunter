@@ -10,7 +10,7 @@
 #ifndef __QMROM_SPI_H__
 #define __QMROM_SPI_H__
 
-#include <stddef.h>
+#include <linux/stddef.h>
 #include <qmrom_error.h>
 #include <qmrom.h>
 
