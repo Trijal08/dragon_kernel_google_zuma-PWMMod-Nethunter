@@ -5,6 +5,7 @@
  * Copyright 2022 Google LLC.
  */
 
+#include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/input/mt.h>
 #include <linux/of.h>
@@ -1955,7 +1956,7 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 static void goog_offload_set_running(struct goog_touch_interface *gti, bool running)
 {
 	if (gti->offload.offload_running != running) {
-		GOOG_INFO("Set offload_running=%d, irq_index=%d, input_index=%d\n",
+		GOOG_INFO("Set offload_running=%d, irq_index=%llu, input_index=%llu\n",
 			running, gti->irq_index, gti->input_index);
 
 		gti->offload.offload_running = running;
