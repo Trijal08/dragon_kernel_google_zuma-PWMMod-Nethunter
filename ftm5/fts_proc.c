@@ -459,7 +459,7 @@
   */
 static void *fts_seq_start(struct seq_file *s, loff_t *pos)
 {
-	struct fts_ts_info *info = PDE_DATA(file_inode(s->file));
+	struct fts_ts_info *info = pde_data(file_inode(s->file));
 
 	dev_info(info->dev, "%s: Entering start(), pos = %lld limit = %d printed = %d\n",
 		__func__, *pos, info->limit, info->printed);
@@ -503,7 +503,7 @@ static void *fts_seq_start(struct seq_file *s, loff_t *pos)
   */
 static int fts_seq_show(struct seq_file *s, void *v)
 {
-	struct fts_ts_info *info = PDE_DATA(file_inode(s->file));
+	struct fts_ts_info *info = pde_data(file_inode(s->file));
 
 	/* dev_err(info->dev, "%s: In show()\n", __func__); */
 	if (seq_write(s, (u8 *)v, info->chunk) == 0)
@@ -522,7 +522,7 @@ static int fts_seq_show(struct seq_file *s, void *v)
   */
 static void *fts_seq_next(struct seq_file *s, void *v, loff_t *pos)
 {
-	struct fts_ts_info *info = PDE_DATA(file_inode(s->file));
+	struct fts_ts_info *info = pde_data(file_inode(s->file));
 
 	/* int* val_ptr; */
 	/* dev_err(info->dev, "%s: In next(), v = %X, pos = %Ld.\n", __func__,
@@ -554,7 +554,7 @@ static void *fts_seq_next(struct seq_file *s, void *v, loff_t *pos)
   */
 static void fts_seq_stop(struct seq_file *s, void *v)
 {
-	struct fts_ts_info *info = PDE_DATA(file_inode(s->file));
+	struct fts_ts_info *info = pde_data(file_inode(s->file));
 
 	/* dev_err(info->dev, "%s: Entering stop().\n", __func__); */
 
@@ -598,7 +598,7 @@ static const struct seq_operations fts_seq_ops = {
 static int fts_driver_test_open(struct inode *inode, struct file *file)
 {
 	int retval;
-	struct fts_ts_info *info = PDE_DATA(inode);
+	struct fts_ts_info *info = pde_data(inode);
 
 	if (!info) {
 		dev_err(info->dev, "%s: Unable to access driver data\n", __func__);
@@ -640,7 +640,7 @@ exit:
 static int fts_driver_test_release(struct inode *inode, struct file *file)
 {
 	int retval;
-	struct fts_ts_info *info = PDE_DATA(inode);
+	struct fts_ts_info *info = pde_data(inode);
 
 	if (info)
 		mutex_lock(&info->diag_cmd_lock);
@@ -682,7 +682,7 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 				     size_t count, loff_t *pos)
 {
 	int numberParam = 0;
-	struct fts_ts_info *info = PDE_DATA(file_inode(file));
+	struct fts_ts_info *info = pde_data(file_inode(file));
 	char *p = NULL;
 	char *pbuf = NULL;
 	char path[100] = { 0 };
