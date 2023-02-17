@@ -23,6 +23,9 @@
 #include "exynos-hdcp2.h"
 #include "exynos-hdcp2-log.h"
 
+#define HDCP_NO_DIGITAL_OUTPUT (0xff)
+#define HDCP_V2_2 (4)
+
 static const uint8_t cert_rx[] = {
 	0x74, 0x5b, 0xb8, 0xbd, 0x04, 0xaf, 0xb5, 0xc5, 0xc6, 0x7b, 0xc5, 0x3a,
 	0x34, 0x90, 0xa9, 0x54, 0xc0, 0x8f, 0xb7, 0xeb, 0xa1, 0x54, 0xd2, 0x4f,
@@ -226,7 +229,7 @@ static int dp_hdcp_protocol_self_test_internal(void) {
 	size_t i;
 	int rc, version;
 
-	hdcp_dplink_connect_state(DP_CONNECT);
+	hdcp_dplink_connect_state(DP_HDCP_READY);
 
 	rc = hdcp_tee_send_cmd(HDCP_CMD_AUTH_START);
 	if (rc) {
@@ -241,12 +244,12 @@ static int dp_hdcp_protocol_self_test_internal(void) {
 			hdcp_err("checking protection failed: %d", rc);
 			return rc;
 		}
-		if (version != -1)
+		if (version != HDCP_NO_DIGITAL_OUTPUT)
 			break;
 		msleep(100);
 	}
 
-	if (version != 4) {
+	if (version != HDCP_V2_2) {
 		hdcp_err("FAIL selftest: %d\n", version);
 		return -1;
 	}
