@@ -283,33 +283,17 @@ static int do_recv_ake_send_cert(struct hdcp_link_data *lk)
 	struct hdcp_msg_info msg_info;
 	struct dp_ake_send_cert m_send_cert;
 
-       /* check abort state firstly,
-        * if session is abored by Rx, Tx stops Authentication process
-        */
-       if (is_auth_aborted())
-               return -TX_AUTH_ERROR_ABORT;
+	/* check abort state firstly,
+	* if session is abored by Rx, Tx stops Authentication process
+	*/
+	if (is_auth_aborted())
+		return -TX_AUTH_ERROR_ABORT;
 
 	ret = hdcp_dplink_recv(HDCP22_MSG_CERT_RX_R,
-			m_send_cert.cert_rx,
-			sizeof(m_send_cert.cert_rx));
+		m_send_cert.cert_rx,
+		HDCP_RX_CERT_LEN + HDCP_RRX_BYTE_LEN + HDCP_CAPS_BYTE_LEN);
 	if (ret) {
 		hdcp_err("ake_send_cert cert recv fail. ret(%d)\n", ret);
-		return -1;
-	}
-
-	ret = hdcp_dplink_recv(HDCP22_MSG_RRX_R,
-			m_send_cert.rrx,
-			sizeof(m_send_cert.rrx));
-	if (ret) {
-		hdcp_err("HDCP : ake_send_cert rrx recv fail: ret(%d)\n", ret);
-		return -1;
-	}
-
-	ret = hdcp_dplink_recv(HDCP22_MSG_RXCAPS_R,
-			m_send_cert.rxcaps,
-			sizeof(m_send_cert.rxcaps));
-	if (ret) {
-		hdcp_err("ake_send_cert rxcaps recv fail: ret(%d)\n", ret);
 		return -1;
 	}
 
@@ -526,9 +510,8 @@ static int do_send_ske_send_eks(struct hdcp_link_data *lk)
 	 * Currently, SST mode only use 0x00 as type value
 	 * MST mode, HDCP driver get type value from DP driver
 	 */
-#if defined(CONFIG_HDCP2_2_ERRATA_SUPPORT)
 	uint8_t type = 0x00;
-#endif
+
        /* check abort state firstly,
         * if session is abored by Rx, Tx stops Authentication process
         */
@@ -566,7 +549,6 @@ static int do_send_ske_send_eks(struct hdcp_link_data *lk)
 		return -1;
 	}
 
-#if defined(CONFIG_HDCP2_2_ERRATA_SUPPORT)
 	/* HDCP errata defined stream type.
 	 * type info is send only for receiver
 	 */
@@ -579,7 +561,6 @@ static int do_send_ske_send_eks(struct hdcp_link_data *lk)
 			return -1;
 		}
 	}
-#endif
 
 	return 0;
 }
