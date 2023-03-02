@@ -24,7 +24,7 @@
 #include "exynos-hdcp2-log.h"
 
 #define HDCP_NO_DIGITAL_OUTPUT (0xff)
-#define HDCP_V2_2 (4)
+#define HDCP_V2_3 (5)
 
 static const uint8_t cert_rx[] = {
 	0x74, 0x5b, 0xb8, 0xbd, 0x04, 0xaf, 0xb5, 0xc5, 0xc6, 0x7b, 0xc5, 0x3a,
@@ -70,9 +70,8 @@ static const uint8_t cert_rx[] = {
 	0xa1, 0x7c, 0xa8, 0xfc, 0xb7, 0xf7, 0xa8, 0x52, 0xa9, 0xc6, 0x84, 0x72,
 	0x3d, 0x1c, 0xc9, 0xdf, 0x35, 0xc6, 0xe6, 0x00, 0xe1, 0x48, 0x72, 0xce,
 	0x83, 0x1b, 0xcc, 0xf8, 0x33, 0x2d, 0x4f, 0x98, 0x75, 0x00, 0x3c, 0x41,
-	0xdf, 0x7a, 0xed, 0x38, 0x53, 0xb1 };
-static const uint8_t Rrx[] = { 0x3b, 0xa0, 0xbe, 0xde, 0x0c, 0x46, 0xa9, 0x91 };
-static const uint8_t RxCaps[] = { 0x02, 0x00, 0x03 };
+	0xdf, 0x7a, 0xed, 0x38, 0x53, 0xb1, 0x3b, 0xa0, 0xbe, 0xde, 0x0c, 0x46,
+	0xa9, 0x91, 0x02, 0x00, 0x03 };
 static const uint8_t Hprime[] = {
 	0x2e, 0xf5, 0xed, 0xf8, 0x7f, 0xd8, 0xa3, 0xd0, 0xf4, 0xa9, 0xd8, 0xac,
 	0x3a, 0xd0, 0xb4, 0x56, 0x2e, 0x32, 0x19, 0x11, 0x41, 0x16, 0xf1, 0xef,
@@ -103,20 +102,18 @@ static int pdp_dpcd_read_for_hdcp22_emu(u32 address, u32 length, u8 *data)
 	int ret = 0;
 
 	const size_t banks[] = {
-		DPCD_ADDR_HDCP22_cert_rx, DPCD_ADDR_HDCP22_Rrx,
-		DPCD_ADDR_HDCP22_RxCaps, DPCD_ADDR_HDCP22_Hprime,
+		DPCD_ADDR_HDCP22_cert_rx, DPCD_ADDR_HDCP22_Hprime,
 		DPCD_ADDR_HDCP22_Ekh_km_r, DPCD_ADDR_HDCP22_Lprime,
 		DPCD_ADDR_HDCP22_RxInfo, DPCD_ADDR_HDCP22_seq_num_V,
 		DPCD_ADDR_HDCP22_Vprime, DPCD_ADDR_HDCP22_Rec_ID_list,
 		DPCD_ADDR_HDCP22_Mprime, DPCD_ADDR_HDCP22_RxStatus };
 	const size_t banks_size[] = {
-		sizeof(cert_rx), sizeof(Rrx), sizeof(RxCaps),
-		sizeof(Hprime), sizeof(Ekh_km_r), sizeof(Lprime),
-		sizeof(RxInfo), sizeof(seq_num_V), sizeof(Vprime),
-		sizeof(Rec_ID_list), sizeof(Mprime),
+		sizeof(cert_rx), sizeof(Hprime), sizeof(Ekh_km_r),
+		sizeof(Lprime), sizeof(RxInfo), sizeof(seq_num_V),
+		sizeof(Vprime), sizeof(Rec_ID_list), sizeof(Mprime),
 		sizeof(RxStatus) };
 	const uint8_t *bank_ptr[] = {
-		cert_rx, Rrx, RxCaps, Hprime, Ekh_km_r, Lprime, RxInfo,
+		cert_rx, Hprime, Ekh_km_r, Lprime, RxInfo,
 		seq_num_V, Vprime, Rec_ID_list, Mprime, RxStatus };
 	size_t bank_idx;
 	size_t bank_offset = 0;
@@ -244,18 +241,15 @@ static int dp_hdcp_protocol_self_test_internal(void) {
 			hdcp_err("checking protection failed: %d", rc);
 			return rc;
 		}
-		if (version != HDCP_NO_DIGITAL_OUTPUT)
-			break;
+		if (version == HDCP_V2_3) {
+			hdcp_info("SUCCESS selftest\n");
+			return 0;
+		}
 		msleep(100);
 	}
 
-	if (version != HDCP_V2_2) {
-		hdcp_err("FAIL selftest: %d\n", version);
-		return -1;
-	}
-
-	hdcp_info("SUCCESS selftest\n");
-	return 0;
+	hdcp_err("FAIL selftest: HDCP_VERSION(%d)\n", version);
+	return -1;
 }
 
 int dp_hdcp_protocol_self_test(void) {
@@ -277,6 +271,7 @@ int dp_hdcp_protocol_self_test(void) {
 		return rc;
 	}
 	rc = dp_hdcp_protocol_self_test_internal();
+	hdcp_tee_send_cmd(HDCP_CMD_AUTH_CANCEL);
 	hdcp_tee_set_test_mode(false);
 
 	return rc;
