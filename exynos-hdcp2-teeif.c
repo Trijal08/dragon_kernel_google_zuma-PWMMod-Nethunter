@@ -262,6 +262,10 @@ int hdcp_tee_set_test_mode(bool enable) {
 	return hdcp_tee_comm_xchg(HDCP_CMD_SET_TEST_MODE, enable, NULL, NULL);
 }
 
+int hdcp_tee_connect_info(int connect_info) {
+	return hdcp_tee_comm_xchg(HDCP_CMD_CONNECT_INFO, connect_info, NULL, NULL);
+}
+
 static int hdcp_tee_comm(struct hci_message *hci) {
 	return hdcp_tee_comm_xchg(HDCP_CMD_PROTOCOL, 0, NULL, hci);
 }

@@ -126,6 +126,6 @@ void hdcp_dplink_connect_state(enum dp_state state)
 {
 	dp_hdcp_state = state;
 	hdcp_info("Displayport connect info (%d)\n", dp_hdcp_state);
-	exynos_smc(SMC_DRM_DP_CONNECT_INFO, dp_hdcp_state, 0, 0);
+	hdcp_tee_connect_info((int)dp_hdcp_state);
 }
 EXPORT_SYMBOL_GPL(hdcp_dplink_connect_state);
