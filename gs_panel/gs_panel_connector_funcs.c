@@ -1,0 +1,380 @@
+/* SPDX-License-Identifier: MIT */
+/*
+ * Copyright 2023 Google LLC
+ *
+ * Use of this source code is governed by an MIT-style
+ * license that can be found in the LICENSE file or at
+ * https://opensource.org/licenses/MIT.
+ */
+
+#include "gs_panel_internal.h"
+
+#include <linux/mutex.h>
+#include <drm/drm_atomic.h>
+#include <drm/drm_connector.h>
+#include <drm/drm_print.h>
+#include <drm/drm_property.h>
+#include <drm/drm_vblank.h>
+
+#include "gs_panel/gs_panel.h"
+
+/* drm_connector_helper_funcs */
+
+static int gs_panel_connector_modes(struct drm_connector *connector)
+{
+	struct gs_drm_connector *gs_connector = to_gs_connector(connector);
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+	struct device *dev = ctx->dev;
+	int ret;
+
+	ret = drm_panel_get_modes(&ctx->base, connector);
+	if (ret < 0) {
+		dev_err(dev, "failed to get panel display modes\n");
+		return ret;
+	}
+
+	return ret;
+}
+
+static void gs_panel_connector_attach_touch(struct gs_panel *ctx,
+					    const struct drm_connector_state *connector_state)
+{
+	struct drm_encoder *encoder = connector_state->best_encoder;
+	struct drm_bridge *bridge;
+
+	if (!encoder) {
+		dev_warn(ctx->dev, "%s encoder is null\n", __func__);
+		return;
+	}
+
+	bridge = of_drm_find_bridge(ctx->touch_dev);
+	if (!bridge || bridge->dev)
+		return;
+
+	drm_bridge_attach(encoder, bridge, &ctx->bridge, 0);
+	dev_info(ctx->dev, "attach bridge %p to encoder %p\n", bridge, encoder);
+}
+
+/*
+ * this atomic check is called before adjusted mode is populated, this can be used to check only
+ * connector state (without adjusted mode), or to decide if modeset may be required
+ */
+static int gs_panel_connector_atomic_check(struct drm_connector *connector,
+					   struct drm_atomic_state *state)
+{
+	struct gs_drm_connector *gs_connector = to_gs_connector(connector);
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+	struct drm_connector_state *old_conn_state, *new_conn_state, *conn_state;
+
+	old_conn_state = drm_atomic_get_old_connector_state(state, connector);
+	new_conn_state = drm_atomic_get_new_connector_state(state, connector);
+
+	if (new_conn_state->crtc)
+		conn_state = new_conn_state;
+	else if (old_conn_state->crtc)
+		conn_state = old_conn_state;
+	else
+		return 0; /* connector is/was unused */
+
+	if (ctx->touch_dev)
+		gs_panel_connector_attach_touch(ctx, conn_state);
+
+	return 0;
+}
+
+static const struct drm_connector_helper_funcs gs_connector_helper_funcs = {
+	.atomic_check = gs_panel_connector_atomic_check,
+	.get_modes = gs_panel_connector_modes,
+};
+
+const struct drm_connector_helper_funcs *get_panel_drm_connector_helper_funcs(void)
+{
+	return &gs_connector_helper_funcs;
+}
+
+/* gs_drm_connector_funcs */
+
+/**
+ * is_umode_lp_compatible - check switching between provided modes can be seamless during LP
+ * @pmode: initial display mode
+ * @umode: target display mode
+ *
+ * Returns true if the switch to target mode can be seamless during LP
+ */
+static inline bool is_umode_lp_compatible(const struct gs_panel_mode *pmode,
+					  const struct drm_mode_modeinfo *umode)
+{
+	return pmode->mode.vdisplay == umode->vdisplay && pmode->mode.hdisplay == umode->hdisplay;
+}
+
+static int gs_panel_get_lp_mode(struct gs_drm_connector *gs_connector,
+				const struct gs_drm_connector_state *gs_state, uint64_t *val)
+{
+	const struct drm_connector_state *conn_state = &gs_state->base;
+	const struct drm_crtc_state *crtc_state = conn_state->crtc ? conn_state->crtc->state : NULL;
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+	const struct gs_panel_desc *desc = ctx->desc;
+	struct drm_property_blob *blob = ctx->lp_mode_blob;
+	const struct gs_panel_mode *cur_mode;
+	struct drm_mode_modeinfo umode;
+
+	if (crtc_state)
+		cur_mode = gs_panel_get_mode(ctx, &crtc_state->mode);
+	else
+		cur_mode = READ_ONCE(ctx->current_mode);
+
+	if (unlikely(!desc->lp_modes))
+		return -EINVAL;
+
+	if (blob) {
+		if (!cur_mode || is_umode_lp_compatible(cur_mode, blob->data)) {
+			dev_dbg(ctx->dev, "%s: returning existing lp mode blob\n", __func__);
+			*val = blob->base.id;
+			return 0;
+		}
+		ctx->lp_mode_blob = NULL;
+		drm_property_blob_put(blob);
+	}
+
+	/* when mode count is 0, assume driver is only providing single LP mode */
+	if ((desc->lp_modes && desc->lp_modes->num_modes <= 1) || !cur_mode) {
+		dev_dbg(ctx->dev, "%s: only single LP mode available\n", __func__);
+		drm_mode_convert_to_umode(&umode, &desc->lp_modes->modes[0].mode);
+	} else if (desc->lp_modes) {
+		int i;
+
+		for (i = 0; i < desc->lp_modes->num_modes; i++) {
+			const struct gs_panel_mode *lp_mode = &desc->lp_modes->modes[i];
+
+			drm_mode_convert_to_umode(&umode, &lp_mode->mode);
+
+			if (is_umode_lp_compatible(cur_mode, &umode)) {
+				dev_dbg(ctx->dev, "%s: found lp mode: %s for mode:%s\n", __func__,
+					lp_mode->mode.name, cur_mode->mode.name);
+				break;
+			}
+		}
+
+		if (i == desc->lp_modes->num_modes) {
+			dev_warn(ctx->dev, "%s: unable to find compatible LP mode for mode: %s\n",
+				 __func__, cur_mode->mode.name);
+			return -ENOENT;
+		}
+	} else {
+		return -ENOENT;
+	}
+
+	blob = drm_property_create_blob(gs_connector->base.dev, sizeof(umode), &umode);
+	if (IS_ERR(blob))
+		return PTR_ERR(blob);
+
+	ctx->lp_mode_blob = blob;
+	*val = blob->base.id;
+
+	return 0;
+}
+
+static void gs_panel_connector_print_state(struct drm_printer *p,
+					   const struct gs_drm_connector_state *state)
+{
+	const struct gs_drm_connector *gs_connector = to_gs_connector(state->base.connector);
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+	const struct gs_panel_desc *desc = ctx->desc;
+	int ret;
+
+	dev_dbg(ctx->dev, "%s+ (exiting)\n", __func__);
+	return;
+
+	/*TODO(b/267170999): MODE*/
+	ret = mutex_lock_interruptible(&ctx->mode_lock);
+	if (ret)
+		return;
+
+	drm_printf(p, "\tpanel_state: %d\n", ctx->panel_state);
+	drm_printf(p, "\tidle: %s (%s)\n",
+		   ctx->idle_data.panel_idle_vrefresh ? "active" : "inactive",
+		   ctx->idle_data.panel_idle_enabled ? "enabled" : "disabled");
+
+	if (ctx->current_mode) {
+		const struct drm_display_mode *m = &ctx->current_mode->mode;
+
+		drm_printf(p, " \tcurrent mode: %dx%d@%d\n", m->hdisplay, m->vdisplay,
+			   drm_mode_vrefresh(m));
+	}
+	drm_printf(p, "\text_info: %s\n", ctx->panel_extinfo);
+	drm_printf(p, "\tluminance: [%u, %u] avg: %u\n", desc->brightness_desc->min_luminance,
+		   desc->brightness_desc->max_luminance, desc->brightness_desc->max_avg_luminance);
+	drm_printf(p, "\thdr_formats: 0x%x\n", desc->hdr_formats);
+	drm_printf(p, "\thbm_mode: %u\n", ctx->hbm_mode);
+	drm_printf(p, "\tdimming_on: %s\n", ctx->dimming_on ? "true" : "false");
+	drm_printf(p, "\tis_partial: %s\n", desc->is_partial ? "true" : "false");
+
+	/*TODO(b/267170999): MODE*/
+	mutex_unlock(&ctx->mode_lock);
+}
+
+static int gs_panel_connector_get_property(struct gs_drm_connector *gs_connector,
+					   const struct gs_drm_connector_state *gs_state,
+					   struct drm_property *property, uint64_t *val)
+{
+	struct gs_drm_connector_properties *p = gs_drm_connector_get_properties(gs_connector);
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+
+	if (property == p->brightness_level) {
+		*val = gs_state->brightness_level;
+		dev_dbg(ctx->dev, "%s: brt(%llu)\n", __func__, *val);
+	} else if (property == p->global_hbm_mode) {
+		*val = gs_state->global_hbm_mode;
+		dev_dbg(ctx->dev, "%s: global_hbm_mode(%llu)\n", __func__, *val);
+	} else if (property == p->local_hbm_on) {
+		*val = gs_state->local_hbm_on;
+		dev_dbg(ctx->dev, "%s: local_hbm_on(%s)\n", __func__, *val ? "true" : "false");
+	} else if (property == p->dimming_on) {
+		*val = gs_state->dimming_on;
+		dev_dbg(ctx->dev, "%s: dimming_on(%s)\n", __func__, *val ? "true" : "false");
+	} else if (property == p->lp_mode) {
+		return gs_panel_get_lp_mode(gs_connector, gs_state, val);
+	} else if (property == p->mipi_sync) {
+		*val = gs_state->mipi_sync;
+		dev_dbg(ctx->dev, "%s: mipi_sync(0x%llx)\n", __func__, *val);
+	} else
+		return -EINVAL;
+
+	return 0;
+}
+
+static int gs_panel_connector_set_property(struct gs_drm_connector *gs_connector,
+					   struct gs_drm_connector_state *gs_state,
+					   struct drm_property *property, uint64_t val)
+{
+	struct gs_drm_connector_properties *p = gs_drm_connector_get_properties(gs_connector);
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+
+	dev_dbg(ctx->dev, "%s+\n", __func__);
+
+	if (property == p->brightness_level) {
+		gs_state->pending_update_flags |= GS_HBM_FLAG_BL_UPDATE;
+		gs_state->brightness_level = val;
+		dev_dbg(ctx->dev, "%s: brt(%u)\n", __func__, gs_state->brightness_level);
+	} else if (property == p->global_hbm_mode) {
+		gs_state->pending_update_flags |= GS_HBM_FLAG_GHBM_UPDATE;
+		gs_state->global_hbm_mode = val;
+		dev_dbg(ctx->dev, "%s: global_hbm_mode(%u)\n", __func__, gs_state->global_hbm_mode);
+	} else if (property == p->local_hbm_on) {
+		gs_state->pending_update_flags |= GS_HBM_FLAG_LHBM_UPDATE;
+		gs_state->local_hbm_on = val;
+		dev_dbg(ctx->dev, "%s: local_hbm_on(%s)\n", __func__,
+			gs_state->local_hbm_on ? "true" : "false");
+	} else if (property == p->dimming_on) {
+		gs_state->pending_update_flags |= GS_HBM_FLAG_DIMMING_UPDATE;
+		gs_state->dimming_on = val;
+		dev_dbg(ctx->dev, "%s: dimming_on(%s)\n", __func__,
+			gs_state->dimming_on ? "true" : "false");
+	} else if (property == p->mipi_sync) {
+		gs_state->mipi_sync = val;
+		dev_dbg(ctx->dev, "%s: mipi_sync(0x%lx)\n", __func__, gs_state->mipi_sync);
+	} else {
+		dev_err(ctx->dev, "property not recognized within %s- \n", __func__);
+		return -EINVAL;
+	}
+
+	dev_dbg(ctx->dev, "%s-\n", __func__);
+	return 0;
+}
+
+static const struct gs_drm_connector_funcs gs_panel_connector_funcs = {
+	.atomic_print_state = gs_panel_connector_print_state,
+	.atomic_get_property = gs_panel_connector_get_property,
+	.atomic_set_property = gs_panel_connector_set_property,
+};
+
+const struct gs_drm_connector_funcs *get_panel_gs_drm_connector_funcs(void)
+{
+	return &gs_panel_connector_funcs;
+}
+
+/* gs_drm_connector_helper_funcs */
+
+static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
+					   struct gs_drm_connector_state *conn_state)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
+	bool mipi_sync;
+	bool ghbm_updated = false;
+
+	if (!conn_state->pending_update_flags)
+		return;
+
+	dev_info(ctx->dev, "%s: mipi_sync(0x%lx) pending_update_flags(0x%x)\n", __func__,
+		 conn_state->mipi_sync, conn_state->pending_update_flags);
+	/*TODO(tknelms) DPU_ATRACE_BEGIN(__func__);*/
+	mipi_sync = conn_state->mipi_sync &
+		    (GS_MIPI_CMD_SYNC_LHBM | GS_MIPI_CMD_SYNC_GHBM | GS_MIPI_CMD_SYNC_BL);
+
+	if ((conn_state->mipi_sync & (GS_MIPI_CMD_SYNC_LHBM | GS_MIPI_CMD_SYNC_GHBM)) &&
+	    ctx->current_mode->gs_mode.is_lp_mode) {
+		conn_state->pending_update_flags &= ~(
+			GS_HBM_FLAG_LHBM_UPDATE | GS_HBM_FLAG_GHBM_UPDATE | GS_HBM_FLAG_BL_UPDATE);
+		dev_warn(ctx->dev, "%s: avoid LHBM/GHBM/BL updates during lp mode\n", __func__);
+	}
+
+	if (mipi_sync) {
+		/*TODO(tknelms)
+		gs_panel_check_mipi_sync_timing(conn_state->base.crtc,
+		    ctx->current_mode, ctx);
+		*/
+		dev_info(ctx->dev, "%s missing mipi_sync\n", __func__);
+		gs_dsi_dcs_write_buffer_force_batch_begin(dsi);
+	}
+
+	if (mipi_sync)
+		gs_dsi_dcs_write_buffer_force_batch_end(dsi);
+
+	if (((GS_MIPI_CMD_SYNC_GHBM | GS_MIPI_CMD_SYNC_BL) & conn_state->mipi_sync) &&
+	    !(GS_MIPI_CMD_SYNC_LHBM & conn_state->mipi_sync) && ctx->desc->dbv_extra_frame) {
+		/**
+		* panel needs one extra VSYNC period to apply GHBM/dbv. The frame
+		* update should be delayed.
+		*/
+		/*TODO(tknelms) DPU_ATRACE_BEGIN("dbv_wait");*/
+		if (!drm_crtc_vblank_get(conn_state->base.crtc)) {
+			drm_crtc_wait_one_vblank(conn_state->base.crtc);
+			drm_crtc_vblank_put(conn_state->base.crtc);
+		} else {
+			pr_warn("%s failed to get vblank for dbv wait\n", __func__);
+		}
+		/*TODO(tknelms) DPU_ATRACE_END("dbv_wait");*/
+	}
+
+	if (ghbm_updated)
+		sysfs_notify(&ctx->bl->dev.kobj, NULL, "hbm_mode");
+
+	/*TODO(tknelms) DPU_ATRACE_END(__func__);*/
+}
+
+static void gs_panel_connector_atomic_pre_commit(struct gs_drm_connector *gs_connector,
+						 struct gs_drm_connector_state *gs_old_state,
+						 struct gs_drm_connector_state *gs_new_state)
+{
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+
+	gs_panel_pre_commit_properties(ctx, gs_new_state);
+}
+
+static void gs_panel_connector_atomic_commit(struct gs_drm_connector *gs_connector,
+					     struct gs_drm_connector_state *gs_old_state,
+					     struct gs_drm_connector_state *gs_new_state)
+{
+	/*TODO(tknelms): replicate atomic commit behavior */
+	return;
+}
+
+static const struct gs_drm_connector_helper_funcs gs_panel_connector_helper_funcs = {
+	.atomic_pre_commit = gs_panel_connector_atomic_pre_commit,
+	.atomic_commit = gs_panel_connector_atomic_commit,
+};
+
+const struct gs_drm_connector_helper_funcs *get_panel_gs_drm_connector_helper_funcs(void)
+{
+	return &gs_panel_connector_helper_funcs;
+}
