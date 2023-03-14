@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MIT
+
+load("//build/kernel/kleaf:kernel.bzl", "kernel_module")
+
+kernel_module(
+    name = "panels",
+    srcs = [
+        "Kbuild",
+        "panel-gs-simple.c",
+        "//private/google-modules/display/common:headers",
+        "//private/google-modules/soc/gs:gs_soc_headers",
+    ],
+    outs = [
+        "panel_gs_simple.ko",
+    ],
+    kernel_build = "//private/google-modules/soc/gs:gs_kernel_build",
+    visibility = [
+        "//private/devices/google:__subpackages__",
+        "//private/google-modules/soc/gs:__pkg__",
+    ],
+    deps = [
+        "//private/google-modules/display/common/gs_panel",
+        "//private/google-modules/soc/gs:gs_soc_module",
+    ],
+)

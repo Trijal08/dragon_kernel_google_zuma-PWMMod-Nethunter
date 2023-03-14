@@ -691,6 +691,20 @@ int gs_dsi_panel_common_probe(struct mipi_dsi_device *dsi)
 }
 EXPORT_SYMBOL(gs_dsi_panel_common_probe);
 
+int gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi)
+{
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+
+	mipi_dsi_detach(dsi);
+	drm_panel_remove(&ctx->base);
+	drm_bridge_remove(&ctx->bridge);
+
+	devm_backlight_device_unregister(ctx->dev, ctx->bl);
+
+	return 0;
+}
+EXPORT_SYMBOL(gs_dsi_panel_common_remove);
+
 /* DRM panel funcs */
 
 void gs_panel_reset_helper(struct gs_panel *ctx)

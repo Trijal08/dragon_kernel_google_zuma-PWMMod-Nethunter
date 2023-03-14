@@ -568,6 +568,14 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx);
 int gs_dsi_panel_common_probe(struct mipi_dsi_device *dsi);
 
 /**
+ * gs_dsi_panel_common_remove - Removes dsi panel
+ * @dsi: dsi device pointer for panel
+ *
+ * Return: 0 on success, negative value for error
+ */
+int gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi);
+
+/**
  * gs_panel_msleep - sleeps for a given number of ms
  * @delay_ms: Length of time to sleep
  *
