@@ -45,6 +45,7 @@
 
 enum misc_command {
      BIGO_GET_PADDING_SIZE,
+     BIGO_CONFIG_AFBC,
 };
 
 static int bigo_worker_thread(void *data);
@@ -310,6 +311,13 @@ inline void bigo_config_priority(struct bigo_inst *inst, __s32 priority)
 	mutex_unlock(&inst->lock);
 }
 
+inline void bigo_config_afbc(struct bigo_inst *inst)
+{
+	mutex_lock(&inst->lock);
+	inst->afbc = true;
+	mutex_unlock(&inst->lock);
+}
+
 static int copy_regs_from_user(struct bigo_core *core,
 			struct bigo_ioc_regs *desc,
 			void __user *user_desc,
@@ -516,17 +524,20 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 
 				misc.ret = res.a0;
 				misc.data0 = res.a1;
-
-				if (copy_to_user(user_desc, &misc, sizeof(misc))) {
-					pr_err("Failed to copy to user\n");
-					rc = -EFAULT;
-				}
-
+				break;
+			}
+			case BIGO_CONFIG_AFBC: {
+				bigo_config_afbc(inst);
+				misc.ret = 0;
 				break;
 			}
 			default:
 				rc = -EINVAL;
 				break;
+		}
+		if (copy_to_user(user_desc, &misc, sizeof(misc))) {
+			pr_err("Failed to copy to user\n");
+			rc = -EFAULT;
 		}
 		break;
 	}

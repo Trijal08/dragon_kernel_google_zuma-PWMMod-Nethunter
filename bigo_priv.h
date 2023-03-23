@@ -53,6 +53,9 @@ struct bigo_bw {
 	u32 rd_bw;
 	u32 wr_bw;
 	u32 pk_bw;
+	u32 rd_bw_afbc;
+	u32 wr_bw_afbc;
+	u32 pk_bw_afbc;
 };
 
 struct power_manager {
@@ -146,6 +149,7 @@ struct bigo_inst {
 	u32 bpp;
 	bool idle;
         bool is_decoder_usage;
+        bool afbc;
 };
 
 inline void set_curr_inst(struct bigo_core *core, struct bigo_inst *inst);

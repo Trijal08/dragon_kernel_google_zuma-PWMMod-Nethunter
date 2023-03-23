@@ -122,9 +122,25 @@ static void bigo_get_bw(struct bigo_core *core, struct bts_bw *bw)
 
 	if (load) {
 		struct bigo_bw *bandwidth = bigo_get_target_bw(core, load);
-		bw->read = bandwidth->rd_bw;
-		bw->write = bandwidth->wr_bw;
-		bw->peak = bandwidth->pk_bw;
+		struct bigo_inst *inst;
+		bool afbc = true;
+
+		/* Use AFBC BW table when all insts are AFBC */
+		list_for_each_entry(inst, &core->instances, list) {
+			if (!inst->afbc) {
+				afbc = false;
+				break;
+			}
+		}
+		if (afbc) {
+			bw->read = bandwidth->rd_bw_afbc;
+			bw->write = bandwidth->wr_bw_afbc;
+			bw->peak = bandwidth->pk_bw_afbc;
+		} else {
+			bw->read = bandwidth->rd_bw;
+			bw->write = bandwidth->wr_bw;
+			bw->peak = bandwidth->pk_bw;
+		}
 	} else {
 		memset(bw, 0, sizeof(*bw));
 	}
