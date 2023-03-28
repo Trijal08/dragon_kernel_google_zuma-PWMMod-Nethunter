@@ -1551,6 +1551,88 @@ bool goog_check_spi_dma_enabled(struct spi_device *spi_dev)
 }
 EXPORT_SYMBOL(goog_check_spi_dma_enabled);
 
+int goog_get_panel_id(struct device_node *node)
+{
+	int id = -1;
+	int err;
+	int index;
+	struct of_phandle_args panelmap;
+	struct drm_panel *panel = NULL;
+
+	if (!of_property_read_bool(node, "goog,panel_map")) {
+		pr_warn("%s: panel_map doesn't exist!\n", __func__);
+		return id;
+	}
+
+	for (index = 0;; index++) {
+		err = of_parse_phandle_with_fixed_args(
+			node, "goog,panel_map", 1, index, &panelmap);
+		if (err) {
+			pr_warn("%s: failed to find panel for index: %d!\n", __func__, index);
+			break;
+		}
+
+		panel = of_drm_find_panel(panelmap.np);
+		of_node_put(panelmap.np);
+		if (IS_ERR_OR_NULL(panel))
+			continue;
+
+		id = index;
+		break;
+	}
+
+	return id;
+}
+EXPORT_SYMBOL(goog_get_panel_id);
+
+int goog_get_firmware_name(struct device_node *node, int id, char *name, size_t size)
+{
+	int err;
+	const char *fw_name;
+
+	err = of_property_read_string_index(node, "goog,firmware_names", id, &fw_name);
+	if (err == 0) {
+		strncpy(name, fw_name, size);
+		pr_info("%s: found firmware name: %s\n", __func__, name);
+	} else {
+		pr_warn("%s: failed to find firmware name!\n", __func__);
+	}
+	return err;
+}
+EXPORT_SYMBOL(goog_get_firmware_name);
+
+int goog_get_config_name(struct device_node *node, int id, char *name, size_t size)
+{
+	int err;
+	const char *config_name;
+
+	err = of_property_read_string_index(node, "goog,config_names", id, &config_name);
+	if (err == 0) {
+		strncpy(name, config_name, size);
+		pr_info("%s: found config name: %s\n", __func__, name);
+	} else {
+		pr_warn("%s: failed to find config name!\n", __func__);
+	}
+	return err;
+}
+EXPORT_SYMBOL(goog_get_config_name);
+
+int goog_get_test_limits_name(struct device_node *node, int id, char *name, size_t size)
+{
+	int err;
+	const char *limits_name;
+
+	err = of_property_read_string_index(node, "goog,test_limits_names", id, &limits_name);
+	if (err == 0) {
+		strncpy(name, limits_name, size);
+		pr_info("%s: found test limits name: %s\n", __func__, name);
+	} else {
+		pr_warn("%s: failed to find test limits name!\n", __func__);
+	}
+	return err;
+}
+EXPORT_SYMBOL(goog_get_test_limits_name);
+
 int goog_process_vendor_cmd(struct goog_touch_interface *gti, enum gti_cmd_type cmd_type)
 {
 	void *private_data = gti->vendor_private_data;
@@ -2243,9 +2325,14 @@ int gti_charger_state_change(struct notifier_block *nb, unsigned long action,
 int goog_offload_probe(struct goog_touch_interface *gti)
 {
 	int ret;
+	int err;
 	u16 values[2];
 	struct device_node *np = gti->vendor_dev->of_node;
 	const char *offload_dev_name = NULL;
+	struct of_phandle_args;
+	u8 *offload_ids_array;
+	int offload_ids_size;
+	int id_size;
 
 	/*
 	 * TODO(b/201610482): rename DEVICE_NAME in touch_offload.h for more specific.
@@ -2255,8 +2342,35 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 			"%s_%s", DEVICE_NAME, offload_dev_name);
 	}
 
-	if (of_property_read_u8_array(np, "goog,touch_offload_id",
-					  gti->offload_id_byte, 4)) {
+	if (gti->panel_id >= 0) {
+		offload_ids_size = of_property_count_u8_elems(np, "goog,touch_offload_ids");
+		id_size = sizeof(gti->offload_id);
+
+		offload_ids_array = devm_kzalloc(gti->vendor_dev, offload_ids_size, GFP_KERNEL);
+		if (offload_ids_array == NULL) {
+			GOOG_WARN(gti, "Failed to alloc offload_ids_array");
+			err = -ENOMEM;
+		} else {
+			err = of_property_read_u8_array(np, "goog,touch_offload_ids",
+				offload_ids_array, offload_ids_size);
+			if (err == 0) {
+				if (id_size * (gti->panel_id + 1) <= offload_ids_size) {
+					memcpy(&gti->offload_id, offload_ids_array + id_size * gti->panel_id, id_size);
+				} else {
+					GOOG_WARN(gti, "Panel id is invalid, id: %d, ids size: %d",
+							gti->panel_id, offload_ids_size);
+					err = -EINVAL;
+				}
+			} else {
+				GOOG_WARN(gti, "Failed to read touch_offload_ids");
+			}
+		}
+	} else {
+		err = of_property_read_u8_array(np, "goog,touch_offload_id",
+				gti->offload_id_byte, 4);
+	}
+
+	if (err < 0) {
 		GOOG_INFO(gti, "set default offload id: GOOG!\n");
 		gti->offload_id_byte[0] = 'G';
 		gti->offload_id_byte[1] = 'O';
@@ -2876,11 +2990,13 @@ void goog_init_options(struct goog_touch_interface *gti,
 	gti->screen_protector_mode_setting = GTI_SCREEN_PROTECTOR_MODE_DISABLE;
 	gti->display_state = GTI_DISPLAY_STATE_ON;
 
+	gti->panel_id = -1;
 	if (gti->vendor_dev) {
 		struct device_node *np = gti->vendor_dev->of_node;
 
 		gti->ignore_force_active = of_property_read_bool(np, "goog,ignore-force-active");
 		gti->coord_filter_enabled = of_property_read_bool(np, "goog,coord-filter-enabled");
+		gti->panel_id = goog_get_panel_id(np);
 	}
 
 	/* Initialize default functions. */

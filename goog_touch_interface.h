@@ -600,6 +600,7 @@ struct gti_pm {
  * @slot_bit_changed: bitmap of slot state changed for this input process cycle.
  * @slot_bit_active: bitmap of active slot during GTI lifecycle.
  * @dev_id: dev_t used for google interface driver.
+ * @panel_id: id of the display panel.
  * @charger_state: indicates a USB charger is connected.
  * @charger_notifier: notifier for power_supply updates.
  * @irq_index: irq count that handle by GTI.
@@ -682,6 +683,7 @@ struct goog_touch_interface {
 	unsigned long slot_bit_changed;
 	unsigned long slot_bit_active;
 	dev_t dev_id;
+	int panel_id;
 
 	u8 charger_state;
 	struct notifier_block charger_notifier;
@@ -767,6 +769,11 @@ void gti_debug_hc_dump(struct goog_touch_interface *gti);
 void gti_debug_input_dump(struct goog_touch_interface *gti);
 
 int goog_get_lptw_triggered(struct goog_touch_interface *gti);
+
+int goog_get_panel_id(struct device_node *node);
+int goog_get_firmware_name(struct device_node *node, int id, char *name, size_t size);
+int goog_get_config_name(struct device_node *node, int id, char *name, size_t size);
+int goog_get_test_limits_name(struct device_node *node, int id, char *name, size_t size);
 
 #endif // _GOOG_TOUCH_INTERFACE_
 
