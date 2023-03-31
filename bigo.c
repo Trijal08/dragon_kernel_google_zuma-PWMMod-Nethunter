@@ -37,7 +37,7 @@
 #define DEFAULT_FPS 60
 #define BIGO_SMC_ID 0xd
 #define BIGO_MAX_INST_NUM 16
-#define BIGO_HBD_BIT BIT(17)
+#define BIGO_HBD_BIT BIT(21)
 
 #define BIGO_IDLE_TIMEOUT_MS 1000
 
