@@ -18,7 +18,7 @@
 #include "bigo_io.h"
 
 #define BIGW_A0_CSR_PROG_FREQ 166000
-#define LARGE_LOAD_MIF_FLOOR 1539000
+#define LARGE_LOAD_MIF_FLOOR 3744000
 
 static inline u32 bigo_get_total_load(struct bigo_core *core)
 {
