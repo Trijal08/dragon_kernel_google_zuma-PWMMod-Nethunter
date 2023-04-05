@@ -17,6 +17,7 @@
 
 #include "lwis_device.h"
 #include "lwis_ioreg.h"
+#include "lwis_util.h"
 
 static int find_block_idx_by_name(struct lwis_ioreg_list *list, char *name)
 {

@@ -53,6 +53,12 @@ int lwis_device_single_register_read(struct lwis_device *lwis_dev, int bid, uint
 const char *lwis_device_type_to_string(int32_t type);
 
 /*
+ * trigger_condition_node_operator_to_string: Converts the trigger condition
+ * node type into a human-readable string. Useful for debug logging.
+ */
+const char *trigger_condition_node_operator_to_string(int32_t type);
+
+/*
  * lwis_get_time: Returns time since boot, this uses CLOCK_BOOTTIME which
  * does not stop during system suspend.
  *

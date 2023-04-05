@@ -80,7 +80,9 @@ static int lwis_iommu_fault_handler(struct iommu_fault *fault, void *param)
 	pr_err("\n");
 	lwis_debug_print_transaction_info(lwis_dev);
 	pr_err("\n");
-	lwis_debug_print_event_states_info(lwis_dev);
+	lwis_debug_print_register_io_history(lwis_dev);
+	pr_err("\n");
+	lwis_debug_print_event_states_info(lwis_dev, /*lwis_event_dump_cnt=*/-1);
 	pr_err("\n");
 	lwis_debug_print_buffer_info(lwis_dev);
 	pr_err("\n");
@@ -303,7 +305,7 @@ int lwis_platform_remove_qos(struct lwis_device *lwis_dev)
 	return 0;
 }
 
-int lwis_platform_update_bts(struct lwis_device *lwis_dev, unsigned int bw_kb_peak,
+int lwis_platform_update_bts(struct lwis_device *lwis_dev, int block, unsigned int bw_kb_peak,
 			     unsigned int bw_kb_read, unsigned int bw_kb_write,
 			     unsigned int bw_kb_rt)
 {

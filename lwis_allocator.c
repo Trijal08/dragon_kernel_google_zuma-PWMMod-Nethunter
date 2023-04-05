@@ -13,7 +13,6 @@
 
 #include <linux/mm.h>
 #include <linux/mutex.h>
-#include <linux/preempt.h>
 #include <linux/slab.h>
 #include "lwis_allocator.h"
 #include "lwis_commands.h"
@@ -118,6 +117,9 @@ allocator_get_block_pool(struct lwis_allocator_block_mgr *block_mgr, int idx)
 	struct lwis_allocator_block_pool *block_pool;
 
 	switch (idx) {
+	case 12:
+		block_pool = &block_mgr->pool_4k;
+		break;
 	case 13:
 		block_pool = &block_mgr->pool_8k;
 		break;
@@ -150,24 +152,25 @@ allocator_get_block_pool(struct lwis_allocator_block_mgr *block_mgr, int idx)
 int lwis_allocator_init(struct lwis_device *lwis_dev)
 {
 	struct lwis_allocator_block_mgr *block_mgr;
-	unsigned long flags;
 
 	if (lwis_dev == NULL) {
 		dev_err(lwis_dev->dev, "lwis_dev is NULL\n");
 		return -EINVAL;
 	}
 
+	mutex_lock(&lwis_dev->client_lock);
+
 	if (lwis_dev->block_mgr != NULL) {
 		block_mgr = lwis_dev->block_mgr;
-		spin_lock_irqsave(&block_mgr->lock, flags);
 		block_mgr->ref_count++;
-		spin_unlock_irqrestore(&block_mgr->lock, flags);
+		mutex_unlock(&lwis_dev->client_lock);
 		return 0;
 	}
 
 	block_mgr = kzalloc(sizeof(struct lwis_allocator_block_mgr), GFP_KERNEL);
 	if (block_mgr == NULL) {
 		dev_err(lwis_dev->dev, "Allocate block_mgr failed\n");
+		mutex_unlock(&lwis_dev->client_lock);
 		return -ENOMEM;
 	}
 
@@ -178,45 +181,49 @@ int lwis_allocator_init(struct lwis_device *lwis_dev)
 	hash_init(block_mgr->allocated_blocks);
 
 	/* Initialize block pools */
-	strlcpy(block_mgr->pool_8k.name, "lwis-block-8k", LWIS_MAX_NAME_STRING_LEN);
-	strlcpy(block_mgr->pool_16k.name, "lwis-block-16k", LWIS_MAX_NAME_STRING_LEN);
-	strlcpy(block_mgr->pool_32k.name, "lwis-block-32k", LWIS_MAX_NAME_STRING_LEN);
-	strlcpy(block_mgr->pool_64k.name, "lwis-block-64k", LWIS_MAX_NAME_STRING_LEN);
-	strlcpy(block_mgr->pool_128k.name, "lwis-block-128k", LWIS_MAX_NAME_STRING_LEN);
-	strlcpy(block_mgr->pool_256k.name, "lwis-block-256k", LWIS_MAX_NAME_STRING_LEN);
-	strlcpy(block_mgr->pool_512k.name, "lwis-block-512k", LWIS_MAX_NAME_STRING_LEN);
-	strlcpy(block_mgr->pool_large.name, "lwis-block-large", LWIS_MAX_NAME_STRING_LEN);
+	strscpy(block_mgr->pool_4k.name, "lwis-block-4k", LWIS_MAX_NAME_STRING_LEN);
+	strscpy(block_mgr->pool_8k.name, "lwis-block-8k", LWIS_MAX_NAME_STRING_LEN);
+	strscpy(block_mgr->pool_16k.name, "lwis-block-16k", LWIS_MAX_NAME_STRING_LEN);
+	strscpy(block_mgr->pool_32k.name, "lwis-block-32k", LWIS_MAX_NAME_STRING_LEN);
+	strscpy(block_mgr->pool_64k.name, "lwis-block-64k", LWIS_MAX_NAME_STRING_LEN);
+	strscpy(block_mgr->pool_128k.name, "lwis-block-128k", LWIS_MAX_NAME_STRING_LEN);
+	strscpy(block_mgr->pool_256k.name, "lwis-block-256k", LWIS_MAX_NAME_STRING_LEN);
+	strscpy(block_mgr->pool_512k.name, "lwis-block-512k", LWIS_MAX_NAME_STRING_LEN);
+	strscpy(block_mgr->pool_large.name, "lwis-block-large", LWIS_MAX_NAME_STRING_LEN);
 
 	/* Initialize reference count */
 	block_mgr->ref_count = 1;
 
 	lwis_dev->block_mgr = block_mgr;
+	mutex_unlock(&lwis_dev->client_lock);
 	return 0;
 }
 
 void lwis_allocator_release(struct lwis_device *lwis_dev)
 {
 	struct lwis_allocator_block_mgr *block_mgr;
-	unsigned long flags;
 
 	if (lwis_dev == NULL) {
 		dev_err(lwis_dev->dev, "lwis_dev is NULL\n");
 		return;
 	}
 
+	mutex_lock(&lwis_dev->client_lock);
+
 	block_mgr = lwis_dev->block_mgr;
 	if (block_mgr == NULL) {
 		dev_err(lwis_dev->dev, "block_mgr is NULL\n");
+		mutex_unlock(&lwis_dev->client_lock);
 		return;
 	}
 
-	spin_lock_irqsave(&block_mgr->lock, flags);
 	block_mgr->ref_count--;
 	if (block_mgr->ref_count > 0) {
-		spin_unlock_irqrestore(&block_mgr->lock, flags);
+		mutex_unlock(&lwis_dev->client_lock);
 		return;
 	}
 
+	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_4k);
 	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_8k);
 	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_16k);
 	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_32k);
@@ -224,10 +231,10 @@ void lwis_allocator_release(struct lwis_device *lwis_dev)
 	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_128k);
 	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_256k);
 	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_512k);
-	spin_unlock_irqrestore(&block_mgr->lock, flags);
 
 	kfree(block_mgr);
 	lwis_dev->block_mgr = NULL;
+	mutex_unlock(&lwis_dev->client_lock);
 }
 
 void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size)
@@ -247,15 +254,6 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size)
 	if (block_mgr == NULL) {
 		dev_err(lwis_dev->dev, "block_mgr is NULL\n");
 		return NULL;
-	}
-
-	/*
-	 * Linux already has slab allocator to cache the allocated memory within a page.
-	 * The default page size is 4K. We can leverage linux's slab implementation for
-	 * small size memory recycling.
-	 */
-	if (size <= 4 * 1024) {
-		return kmalloc(size, GFP_KERNEL);
 	}
 
 	/*
@@ -288,6 +286,11 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size)
 	     if (size <=  32 * 1024 * 1024) return 25;
 	*/
 	idx = fls(size - 1);
+
+	/* Set 4K as the minimal block size */
+	if (idx < 12) {
+		idx = 12;
+	}
 
 	/*
 	 * For the large size memory allocation, we usually use kvmalloc() to allocate
@@ -387,6 +390,7 @@ void lwis_allocator_free(struct lwis_device *lwis_dev, void *ptr)
 	}
 
 	if (block == NULL) {
+		dev_err(lwis_dev->dev, "Allocator free ptr not found\n");
 		kfree(ptr);
 		return;
 	}

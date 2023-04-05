@@ -38,12 +38,40 @@ static struct lwis_event_subscribe_operations dpm_subscribe_ops = {
 	.release = NULL,
 };
 
+#ifdef LWIS_BTS_BLOCK_NAME_ENABLED
+static int find_bts_block(struct lwis_device *lwis_dev, struct lwis_device *target_dev,
+			struct lwis_qos_setting *qos_setting)
+{
+	int i;
+
+	if (strcmp(qos_setting->bts_block_name, "") == 0) {
+		if (target_dev->bts_block_num != 1) {
+			dev_err(lwis_dev->dev,
+				"Device %s has %d bts blocks but no block name specified in qos setting\n",
+				target_dev->name, target_dev->bts_block_num);
+			return -EINVAL;
+		}
+		return 0;
+	} else {
+		for (i = 0; i < target_dev->bts_block_num; i++) {
+			if (strcmp(target_dev->bts_block_names[i], qos_setting->bts_block_name) ==
+			    0) {
+				return i;
+			}
+		}
+		dev_err(lwis_dev->dev, "Failed to find block name matching %s for device %s\n",
+			qos_setting->bts_block_name, target_dev->name);
+		return -EINVAL;
+	}
+}
+#endif
+
 /*
  *  lwis_dpm_update_qos: update qos requirement for lwis device.
  */
 int lwis_dpm_update_qos(struct lwis_device *lwis_dev, struct lwis_qos_setting *qos_setting)
 {
-	int ret = 0;
+	int ret = 0, bts_block = -1;
 	int64_t peak_bw = 0;
 	int64_t read_bw = 0;
 	int64_t write_bw = 0;
@@ -78,15 +106,26 @@ int lwis_dpm_update_qos(struct lwis_device *lwis_dev, struct lwis_qos_setting *q
 					qos_setting->clock_family);
 			}
 		} else {
+#ifdef LWIS_BTS_BLOCK_NAME_ENABLED
+			bts_block = find_bts_block(lwis_dev, target_dev, qos_setting);
+			if (bts_block < 0) {
+				return bts_block;
+			}
+#else
+			bts_block = 0;
+#endif
+
 			read_bw = qos_setting->read_bw;
 			write_bw = qos_setting->write_bw;
 			peak_bw = (qos_setting->peak_bw > 0) ?
-						qos_setting->peak_bw :
-						((read_bw > write_bw) ? read_bw : write_bw) / 4;
+					  qos_setting->peak_bw :
+					  ((read_bw > write_bw) ? read_bw : write_bw) / 4;
 			rt_bw = (qos_setting->rt_bw > 0) ? qos_setting->rt_bw : 0;
-			ret = lwis_platform_update_bts(target_dev, peak_bw, read_bw, write_bw, rt_bw);
+			ret = lwis_platform_update_bts(target_dev, bts_block, peak_bw, read_bw,
+						       write_bw, rt_bw);
 			if (ret < 0) {
-				dev_err(lwis_dev->dev, "Failed to update bandwidth to bts, ret: %d\n", ret);
+				dev_err(lwis_dev->dev,
+					"Failed to update bandwidth to bts, ret: %d\n", ret);
 			}
 		}
 		break;

@@ -11,18 +11,19 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-ioentry: " fmt
 
 #include <linux/delay.h>
+#include <linux/preempt.h>
 
 #include "lwis_io_entry.h"
 #include "lwis_util.h"
 
-int lwis_io_entry_poll(struct lwis_device *lwis_dev, struct lwis_io_entry *entry, bool non_blocking)
+int lwis_io_entry_poll(struct lwis_device *lwis_dev, struct lwis_io_entry *entry)
 {
 	uint64_t val, start;
 	uint64_t timeout_ms = entry->read_assert.timeout_ms;
 	int ret = 0;
 
-	/* Only read and check once if non_blocking */
-	if (non_blocking) {
+	/* Only read and check once if in_irq() */
+	if (in_irq()) {
 		timeout_ms = 0;
 	}
 

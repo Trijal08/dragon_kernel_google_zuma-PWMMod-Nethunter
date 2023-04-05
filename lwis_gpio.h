@@ -20,6 +20,8 @@
  * This structure is to store the gpios information
  */
 struct lwis_gpios_info {
+	int id;
+	struct device *hold_dev;
 	char name[LWIS_MAX_NAME_STRING_LEN];
 	bool is_shared;
 	bool is_pulse;
@@ -71,12 +73,6 @@ int lwis_gpio_list_set_output_value_raw(struct gpio_descs *gpios, int value);
  *  Set all the GPIO pins in the list to input.
  */
 int lwis_gpio_list_set_input(struct gpio_descs *gpios);
-
-/*
- * Get the IRQ list corresponding to the GPIO list
- */
-int lwis_gpio_list_to_irqs(struct lwis_device *lwis_dev, struct lwis_gpios_info *gpios_info,
-			   char *irq_gpios_names);
 
 /*
  *  Allocate an instance of the lwis_gpios_info and initialize

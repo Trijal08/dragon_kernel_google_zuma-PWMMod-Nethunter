@@ -24,11 +24,29 @@ void lwis_get_feature_flags(char *buffer, size_t buffer_size)
 	 * Feature flags start here:
 	 */
 
-	/* core:
+	/*
+	 * core:
 	 * All features we have shipped with in our initial version of LWIS, the basic fundamental
 	 * functions of LWIS.
 	 */
 	strlcat(buffer, "core", buffer_size);
+
+	/*
+	 * cmd-pkt:
+	 * A forward and backward compatible interface for LWIS commands. It uses a single IOCTL
+	 * interface with different command packets to replace the current multiple IOCTL
+	 * interfaces for different commands. It resolves the kernel version mismatch error when
+	 * interface(s) change.
+	 */
+	strlcat(buffer, " cmd-pkt", buffer_size);
+
+#ifdef LWIS_FENCE_ENABLED
+	/*
+	 * fence:
+	 * Support fence feature
+	 */
+	strlcat(buffer, " fence", buffer_size);
+#endif
 
 	strlcat(buffer, "\n", buffer_size);
 }

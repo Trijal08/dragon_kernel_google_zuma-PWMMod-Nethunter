@@ -177,7 +177,7 @@ static int generate_device_info(struct lwis_device *lwis_dev, char *buffer, size
 }
 
 static int generate_event_states_info(struct lwis_device *lwis_dev, char *buffer,
-				      size_t buffer_size)
+				      size_t buffer_size, int lwis_event_dump_cnt)
 {
 	/* Temporary buffer to be concatenated to the main buffer. */
 	char tmp_buf[96] = {};
@@ -186,13 +186,27 @@ static int generate_event_states_info(struct lwis_device *lwis_dev, char *buffer
 	unsigned long flags;
 	struct lwis_device_event_state *state;
 	bool enabled_event_present = false;
+	int traverse_last_events_size;
 
 	if (lwis_dev == NULL) {
 		pr_err("Unknown LWIS device pointer\n");
 		return -EINVAL;
 	}
 
-	scnprintf(buffer, buffer_size, "=== LWIS EVENT STATES INFO: %s ===\n", lwis_dev->name);
+	if (lwis_event_dump_cnt >= 0 && lwis_event_dump_cnt <= EVENT_DEBUG_HISTORY_SIZE) {
+		scnprintf(tmp_buf, sizeof(tmp_buf), "=== LWIS DUMP LAST %d Received Events ===\n",
+				  lwis_event_dump_cnt);
+		strlcat(buffer, tmp_buf, buffer_size);
+		traverse_last_events_size = lwis_event_dump_cnt;
+	} else if (lwis_event_dump_cnt > EVENT_DEBUG_HISTORY_SIZE) {
+		pr_err("lwis_event_dump_cnt (%d) exceed EVENT_DEBUG_HISTORY_SIZE (%d) \n",
+			   lwis_event_dump_cnt, EVENT_DEBUG_HISTORY_SIZE);
+		return -EINVAL;
+	} else {
+		scnprintf(buffer, buffer_size, "=== LWIS EVENT STATES INFO: %s ===\n",
+				  lwis_dev->name);
+		traverse_last_events_size = EVENT_DEBUG_HISTORY_SIZE;
+	}
 
 	spin_lock_irqsave(&lwis_dev->lock, flags);
 	if (hash_empty(lwis_dev->event_states)) {
@@ -211,9 +225,18 @@ static int generate_event_states_info(struct lwis_device *lwis_dev, char *buffer
 	if (!enabled_event_present) {
 		strlcat(buffer, "No enabled events\n", buffer_size);
 	}
-	strlcat(buffer, "Last Events:\n", buffer_size);
+	if (lwis_event_dump_cnt < 0) {
+		strlcat(buffer, "Last Events:\n", buffer_size);
+	}
+
 	idx = lwis_dev->debug_info.cur_event_hist_idx;
-	for (i = 0; i < EVENT_DEBUG_HISTORY_SIZE; ++i) {
+	for (i = 0; i < traverse_last_events_size; ++i) {
+		if (lwis_event_dump_cnt >= 0) {
+			if (idx == 0) {
+				idx = EVENT_DEBUG_HISTORY_SIZE;
+			}
+			idx--;
+		}
 		state = &lwis_dev->debug_info.event_hist[idx].state;
 		/* Skip uninitialized entries */
 		if (state->event_id != 0) {
@@ -223,9 +246,11 @@ static int generate_event_states_info(struct lwis_device *lwis_dev, char *buffer
 				  lwis_dev->debug_info.event_hist[idx].timestamp);
 			strlcat(buffer, tmp_buf, buffer_size);
 		}
-		idx++;
-		if (idx >= EVENT_DEBUG_HISTORY_SIZE) {
-			idx = 0;
+		if (lwis_event_dump_cnt < 0) {
+			idx++;
+			if (idx >= EVENT_DEBUG_HISTORY_SIZE) {
+				idx = 0;
+			}
 		}
 	}
 
@@ -295,6 +320,95 @@ static int generate_buffer_info(struct lwis_device *lwis_dev, char *buffer, size
 	return 0;
 }
 
+static int generate_register_io_history(struct lwis_device *lwis_dev, char *buffer, size_t buffer_size)
+{
+	/* Temporary buffer to be concatenated to the main buffer. */
+	char tmp_buf[128] = {};
+	struct lwis_register_io_info *reg_io;
+	int i, hist_idx;
+
+	if (lwis_dev == NULL) {
+		pr_err("Unknown LWIS device pointer\n");
+		return -EINVAL;
+	}
+
+	scnprintf(buffer, buffer_size, "=== LWIS REGISTER IO INFO: %s ===\n", lwis_dev->name);
+	strlcat(buffer, "Last register read/writes:\n", buffer_size);
+	hist_idx = lwis_dev->debug_info.cur_io_entry_hist_idx;
+	for (i = 0; i < IO_ENTRY_DEBUG_HISTORY_SIZE; ++i) {
+		reg_io = &lwis_dev->debug_info.io_entry_hist[hist_idx];
+		/* Skip uninitialized entries */
+		if (reg_io->start_timestamp != 0) {
+			if (reg_io->io_entry.type == LWIS_IO_ENTRY_READ) {
+				scnprintf(tmp_buf, sizeof(tmp_buf),
+					  "READ: bid %d, offset %llu, val %llu, access_size %lu, start_timestamp %llu\n",
+					  reg_io->io_entry.rw.bid, reg_io->io_entry.rw.offset,
+					  reg_io->io_entry.rw.val, reg_io->access_size,
+					  reg_io->start_timestamp);
+				strlcat(buffer, tmp_buf, buffer_size);
+			} else if (reg_io->io_entry.type == LWIS_IO_ENTRY_READ_BATCH) {
+				scnprintf(tmp_buf, sizeof(tmp_buf),
+					 "READ_BATCH: bid %d, offset %llu, size_in_bytes %lu, access_size %lu, start_timestamp %llu\n",
+					 reg_io->io_entry.rw_batch.bid,
+					 reg_io->io_entry.rw_batch.offset,
+					 reg_io->io_entry.rw_batch.size_in_bytes,
+					 reg_io->access_size, reg_io->start_timestamp);
+				strlcat(buffer, tmp_buf, buffer_size);
+			} else if (reg_io->io_entry.type == LWIS_IO_ENTRY_WRITE) {
+				scnprintf(tmp_buf, sizeof(tmp_buf),
+					 "WRITE: bid %d, offset %llu, val %llu, access_size %lu, start_timestamp %llu\n",
+					 reg_io->io_entry.rw.bid, reg_io->io_entry.rw.offset,
+					 reg_io->io_entry.rw.val, reg_io->access_size,
+					 reg_io->start_timestamp);
+				strlcat(buffer, tmp_buf, buffer_size);
+			} else if (reg_io->io_entry.type == LWIS_IO_ENTRY_WRITE_BATCH) {
+				scnprintf(tmp_buf, sizeof(tmp_buf),
+					 "WRITE_BATCH: bid %d, offset %llu, size_in_bytes %lu, access_size %lu, start_timestamp %llu\n",
+					 reg_io->io_entry.rw_batch.bid,
+					 reg_io->io_entry.rw_batch.offset,
+					 reg_io->io_entry.rw_batch.size_in_bytes,
+					 reg_io->access_size, reg_io->start_timestamp);
+				strlcat(buffer, tmp_buf, buffer_size);
+			} else if (reg_io->io_entry.type == LWIS_IO_ENTRY_MODIFY) {
+				scnprintf(tmp_buf, sizeof(tmp_buf),
+					 "MODIFY: bid %d, offset %llu, access_size %lu, start_timestamp %llu\n",
+					 reg_io->io_entry.mod.bid, reg_io->io_entry.mod.offset,
+					 reg_io->access_size, reg_io->start_timestamp);
+				strlcat(buffer, tmp_buf, buffer_size);
+			}
+		}
+		hist_idx++;
+		if (hist_idx >= IO_ENTRY_DEBUG_HISTORY_SIZE) {
+			hist_idx = 0;
+		}
+	}
+
+	return 0;
+}
+
+int lwis_debug_print_register_io_history(struct lwis_device *lwis_dev)
+{
+	int ret = 0;
+	/* Buffer to store information */
+	const size_t buffer_size = 10240;
+	char *buffer = kzalloc(buffer_size, GFP_KERNEL);
+	if (!buffer) {
+		dev_err(lwis_dev->dev, "Failed to allocate register io history log buffer\n");
+		return -ENOMEM;
+	}
+
+	ret = generate_register_io_history(lwis_dev, buffer, buffer_size);
+	if (ret) {
+		dev_err(lwis_dev->dev, "Failed to generate register io history");
+		goto exit;
+	}
+	print_to_log(buffer);
+
+exit:
+	kfree(buffer);
+	return 0;
+}
+
 int lwis_debug_print_device_info(struct lwis_device *lwis_dev)
 {
 	int ret = 0;
@@ -311,7 +425,7 @@ int lwis_debug_print_device_info(struct lwis_device *lwis_dev)
 	return 0;
 }
 
-int lwis_debug_print_event_states_info(struct lwis_device *lwis_dev)
+int lwis_debug_print_event_states_info(struct lwis_device *lwis_dev, int lwis_event_dump_cnt)
 {
 	int ret = 0;
 	/* Buffer to store information */
@@ -322,7 +436,7 @@ int lwis_debug_print_event_states_info(struct lwis_device *lwis_dev)
 		return -ENOMEM;
 	}
 
-	ret = generate_event_states_info(lwis_dev, buffer, buffer_size);
+	ret = generate_event_states_info(lwis_dev, buffer, buffer_size, lwis_event_dump_cnt);
 	if (ret) {
 		dev_err(lwis_dev->dev, "Failed to generate event states info");
 		goto exit;
@@ -410,7 +524,7 @@ static ssize_t event_states_read(struct file *fp, char __user *user_buf, size_t 
 		return -ENOMEM;
 	}
 
-	ret = generate_event_states_info(lwis_dev, buffer, buffer_size);
+	ret = generate_event_states_info(lwis_dev, buffer, buffer_size, /*lwis_event_dump_cnt=*/-1);
 	if (ret) {
 		dev_err(lwis_dev->dev, "Failed to generate event states info");
 		goto exit;
@@ -471,6 +585,31 @@ exit:
 	return ret;
 }
 
+static ssize_t register_io_history_read(struct file *fp, char __user *user_buf, size_t count,
+					loff_t *position)
+{
+	int ret = 0;
+	/* Buffer to store information */
+	const size_t buffer_size = 10240;
+	struct lwis_device *lwis_dev = fp->f_inode->i_private;
+	char *buffer = kzalloc(buffer_size, GFP_KERNEL);
+	if (!buffer) {
+		dev_err(lwis_dev->dev, "Failed to allocate register io history log buffer\n");
+		return -ENOMEM;
+	}
+
+	ret = generate_register_io_history(lwis_dev, buffer, buffer_size);
+	if (ret) {
+		dev_err(lwis_dev->dev, "Failed to generate register io history");
+		goto exit;
+	}
+
+	ret = simple_read_from_buffer(user_buf, count, position, buffer, strlen(buffer));
+exit:
+	kfree(buffer);
+	return ret;
+}
+
 static struct file_operations dev_info_fops = {
 	.owner = THIS_MODULE,
 	.read = dev_info_read,
@@ -491,6 +630,11 @@ static struct file_operations buffer_info_fops = {
 	.read = buffer_info_read,
 };
 
+static struct file_operations register_io_history_fops = {
+	.owner = THIS_MODULE,
+	.read = register_io_history_read,
+};
+
 int lwis_device_debugfs_setup(struct lwis_device *lwis_dev, struct dentry *dbg_root)
 {
 	struct dentry *dbg_dir;
@@ -498,6 +642,7 @@ int lwis_device_debugfs_setup(struct lwis_device *lwis_dev, struct dentry *dbg_r
 	struct dentry *dbg_event_file;
 	struct dentry *dbg_transaction_file;
 	struct dentry *dbg_buffer_file;
+	struct dentry *dbg_reg_io_file;
 
 	/* DebugFS not present, just return */
 	if (dbg_root == NULL) {
@@ -543,11 +688,20 @@ int lwis_device_debugfs_setup(struct lwis_device *lwis_dev, struct dentry *dbg_r
 		dbg_buffer_file = NULL;
 	}
 
+	dbg_reg_io_file =
+		debugfs_create_file("io_history", 0444, dbg_dir, lwis_dev, &register_io_history_fops);
+	if (IS_ERR_OR_NULL(dbg_reg_io_file)) {
+		dev_warn(lwis_dev->dev, "Failed to create DebugFS io_history - %ld",
+			 PTR_ERR(dbg_reg_io_file));
+		dbg_reg_io_file = NULL;
+	}
+
 	lwis_dev->dbg_dir = dbg_dir;
 	lwis_dev->dbg_dev_info_file = dbg_dev_info_file;
 	lwis_dev->dbg_event_file = dbg_event_file;
 	lwis_dev->dbg_transaction_file = dbg_transaction_file;
 	lwis_dev->dbg_buffer_file = dbg_buffer_file;
+	lwis_dev->dbg_reg_io_file = dbg_reg_io_file;
 
 	return 0;
 }
@@ -564,6 +718,7 @@ int lwis_device_debugfs_cleanup(struct lwis_device *lwis_dev)
 	lwis_dev->dbg_event_file = NULL;
 	lwis_dev->dbg_transaction_file = NULL;
 	lwis_dev->dbg_buffer_file = NULL;
+	lwis_dev->dbg_reg_io_file = NULL;
 	return 0;
 }
 

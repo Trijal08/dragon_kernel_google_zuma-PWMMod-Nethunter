@@ -67,6 +67,7 @@ static int parse_irq_gpios(struct lwis_device *lwis_dev)
 	int count;
 	int name_count;
 	int event_count;
+	int type_count;
 	int ret;
 	struct device *dev;
 	struct device_node *dev_node;
@@ -74,10 +75,11 @@ static int parse_irq_gpios(struct lwis_device *lwis_dev)
 	const char *name;
 	char *irq_gpios_names = NULL;
 	u64 *irq_gpios_events = NULL;
+	u32 *irq_gpios_types = NULL;
 	int i;
 
 	/* Initialize the data structure */
-	strlcpy(lwis_dev->irq_gpios_info.name, "irq", LWIS_MAX_NAME_STRING_LEN);
+	strscpy(lwis_dev->irq_gpios_info.name, "irq", LWIS_MAX_NAME_STRING_LEN);
 	lwis_dev->irq_gpios_info.gpios = NULL;
 	lwis_dev->irq_gpios_info.irq_list = NULL;
 	lwis_dev->irq_gpios_info.is_shared = false;
@@ -93,7 +95,9 @@ static int parse_irq_gpios(struct lwis_device *lwis_dev)
 	dev_node = dev->of_node;
 	name_count = of_property_count_strings(dev_node, "irq-gpios-names");
 	event_count = of_property_count_elems_of_size(dev_node, "irq-gpios-events", sizeof(u64));
-	if (count != event_count || count != name_count) {
+	type_count = of_property_count_elems_of_size(dev_node, "irq-gpios-types", sizeof(u32));
+
+	if (count != event_count || count != name_count || count != type_count) {
 		pr_err("Count of irq-gpios-* is not match\n");
 		return -EINVAL;
 	}
@@ -104,6 +108,14 @@ static int parse_irq_gpios(struct lwis_device *lwis_dev)
 		return PTR_ERR(gpios);
 	}
 	lwis_dev->irq_gpios_info.gpios = gpios;
+
+	lwis_dev->irq_gpios_info.irq_list = lwis_interrupt_list_alloc(lwis_dev, gpios->ndescs);
+	if (IS_ERR(lwis_dev->irq_gpios_info.irq_list)) {
+		ret = -ENOMEM;
+		lwis_dev->irq_gpios_info.irq_list = NULL;
+		pr_err("Failed to allocate irq list\n");
+		goto error_parse_irq_gpios;
+	}
 
 	irq_gpios_names = kmalloc(LWIS_MAX_NAME_STRING_LEN * name_count, GFP_KERNEL);
 	if (IS_ERR_OR_NULL(irq_gpios_names)) {
@@ -118,13 +130,23 @@ static int parse_irq_gpios(struct lwis_device *lwis_dev)
 			pr_err("Error get GPIO irq name list (%d)\n", ret);
 			goto error_parse_irq_gpios;
 		}
-		strlcpy(irq_gpios_names + i * LWIS_MAX_NAME_STRING_LEN, name,
+		strscpy(irq_gpios_names + i * LWIS_MAX_NAME_STRING_LEN, name,
 			LWIS_MAX_NAME_STRING_LEN);
 	}
 
-	ret = lwis_gpio_list_to_irqs(lwis_dev, &lwis_dev->irq_gpios_info, irq_gpios_names);
-	if (ret) {
-		pr_err("Error get GPIO irq list (%d)\n", ret);
+	irq_gpios_types = kmalloc(sizeof(u32) * type_count, GFP_KERNEL);
+	if (IS_ERR_OR_NULL(irq_gpios_types)) {
+		pr_err("Allocating irq_gpios_types list failed\n");
+		ret = -ENOMEM;
+		goto error_parse_irq_gpios;
+	}
+
+	type_count = of_property_read_variable_u32_array(
+		dev_node, "irq-gpios-types", irq_gpios_types, type_count, type_count);
+
+	if (type_count != count) {
+		pr_err("Error getting irq-gpios-types: %d\n", type_count);
+		ret = type_count;
 		goto error_parse_irq_gpios;
 	}
 
@@ -152,8 +174,23 @@ static int parse_irq_gpios(struct lwis_device *lwis_dev)
 		}
 	}
 
+	for (i = 0; i < gpios->ndescs; ++i) {
+		char *name;
+		int irq;
+		irq = gpiod_to_irq(gpios->desc[i]);
+		if (irq < 0) {
+			pr_err("gpio to irq failed (%d)\n", irq);
+			lwis_interrupt_list_free(lwis_dev->irq_gpios_info.irq_list);
+			return irq;
+		}
+		name = irq_gpios_names + i * LWIS_MAX_NAME_STRING_LEN;
+		lwis_interrupt_get_gpio_irq(lwis_dev->irq_gpios_info.irq_list, i, name, irq,
+					    irq_gpios_types[i]);
+	}
+
 	kfree(irq_gpios_names);
 	kfree(irq_gpios_events);
+	kfree(irq_gpios_types);
 	return 0;
 
 error_parse_irq_gpios:
@@ -161,12 +198,13 @@ error_parse_irq_gpios:
 		lwis_gpio_list_put(lwis_dev->irq_gpios_info.gpios, dev);
 		lwis_dev->irq_gpios_info.gpios = NULL;
 	}
-	if (irq_gpios_names) {
-		kfree(irq_gpios_names);
+	if (lwis_dev->irq_gpios_info.irq_list) {
+		lwis_interrupt_list_free(lwis_dev->irq_gpios_info.irq_list);
+		lwis_dev->irq_gpios_info.irq_list = NULL;
 	}
-	if (irq_gpios_events) {
-		kfree(irq_gpios_events);
-	}
+	kfree(irq_gpios_names);
+	kfree(irq_gpios_events);
+	kfree(irq_gpios_types);
 	return ret;
 }
 
@@ -253,6 +291,7 @@ static int parse_clocks(struct lwis_device *lwis_dev)
 	int i;
 	int ret = 0;
 	int count;
+	int __maybe_unused bts_count;
 	struct device *dev;
 	struct device_node *dev_node;
 	const char *name;
@@ -293,6 +332,26 @@ static int parse_clocks(struct lwis_device *lwis_dev)
 	/* It is allowed to omit clock rates for some of the clocks */
 	ret = of_property_read_u32(dev_node, "clock-family", &clock_family);
 	lwis_dev->clock_family = (ret == 0) ? clock_family : CLOCK_FAMILY_INVALID;
+
+#ifdef LWIS_BTS_BLOCK_NAME_ENABLED
+	/* Parse the BTS block names */
+	bts_count = of_property_count_strings(dev_node, "bts-block-names");
+	if (bts_count > 0) {
+		lwis_dev->bts_block_num = bts_count;
+		for (i = 0; i < bts_count; ++i) {
+			of_property_read_string_index(dev_node, "bts-block-names", i, &name);
+			lwis_dev->bts_block_names[i] = (const char *)name;
+		}
+	} else {
+		lwis_dev->bts_block_num = 1;
+		lwis_dev->bts_block_names[0] = lwis_dev->name;
+	}
+
+	/* Initialize all the BTS indexes */
+	for (i = 0; i < MAX_BTS_BLOCK_NUM; ++i) {
+		lwis_dev->bts_indexes[i] = BTS_UNSUPPORTED;
+	}
+#endif
 
 #ifdef LWIS_DT_DEBUG
 	pr_info("%s: clock family %d", lwis_dev->name, lwis_dev->clock_family);
@@ -356,7 +415,37 @@ static int parse_pinctrls(struct lwis_device *lwis_dev, char *expected_state)
 	return 0;
 }
 
-static int parse_critical_irq_events(struct device_node *event_info, u64** irq_events)
+static int parse_irq_reg_bits(struct device_node *info, int *bits_num_result, u32 **reg_bits_result)
+{
+	int int_reg_bits_num;
+	u32 *int_reg_bits;
+
+	int_reg_bits_num = of_property_count_elems_of_size(info, "int-reg-bits", 4);
+	if (int_reg_bits_num <= 0) {
+		pr_err("Error getting int-reg-bits: %d\n", int_reg_bits_num);
+		return -EINVAL;
+	}
+
+	int_reg_bits = kmalloc(sizeof(u32) * int_reg_bits_num, GFP_KERNEL);
+	if (IS_ERR_OR_NULL(int_reg_bits)) {
+		pr_err("Failed to allocate memory for irq regiater bits\n");
+		return -ENOMEM;
+	}
+
+	*bits_num_result = int_reg_bits_num;
+	int_reg_bits_num = of_property_read_variable_u32_array(info, "int-reg-bits", int_reg_bits,
+							       int_reg_bits_num, int_reg_bits_num);
+	if (*bits_num_result != int_reg_bits_num) {
+		pr_err("Error getting int-reg-bits: %d\n", int_reg_bits_num);
+		kfree(int_reg_bits);
+		return int_reg_bits_num;
+	}
+	*reg_bits_result = int_reg_bits;
+
+	return 0;
+}
+
+static int parse_critical_irq_events(struct device_node *event_info, u64 **irq_events)
 {
 	int ret;
 	int critical_irq_events_num;
@@ -391,6 +480,150 @@ static int parse_critical_irq_events(struct device_node *event_info, u64** irq_e
 	return critical_irq_events_num;
 }
 
+static int parse_interrupts_event_info(struct lwis_interrupt_list *list, int index,
+				       struct device_node *event_info)
+{
+	int irq_events_num;
+	int int_reg_bits_num = 0;
+	int critical_events_num = 0;
+	u64 *irq_events = NULL;
+	u32 *int_reg_bits = NULL;
+	u64 *critical_events = NULL;
+	int ret = 0;
+
+	ret = parse_irq_reg_bits(event_info, &int_reg_bits_num, &int_reg_bits);
+	if (ret) {
+		return ret;
+	}
+
+	irq_events_num = of_property_count_elems_of_size(event_info, "irq-events", 8);
+	if (irq_events_num != int_reg_bits_num || irq_events_num <= 0) {
+		pr_err("Error getting irq-events: %d\n", irq_events_num);
+		ret = -EINVAL;
+		goto event_info_exit;
+	}
+
+	irq_events = kmalloc(sizeof(u64) * irq_events_num, GFP_KERNEL);
+	if (IS_ERR_OR_NULL(irq_events)) {
+		ret = -ENOMEM;
+		goto event_info_exit;
+	}
+
+	irq_events_num = of_property_read_variable_u64_array(event_info, "irq-events", irq_events,
+							     irq_events_num, irq_events_num);
+	if (irq_events_num != int_reg_bits_num) {
+		pr_err("Error getting irq-events: %d\n", irq_events_num);
+		ret = irq_events_num;
+		goto event_info_exit;
+	}
+
+	critical_events_num = parse_critical_irq_events(event_info, &critical_events);
+
+	ret = lwis_interrupt_set_event_info(list, index, (int64_t *)irq_events, irq_events_num,
+					    int_reg_bits, int_reg_bits_num,
+					    (int64_t *)critical_events, critical_events_num);
+	if (ret) {
+		pr_err("Error setting event info for interrupt %d %d\n", index, ret);
+		goto event_info_exit;
+	}
+
+event_info_exit:
+	kfree(critical_events);
+	kfree(irq_events);
+	kfree(int_reg_bits);
+	return ret;
+}
+
+static int find_irq_index_by_name(struct lwis_interrupt_list *list, const char *irq_name)
+{
+	int i;
+
+	for (i = 0; i < list->count; ++i) {
+		if (strncmp(irq_name, list->irq[i].name, IRQ_FULL_NAME_LENGTH - 1) == 0) {
+			return i;
+		}
+	}
+	return -ENOENT;
+}
+
+static int parse_interrupt_leaf_nodes(struct lwis_interrupt_list *list, int index,
+				      struct device_node *leaf_info)
+{
+	int irq_leaves_num;
+	int int_reg_bits_num;
+	u32 *int_reg_bits = NULL;
+	struct of_phandle_iterator it;
+	int i = 0, ret = 0;
+
+	ret = parse_irq_reg_bits(leaf_info, &int_reg_bits_num, &int_reg_bits);
+	if (ret) {
+		return ret;
+	}
+
+	irq_leaves_num = of_property_count_elems_of_size(leaf_info, "irq-leaf-nodes", 4);
+	if (irq_leaves_num != int_reg_bits_num || irq_leaves_num <= 0) {
+		pr_err("Error getting irq-leaf-nodes: %d\n", irq_leaves_num);
+		ret = -EINVAL;
+		kfree(int_reg_bits);
+		return ret;
+	}
+
+	i = 0;
+	of_for_each_phandle (&it, ret, leaf_info, "irq-leaf-nodes", 0, 0) {
+		struct device_node *irq_group_node = of_node_get(it.node);
+		int leaf_interrupts_count;
+		const char *leaf_interrupt_name;
+		int32_t *leaf_indexes = NULL;
+		int j = 0;
+
+		leaf_interrupts_count =
+			of_property_count_strings(irq_group_node, "leaf-interrupt-names");
+		if (leaf_interrupts_count == -ENODATA) {
+			/* Does not have a value means no leaf interrupt is configured for this */
+			/* leaf node */
+			continue;
+		} else if (leaf_interrupts_count < 0) {
+			pr_err("Error counting leaf-interrupt-names for : %d\n",
+			       leaf_interrupts_count);
+			ret = -EINVAL;
+			goto leaf_error;
+		}
+
+		leaf_indexes = kmalloc(sizeof(int32_t) * leaf_interrupts_count, GFP_KERNEL);
+		if (IS_ERR_OR_NULL(leaf_indexes)) {
+			ret = -ENOMEM;
+			goto leaf_error;
+		}
+
+		for (j = 0; j < leaf_interrupts_count; ++j) {
+			of_property_read_string_index(irq_group_node, "leaf-interrupt-names", j,
+						      &leaf_interrupt_name);
+			leaf_indexes[j] = find_irq_index_by_name(list, leaf_interrupt_name);
+			if (leaf_indexes[j] < 0) {
+				ret = leaf_indexes[j];
+				pr_err("Cannot find leaf irq %s\n", leaf_interrupt_name);
+				kfree(leaf_indexes);
+				goto leaf_error;
+			}
+		}
+
+		ret = lwis_interrupt_add_leaf(list, index, int_reg_bits[i], leaf_interrupts_count,
+					      leaf_indexes);
+		if (ret) {
+			pr_err("Error setting event info for interrupt %d %d\n", index, ret);
+			kfree(leaf_indexes);
+			goto leaf_error;
+		}
+		i++;
+	}
+
+	return 0;
+leaf_error:
+	lwis_interrupt_free_leaves(&list->irq[index]);
+	kfree(int_reg_bits);
+	return ret;
+}
+
 static int parse_interrupts(struct lwis_device *lwis_dev)
 {
 	int i;
@@ -420,9 +653,9 @@ static int parse_interrupts(struct lwis_device *lwis_dev)
 
 	for (i = 0; i < count; ++i) {
 		of_property_read_string_index(dev_node, "interrupt-names", i, &name);
-		ret = lwis_interrupt_get(lwis_dev->irqs, i, (char *)name, plat_dev);
+		ret = lwis_interrupt_init(lwis_dev->irqs, i, (char *)name);
 		if (ret) {
-			pr_err("Cannot set irq %s\n", name);
+			pr_err("Cannot initialize irq %s\n", name);
 			goto error_get_irq;
 		}
 	}
@@ -437,78 +670,23 @@ static int parse_interrupts(struct lwis_device *lwis_dev)
 	/* Get event infos */
 	i = 0;
 	of_for_each_phandle (&it, ret, dev_node, "interrupt-event-infos", 0, 0) {
-		const char *irq_reg_space = NULL;
+		const char *irq_reg_space = NULL, *irq_type_str = NULL;
 		bool irq_mask_reg_toggle;
 		u64 irq_src_reg;
 		u64 irq_reset_reg;
 		u64 irq_mask_reg;
-		int irq_events_num;
-		int int_reg_bits_num;
-		int critical_events_num = 0;
-		u64 *irq_events;
-		u32 *int_reg_bits;
-		u64 *critical_events = NULL;
+		u64 irq_overflow_reg = 0;
 		int irq_reg_bid = -1;
 		int irq_reg_bid_count;
 		/* To match default value of reg-addr/value-bitwidth. */
 		u32 irq_reg_bitwidth = 32;
+		int32_t irq_type = REGULAR_INTERRUPT;
 		int j;
 		struct device_node *event_info = of_node_get(it.node);
-
-		irq_events_num = of_property_count_elems_of_size(event_info, "irq-events", 8);
-		if (irq_events_num <= 0) {
-			pr_err("Error getting irq-events: %d\n", irq_events_num);
-			ret = -EINVAL;
-			goto error_event_infos;
-		}
-
-		int_reg_bits_num = of_property_count_elems_of_size(event_info, "int-reg-bits", 4);
-		if (irq_events_num != int_reg_bits_num || int_reg_bits_num <= 0) {
-			pr_err("Error getting int-reg-bits: %d\n", int_reg_bits_num);
-			ret = -EINVAL;
-			goto error_event_infos;
-		}
-
-		irq_events = kmalloc(sizeof(u64) * irq_events_num, GFP_KERNEL);
-		if (IS_ERR_OR_NULL(irq_events)) {
-			ret = -ENOMEM;
-			goto error_event_infos;
-		}
-
-		int_reg_bits = kmalloc(sizeof(u32) * int_reg_bits_num, GFP_KERNEL);
-		if (IS_ERR_OR_NULL(int_reg_bits)) {
-			ret = -ENOMEM;
-			kfree(irq_events);
-			goto error_event_infos;
-		}
-
-		irq_events_num = of_property_read_variable_u64_array(
-			event_info, "irq-events", irq_events, irq_events_num, irq_events_num);
-		if (irq_events_num != int_reg_bits_num) {
-			pr_err("Error getting irq-events: %d\n", irq_events_num);
-			ret = irq_events_num;
-			kfree(irq_events);
-			kfree(int_reg_bits);
-			goto error_event_infos;
-		}
-
-		int_reg_bits_num =
-			of_property_read_variable_u32_array(event_info, "int-reg-bits",
-							    int_reg_bits, int_reg_bits_num,
-							    int_reg_bits_num);
-		if (irq_events_num != int_reg_bits_num) {
-			pr_err("Error getting int-reg-bits: %d\n", int_reg_bits_num);
-			ret = int_reg_bits_num;
-			kfree(irq_events);
-			kfree(int_reg_bits);
-			goto error_event_infos;
-		}
 
 		ret = of_property_read_string(event_info, "irq-reg-space", &irq_reg_space);
 		if (ret) {
 			pr_err("Error getting irq-reg-space from dt: %d\n", ret);
-			kfree(irq_events);
-			kfree(int_reg_bits);
 			goto error_event_infos;
 		}
 
@@ -516,8 +694,6 @@ static int parse_interrupts(struct lwis_device *lwis_dev)
 
 		if (irq_reg_bid_count <= 0) {
 			pr_err("Error getting reg-names from dt: %d\n", irq_reg_bid_count);
-			kfree(irq_events);
-			kfree(int_reg_bits);
 			goto error_event_infos;
 		}
 		for (j = 0; j < irq_reg_bid_count; j++) {
@@ -534,63 +710,85 @@ static int parse_interrupts(struct lwis_device *lwis_dev)
 		}
 		if (irq_reg_bid < 0) {
 			pr_err("Could not find a reg bid for %s\n", irq_reg_space);
-			kfree(irq_events);
-			kfree(int_reg_bits);
 			goto error_event_infos;
 		}
 
 		ret = of_property_read_u64(event_info, "irq-src-reg", &irq_src_reg);
 		if (ret) {
 			pr_err("Error getting irq-src-reg from dt: %d\n", ret);
-			kfree(irq_events);
-			kfree(int_reg_bits);
 			goto error_event_infos;
 		}
 
 		ret = of_property_read_u64(event_info, "irq-reset-reg", &irq_reset_reg);
 		if (ret) {
 			pr_err("Error getting irq-reset-reg from dt: %d\n", ret);
-			kfree(irq_events);
-			kfree(int_reg_bits);
 			goto error_event_infos;
 		}
 
 		ret = of_property_read_u64(event_info, "irq-mask-reg", &irq_mask_reg);
 		if (ret) {
 			pr_err("Error getting irq-mask-reg from dt: %d\n", ret);
-			kfree(irq_events);
-			kfree(int_reg_bits);
 			goto error_event_infos;
 		}
+
+		of_property_read_u64(event_info, "irq-overflow-reg", &irq_overflow_reg);
 
 		irq_mask_reg_toggle = of_property_read_bool(event_info, "irq-mask-reg-toggle");
 
 		of_property_read_u32(event_info, "irq-reg-bitwidth", &irq_reg_bitwidth);
 
-		critical_events_num = parse_critical_irq_events(event_info, &critical_events);
-
-		ret = lwis_interrupt_set_event_info(
-			lwis_dev->irqs, i, irq_reg_space, irq_reg_bid, (int64_t *)irq_events,
-			irq_events_num, int_reg_bits, int_reg_bits_num, irq_src_reg, irq_reset_reg,
-			irq_mask_reg, irq_mask_reg_toggle, irq_reg_bitwidth,
-			(int64_t *)critical_events, critical_events_num);
-		if (ret) {
-			pr_err("Error setting event info for interrupt %d %d\n", i, ret);
-			if (critical_events) {
-				kfree(critical_events);
+		ret = of_property_read_string(event_info, "irq-type", &irq_type_str);
+		if (ret && ret != -EINVAL) {
+			pr_err("Error getting irq-type from dt: %d\n", ret);
+			return ret;
+		} else if (ret && ret == -EINVAL) {
+			/* The property does not exist, which means regular*/
+			irq_type = REGULAR_INTERRUPT;
+		} else {
+			if (strcmp(irq_type_str, "regular") == 0) {
+				irq_type = REGULAR_INTERRUPT;
+			} else if (strcmp(irq_type_str, "aggregate") == 0) {
+				irq_type = AGGREGATE_INTERRUPT;
+			} else if (strcmp(irq_type_str, "leaf") == 0) {
+				irq_type = LEAF_INTERRUPT;
+			} else {
+				pr_err("Invalid irq-type from dt: %s\n", irq_type_str);
+				return ret;
 			}
-			kfree(irq_events);
-			kfree(int_reg_bits);
+		}
+
+		lwis_interrupt_set_basic_info(lwis_dev->irqs, i, irq_reg_space, irq_reg_bid,
+					      irq_src_reg, irq_reset_reg, irq_mask_reg,
+					      irq_overflow_reg, irq_mask_reg_toggle,
+					      irq_reg_bitwidth, irq_type);
+
+		/* Register IRQ handler only for aggregate and regular interrupts */
+		if (irq_type == AGGREGATE_INTERRUPT || irq_type == REGULAR_INTERRUPT) {
+			ret = lwis_interrupt_get(lwis_dev->irqs, i, plat_dev);
+			if (ret) {
+				pr_err("Cannot set irq %s\n", name);
+				goto error_event_infos;
+			}
+		}
+
+		/* Parse event info */
+		ret = parse_interrupts_event_info(lwis_dev->irqs, i, event_info);
+		if (ret) {
+			pr_err("Cannot set event info %s\n", name);
 			goto error_event_infos;
+		}
+
+		/* Parse leaf nodes if it's an aggregate interrupt */
+		if (irq_type == AGGREGATE_INTERRUPT) {
+			ret = parse_interrupt_leaf_nodes(lwis_dev->irqs, i, event_info);
+			if (ret) {
+				pr_err("Error setting leaf nodes for interrupt %d %d\n", i, ret);
+				goto error_event_infos;
+			}
 		}
 
 		of_node_put(event_info);
 		i++;
-		if (critical_events) {
-			kfree(critical_events);
-		}
-		kfree(irq_events);
-		kfree(int_reg_bits);
 	}
 
 #ifdef LWIS_DT_DEBUG
@@ -683,8 +881,13 @@ static void parse_bitwidths(struct lwis_device *lwis_dev)
 	lwis_dev->native_value_bitwidth = value_bitwidth;
 }
 
-static int parse_power_up_seqs(struct lwis_device *lwis_dev)
+static int parse_power_seqs(struct lwis_device *lwis_dev, const char *seq_name,
+			    struct lwis_device_power_sequence_list **list,
+			    struct device_node *dev_node_seq)
 {
+	char str_seq_name[LWIS_MAX_NAME_STRING_LEN];
+	char str_seq_type[LWIS_MAX_NAME_STRING_LEN];
+	char str_seq_delay[LWIS_MAX_NAME_STRING_LEN];
 	struct device *dev;
 	struct device_node *dev_node;
 	int power_seq_count;
@@ -698,92 +901,109 @@ static int parse_power_up_seqs(struct lwis_device *lwis_dev)
 	int type_gpio_count = 0;
 	int type_regulator_count = 0;
 
+	scnprintf(str_seq_name, LWIS_MAX_NAME_STRING_LEN, "%s-seqs", seq_name);
+	scnprintf(str_seq_type, LWIS_MAX_NAME_STRING_LEN, "%s-seq-types", seq_name);
+	scnprintf(str_seq_delay, LWIS_MAX_NAME_STRING_LEN, "%s-seq-delays-us", seq_name);
+
 	dev = &lwis_dev->plat_dev->dev;
 	dev_node = dev->of_node;
+	*list = NULL;
+	if (dev_node_seq) {
+		dev_node = dev_node_seq;
+	}
 
-	lwis_dev->power_up_seqs_present = false;
-	lwis_dev->power_up_sequence = NULL;
-	lwis_dev->gpios_list = NULL;
-
-	power_seq_count = of_property_count_strings(dev_node, "power-up-seqs");
-	power_seq_type_count = of_property_count_strings(dev_node, "power-up-seq-types");
+	power_seq_count = of_property_count_strings(dev_node, str_seq_name);
+	power_seq_type_count = of_property_count_strings(dev_node, str_seq_type);
 	power_seq_delay_count =
-		of_property_count_elems_of_size(dev_node, "power-up-seq-delays-us", sizeof(u32));
+		of_property_count_elems_of_size(dev_node, str_seq_delay, sizeof(u32));
 
-	/* No power-up-seqs found, just return */
+	/* No power-seqs found, just return */
 	if (power_seq_count <= 0) {
 		return 0;
 	}
 	if (power_seq_count != power_seq_type_count || power_seq_count != power_seq_delay_count) {
-		pr_err("Count of power-up-seqs-* are not match\n");
+		pr_err("Count of power sequence %s is not match\n", str_seq_name);
 		return -EINVAL;
 	}
 
-	lwis_dev->power_up_sequence = lwis_dev_power_seq_list_alloc(power_seq_count);
-	if (IS_ERR(lwis_dev->power_up_sequence)) {
+	*list = lwis_dev_power_seq_list_alloc(power_seq_count);
+	if (IS_ERR(*list)) {
 		pr_err("Failed to allocate power sequence list\n");
-		return PTR_ERR(lwis_dev->power_up_sequence);
+		return PTR_ERR(*list);
 	}
 
 	for (i = 0; i < power_seq_count; ++i) {
-		ret = of_property_read_string_index(dev_node, "power-up-seqs", i, &name);
+		ret = of_property_read_string_index(dev_node, str_seq_name, i, &name);
 		if (ret < 0) {
 			pr_err("Error adding power sequence[%d]\n", i);
-			goto error_parse_power_up_seqs;
+			goto error_parse_power_seqs;
 		}
-		strlcpy(lwis_dev->power_up_sequence->seq_info[i].name, name,
-			LWIS_MAX_NAME_STRING_LEN);
+		strscpy((*list)->seq_info[i].name, name, LWIS_MAX_NAME_STRING_LEN);
 
-		ret = of_property_read_string_index(dev_node, "power-up-seq-types", i, &type);
+		ret = of_property_read_string_index(dev_node, str_seq_type, i, &type);
 		if (ret < 0) {
 			pr_err("Error adding power sequence type[%d]\n", i);
-			goto error_parse_power_up_seqs;
+			goto error_parse_power_seqs;
 		}
-		strlcpy(lwis_dev->power_up_sequence->seq_info[i].type, type,
-			LWIS_MAX_NAME_STRING_LEN);
+		strscpy((*list)->seq_info[i].type, type, LWIS_MAX_NAME_STRING_LEN);
 		if (strcmp(type, "gpio") == 0) {
 			type_gpio_count++;
 		} else if (strcmp(type, "regulator") == 0) {
 			type_regulator_count++;
 		}
 
-		ret = of_property_read_u32_index(dev_node, "power-up-seq-delays-us", i, &delay_us);
+		ret = of_property_read_u32_index(dev_node, str_seq_delay, i, &delay_us);
 		if (ret < 0) {
 			pr_err("Error adding power sequence delay[%d]\n", i);
-			goto error_parse_power_up_seqs;
+			goto error_parse_power_seqs;
 		}
-		lwis_dev->power_up_sequence->seq_info[i].delay_us = delay_us;
+		(*list)->seq_info[i].delay_us = delay_us;
 	}
 
 #ifdef LWIS_DT_DEBUG
-	lwis_dev_power_seq_list_print(lwis_dev->power_up_sequence);
+	lwis_dev_power_seq_list_print(*list);
 #endif
 
-	lwis_dev->power_up_seqs_present = true;
-
-	if (type_gpio_count > 0) {
+	if (type_gpio_count > 0 && lwis_dev->gpios_list == NULL) {
 		lwis_dev->gpios_list = lwis_gpios_list_alloc(type_gpio_count);
 		if (IS_ERR(lwis_dev->gpios_list)) {
 			pr_err("Failed to allocate gpios list\n");
 			ret = PTR_ERR(lwis_dev->gpios_list);
-			goto error_parse_power_up_seqs;
+			goto error_parse_power_seqs;
 		}
 
 		type_gpio_count = 0;
 		for (i = 0; i < power_seq_count; ++i) {
 			struct lwis_gpios_info *gpios_info;
 			char *seq_item_name;
+			struct device *dev;
+			struct gpio_descs *descs;
 
-			if (strcmp(lwis_dev->power_up_sequence->seq_info[i].type, "gpio") != 0) {
+			if (strcmp((*list)->seq_info[i].type, "gpio") != 0) {
 				continue;
 			}
 
 			gpios_info = &lwis_dev->gpios_list->gpios_info[type_gpio_count];
-			seq_item_name = lwis_dev->power_up_sequence->seq_info[i].name;
+			seq_item_name = (*list)->seq_info[i].name;
+			dev = &lwis_dev->plat_dev->dev;
+			descs = lwis_gpio_list_get(dev, seq_item_name);
+			if (IS_ERR(descs)) {
+				pr_err("Error parsing GPIO list %s (%ld)\n", seq_item_name,
+				       PTR_ERR(descs));
+				ret = PTR_ERR(descs);
+				goto error_parse_power_seqs;
+			}
+			gpios_info->id = desc_to_gpio(descs->desc[0]);
+			gpios_info->hold_dev = dev;
+			/*
+			 * The GPIO pins are valid, release the list as we do not need to hold
+			 * on to the pins yet
+			 */
+			lwis_gpio_list_put(descs, dev);
 
 			gpios_info->gpios = NULL;
 			gpios_info->irq_list = NULL;
-			strlcpy(gpios_info->name, seq_item_name, LWIS_MAX_NAME_STRING_LEN);
+			strscpy(gpios_info->name, seq_item_name, LWIS_MAX_NAME_STRING_LEN);
 
 			if (strncmp(SHARED_STRING, seq_item_name, strlen(SHARED_STRING)) == 0) {
 				gpios_info->is_shared = true;
@@ -799,38 +1019,37 @@ static int parse_power_up_seqs(struct lwis_device *lwis_dev)
 		}
 	}
 
-	if (type_regulator_count > 0) {
+	if (type_regulator_count > 0 && lwis_dev->regulators == NULL) {
 		lwis_dev->regulators = lwis_regulator_list_alloc(type_regulator_count);
 		if (IS_ERR(lwis_dev->regulators)) {
 			pr_err("Failed to allocate regulator list\n");
 			ret = PTR_ERR(lwis_dev->regulators);
-			goto error_parse_power_up_seqs;
+			goto error_parse_power_seqs;
 		}
 
 		for (i = 0; i < power_seq_count; ++i) {
 			struct device *dev;
 			char *seq_item_name;
 
-			if (strcmp(lwis_dev->power_up_sequence->seq_info[i].type,
-				   "regulator") != 0) {
+			if (strcmp((*list)->seq_info[i].type, "regulator") != 0) {
 				continue;
 			}
 
 			dev = &lwis_dev->plat_dev->dev;
-			seq_item_name = lwis_dev->power_up_sequence->seq_info[i].name;
+			seq_item_name = (*list)->seq_info[i].name;
 
 			ret = lwis_regulator_get(lwis_dev->regulators, seq_item_name,
 						 /*voltage=*/0, dev);
 			if (ret < 0) {
 				pr_err("Cannot find regulator: %s\n", seq_item_name);
-				goto error_parse_power_up_seqs;
+				goto error_parse_power_seqs;
 			}
 		}
 	}
 
 	return 0;
 
-error_parse_power_up_seqs:
+error_parse_power_seqs:
 	if (lwis_dev->regulators) {
 		lwis_regulator_put_all(lwis_dev->regulators);
 		lwis_regulator_list_free(lwis_dev->regulators);
@@ -838,86 +1057,51 @@ error_parse_power_up_seqs:
 	}
 	lwis_gpios_list_free(lwis_dev->gpios_list);
 	lwis_dev->gpios_list = NULL;
-	lwis_dev_power_seq_list_free(lwis_dev->power_up_sequence);
-	lwis_dev->power_up_sequence = NULL;
+	lwis_dev_power_seq_list_free(*list);
+	*list = NULL;
 	return ret;
 }
 
-static int parse_power_down_seqs(struct lwis_device *lwis_dev)
+static int parse_unified_power_seqs(struct lwis_device *lwis_dev)
 {
 	struct device *dev;
 	struct device_node *dev_node;
-	int power_seq_count;
-	int power_seq_type_count;
-	int power_seq_delay_count;
-	int i;
-	int ret;
-	const char *name;
-	const char *type;
-	int delay_us;
+	struct device_node *dev_node_seq;
+	int count;
+	int ret = 0;
 
 	dev = &lwis_dev->plat_dev->dev;
 	dev_node = dev->of_node;
 
-	lwis_dev->power_down_seqs_present = false;
-	lwis_dev->power_down_sequence = NULL;
+	count = of_property_count_elems_of_size(dev_node, "power-seq", sizeof(u32));
 
-	power_seq_count = of_property_count_strings(dev_node, "power-down-seqs");
-	power_seq_type_count = of_property_count_strings(dev_node, "power-down-seq-types");
-	power_seq_delay_count =
-		of_property_count_elems_of_size(dev_node, "power-down-seq-delays-us", sizeof(u32));
-
-	/* No power-down-seqs found, just return */
-	if (power_seq_count <= 0) {
+	/* No power-seq found, or entry does not exist, just return */
+	if (count <= 0) {
+		lwis_dev->power_seq_handler = NULL;
 		return 0;
 	}
-	if (power_seq_count != power_seq_type_count || power_seq_count != power_seq_delay_count) {
-		pr_err("Count of power-down-seqs-* are not match\n");
+
+	dev_node_seq = of_parse_phandle(dev_node, "power-seq", 0);
+	if (!dev_node_seq) {
+		pr_err("Can't get power-seq node\n");
 		return -EINVAL;
 	}
 
-	lwis_dev->power_down_sequence = lwis_dev_power_seq_list_alloc(power_seq_count);
-	if (IS_ERR(lwis_dev->power_down_sequence)) {
-		pr_err("Failed to allocate power sequence list\n");
-		return PTR_ERR(lwis_dev->power_down_sequence);
+	ret = parse_power_seqs(lwis_dev, "power-up", &lwis_dev->power_up_sequence, dev_node_seq);
+	if (ret) {
+		pr_err("Error parsing power-up-seqs\n");
+		return ret;
 	}
 
-	for (i = 0; i < power_seq_count; ++i) {
-		ret = of_property_read_string_index(dev_node, "power-down-seqs", i, &name);
-		if (ret < 0) {
-			pr_err("Error adding power sequence[%d]\n", i);
-			goto error_parse_power_down_seqs;
-		}
-		strlcpy(lwis_dev->power_down_sequence->seq_info[i].name, name,
-			LWIS_MAX_NAME_STRING_LEN);
-
-		ret = of_property_read_string_index(dev_node, "power-down-seq-types", i, &type);
-		if (ret < 0) {
-			pr_err("Error adding power sequence type[%d]\n", i);
-			goto error_parse_power_down_seqs;
-		}
-		strlcpy(lwis_dev->power_down_sequence->seq_info[i].type, type,
-			LWIS_MAX_NAME_STRING_LEN);
-
-		ret = of_property_read_u32_index(dev_node, "power-down-seq-delays-us", i,
-						 &delay_us);
-		if (ret < 0) {
-			pr_err("Error adding power sequence delay[%d]\n", i);
-			goto error_parse_power_down_seqs;
-		}
-		lwis_dev->power_down_sequence->seq_info[i].delay_us = delay_us;
+	ret = parse_power_seqs(lwis_dev, "power-down", &lwis_dev->power_down_sequence,
+			       dev_node_seq);
+	if (ret) {
+		pr_err("Error parsing power-down-seqs\n");
+		return ret;
 	}
 
-#ifdef LWIS_DT_DEBUG
-	lwis_dev_power_seq_list_print(lwis_dev->power_down_sequence);
-#endif
+	lwis_dev->power_seq_handler = dev_node_seq;
 
-	lwis_dev->power_down_seqs_present = true;
-	return 0;
-
-error_parse_power_down_seqs:
-	lwis_dev_power_seq_list_free(lwis_dev->power_down_sequence);
-	lwis_dev->power_down_sequence = NULL;
 	return ret;
 }
 
@@ -950,12 +1134,9 @@ static int parse_thread_priority(struct lwis_device *lwis_dev)
 
 	dev_node = lwis_dev->plat_dev->dev.of_node;
 	lwis_dev->transaction_thread_priority = 0;
-	lwis_dev->periodic_io_thread_priority = 0;
 
 	of_property_read_u32(dev_node, "transaction-thread-priority",
 			     &lwis_dev->transaction_thread_priority);
-	of_property_read_u32(dev_node, "periodic-io-thread-priority",
-			     &lwis_dev->periodic_io_thread_priority);
 
 	return 0;
 }
@@ -1006,7 +1187,7 @@ int lwis_base_parse_dt(struct lwis_device *lwis_dev)
 		pr_err("Error parsing node name\n");
 		return -EINVAL;
 	}
-	strlcpy(lwis_dev->name, name_str, LWIS_MAX_NAME_STRING_LEN);
+	strscpy(lwis_dev->name, name_str, LWIS_MAX_NAME_STRING_LEN);
 
 	pr_debug("Device tree entry [%s] - begin\n", lwis_dev->name);
 
@@ -1034,15 +1215,38 @@ int lwis_base_parse_dt(struct lwis_device *lwis_dev)
 		return ret;
 	}
 
-	ret = parse_power_up_seqs(lwis_dev);
+	ret = parse_unified_power_seqs(lwis_dev);
 	if (ret) {
-		pr_err("Error parsing power-up-seqs\n");
+		pr_err("Error parse_unified_power_seqs\n");
 		return ret;
 	}
 
-	ret = parse_power_down_seqs(lwis_dev);
+	if (lwis_dev->power_up_sequence == NULL) {
+		ret = parse_power_seqs(lwis_dev, "power-up", &lwis_dev->power_up_sequence, NULL);
+		if (ret) {
+			pr_err("Error parsing power-up-seqs\n");
+			return ret;
+		}
+	}
+
+	if (lwis_dev->power_down_sequence == NULL) {
+		ret = parse_power_seqs(lwis_dev, "power-down", &lwis_dev->power_down_sequence,
+				       NULL);
+		if (ret) {
+			pr_err("Error parsing power-down-seqs\n");
+			return ret;
+		}
+	}
+
+	ret = parse_power_seqs(lwis_dev, "suspend", &lwis_dev->suspend_sequence, NULL);
 	if (ret) {
-		pr_err("Error parsing power-down-seqs\n");
+		pr_err("Error parsing suspend-seqs\n");
+		return ret;
+	}
+
+	ret = parse_power_seqs(lwis_dev, "resume", &lwis_dev->resume_sequence, NULL);
+	if (ret) {
+		pr_err("Error parsing resume-seqs\n");
 		return ret;
 	}
 

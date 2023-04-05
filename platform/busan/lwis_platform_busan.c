@@ -77,7 +77,9 @@ static int lwis_iommu_fault_handler(struct iommu_fault *fault, void *param)
 	pr_err("\n");
 	lwis_debug_print_transaction_info(lwis_dev);
 	pr_err("\n");
-	lwis_debug_print_event_states_info(lwis_dev);
+	lwis_debug_print_register_io_history(lwis_dev);
+	pr_err("\n");
+	lwis_debug_print_event_states_info(lwis_dev, /*lwis_event_dump_cnt=*/-1);
 	pr_err("\n");
 	lwis_debug_print_buffer_info(lwis_dev);
 	pr_err("\n");
@@ -131,17 +133,6 @@ int lwis_platform_device_enable(struct lwis_device *lwis_dev)
 		}
 	}
 
-	/*
-	 * PM_QOS_CPU_ONLINE_MIN is not defined in 5.4 branch, will need to
-	 * revisit and see if a replacement is needed.
-	 */
-#if 0
-	/* Set hardcoded DVFS levels */
-	if (!exynos_pm_qos_request_active(&platform->pm_qos_hpg)) {
-		exynos_pm_qos_add_request(&platform->pm_qos_hpg,
-					  PM_QOS_CPU_ONLINE_MIN, hpg_qos);
-	}
-#endif
 	if (lwis_dev->clock_family != CLOCK_FAMILY_INVALID &&
 	    lwis_dev->clock_family < NUM_CLOCK_FAMILY) {
 		ret = lwis_platform_update_qos(lwis_dev, core_clock_qos, lwis_dev->clock_family);
@@ -204,8 +195,7 @@ int lwis_platform_device_disable(struct lwis_device *lwis_dev)
 	return pm_runtime_put_sync(&lwis_dev->plat_dev->dev);
 }
 
-int lwis_platform_update_qos(struct lwis_device *lwis_dev, int value,
-			     int32_t clock_family)
+int lwis_platform_update_qos(struct lwis_device *lwis_dev, int value, int32_t clock_family)
 {
 	struct lwis_platform *platform;
 	struct exynos_pm_qos_request *qos_req;
@@ -279,15 +269,6 @@ int lwis_platform_remove_qos(struct lwis_device *lwis_dev)
 		exynos_pm_qos_remove_request(&platform->pm_qos_mem);
 	}
 
-	/*
-	 * pm_qos_hpg is not being used, see comments above regarding
-	 * PM_QOS_CPU_ONLINE_MIN
-	 */
-#if 0
-	if (exynos_pm_qos_request_active(&platform->pm_qos_hpg)) {
-		exynos_pm_qos_remove_request(&platform->pm_qos_hpg);
-	}
-#endif
 	if (exynos_pm_qos_request_active(&platform->pm_qos_int_cam)) {
 		exynos_pm_qos_remove_request(&platform->pm_qos_int_cam);
 	}
@@ -300,7 +281,7 @@ int lwis_platform_remove_qos(struct lwis_device *lwis_dev)
 	return 0;
 }
 
-int lwis_platform_update_bts(struct lwis_device *lwis_dev, unsigned int bw_kb_peak,
+int lwis_platform_update_bts(struct lwis_device *lwis_dev, int block, unsigned int bw_kb_peak,
 			     unsigned int bw_kb_read, unsigned int bw_kb_write,
 			     unsigned int bw_kb_rt)
 {

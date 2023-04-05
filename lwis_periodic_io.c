@@ -43,8 +43,8 @@ static enum hrtimer_restart periodic_io_timer_func(struct hrtimer *timer)
 	list_for_each_safe (it_period, it_period_tmp, &periodic_io_list->list) {
 		periodic_io = list_entry(it_period, struct lwis_periodic_io, timer_list_node);
 		if (periodic_io->active) {
-			periodic_io_proxy =
-				kmalloc(sizeof(struct lwis_periodic_io_proxy), GFP_NOWAIT);
+			periodic_io_proxy = lwis_allocator_allocate(
+				client->lwis_dev, sizeof(struct lwis_periodic_io_proxy));
 			if (!periodic_io_proxy) {
 				/* Non-fatal, skip this period */
 				pr_warn("Cannot allocate new periodic io proxy.\n");
@@ -57,8 +57,8 @@ static enum hrtimer_restart periodic_io_timer_func(struct hrtimer *timer)
 		}
 	}
 	if (active_periodic_io_present) {
-		kthread_queue_work(&client->lwis_dev->periodic_io_worker,
-				   &client->periodic_io_work);
+		kthread_queue_work(&client->lwis_dev->transaction_worker,
+				   &client->transaction_work);
 	}
 	spin_unlock_irqrestore(&client->periodic_io_lock, flags);
 	if (!active_periodic_io_present) {
@@ -234,7 +234,7 @@ static int process_io_entries(struct lwis_client *client,
 			read_buf += sizeof(struct lwis_periodic_io_result) +
 				    io_result->io_result.num_value_bytes;
 		} else if (entry->type == LWIS_IO_ENTRY_POLL) {
-			ret = lwis_io_entry_poll(lwis_dev, entry, /*non_blocking=*/false);
+			ret = lwis_io_entry_poll(lwis_dev, entry);
 			if (ret) {
 				resp->error_code = ret;
 				goto event_push;
@@ -298,14 +298,13 @@ event_push:
 	return ret;
 }
 
-static void periodic_io_work_func(struct kthread_work *work)
+void lwis_process_periodic_io_in_queue(struct lwis_client *client)
 {
 	int error_code;
 	unsigned long flags;
 	struct lwis_periodic_io *periodic_io;
 	struct lwis_periodic_io_proxy *periodic_io_proxy;
 	struct list_head *it_period, *it_period_tmp;
-	struct lwis_client *client = container_of(work, struct lwis_client, periodic_io_work);
 	struct list_head pending_events;
 	INIT_LIST_HEAD(&pending_events);
 
@@ -326,12 +325,10 @@ static void periodic_io_work_func(struct kthread_work *work)
 			process_io_entries(client, periodic_io_proxy, &pending_events);
 			spin_lock_irqsave(&client->periodic_io_lock, flags);
 		}
-		kfree(periodic_io_proxy);
+		lwis_allocator_free(client->lwis_dev, periodic_io_proxy);
 	}
 	spin_unlock_irqrestore(&client->periodic_io_lock, flags);
-
-	lwis_pending_events_emit(client->lwis_dev, &pending_events,
-				 /*in_irq=*/false);
+	lwis_pending_events_emit(client->lwis_dev, &pending_events);
 }
 
 static int prepare_emit_events(struct lwis_client *client, struct lwis_periodic_io *periodic_io)
@@ -446,7 +443,6 @@ void lwis_periodic_io_free(struct lwis_device *lwis_dev, struct lwis_periodic_io
 int lwis_periodic_io_init(struct lwis_client *client)
 {
 	INIT_LIST_HEAD(&client->periodic_io_process_queue);
-	kthread_init_work(&client->periodic_io_work, periodic_io_work_func);
 	client->periodic_io_counter = 0;
 	hash_init(client->timer_list);
 	return 0;
@@ -514,8 +510,8 @@ int lwis_periodic_io_client_flush(struct lwis_client *client)
 	}
 
 	/* Wait until all workload in process queue are processed */
-	if (client->lwis_dev->periodic_io_worker_thread) {
-		kthread_flush_worker(&client->lwis_dev->periodic_io_worker);
+	if (client->lwis_dev->transaction_worker_thread) {
+		kthread_flush_worker(&client->lwis_dev->transaction_worker);
 	}
 	spin_lock_irqsave(&client->periodic_io_lock, flags);
 

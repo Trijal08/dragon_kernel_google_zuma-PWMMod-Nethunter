@@ -232,7 +232,7 @@ int lwis_device_event_enable(struct lwis_device *lwis_dev, int64_t event_id, boo
  * Returns: 0 on success
  */
 int lwis_device_event_emit(struct lwis_device *lwis_dev, int64_t event_id, void *payload,
-			   size_t payload_size, bool in_irq);
+			   size_t payload_size);
 
 /*
  * lwis_device_external_event_emit: Emits an subscribed event to device.
@@ -243,7 +243,7 @@ int lwis_device_event_emit(struct lwis_device *lwis_dev, int64_t event_id, void 
  * 4. Not supported chain transaction
  */
 void lwis_device_external_event_emit(struct lwis_device *lwis_dev, int64_t event_id,
-				     int64_t event_counter, int64_t timestamp, bool in_irq);
+				     int64_t event_counter, int64_t timestamp);
 
 /*
  * lwis_device_error_event_emit: Emits an error event for all clients.
@@ -311,8 +311,7 @@ int lwis_pending_event_push(struct list_head *pending_events, int64_t event_id, 
  *
  * Returns: 0 on success
  */
-int lwis_pending_events_emit(struct lwis_device *lwis_dev, struct list_head *pending_events,
-			     bool in_irq);
+int lwis_pending_events_emit(struct lwis_device *lwis_dev, struct list_head *pending_events);
 
 /*
  * lwis_device_event_update_subscriber: The function to notify an event has been subscribed/unsubscribed.

@@ -38,12 +38,14 @@
 #define LWIS_IOREG_DEVICE_COMPAT "google,lwis-ioreg-device"
 #define LWIS_SLC_DEVICE_COMPAT "google,lwis-slc-device"
 #define LWIS_DPM_DEVICE_COMPAT "google,lwis-dpm-device"
+#define LWIS_TEST_DEVICE_COMPAT "google,lwis-test-device"
 
 #define EVENT_HASH_BITS 8
 #define BUFFER_HASH_BITS 8
 #define TRANSACTION_HASH_BITS 8
 #define PERIODIC_IO_HASH_BITS 8
 #define BTS_UNSUPPORTED -1
+#define MAX_UNIFIED_POWER_DEVICE 8
 
 /* Forward declaration for lwis_device. This is needed for the declaration for
    lwis_device_subclass_operations data struct. */
@@ -58,6 +60,16 @@ int lwis_allocator_init(struct lwis_device *lwis_dev);
 void lwis_allocator_release(struct lwis_device *lwis_dev);
 
 /*
+ * struct lwis_dev_pwr_ref_cnt
+ * This struct is to store the power up/down sequence reference count
+ */
+struct lwis_dev_pwr_ref_cnt {
+	struct device_node *dev_node_seq;
+	struct lwis_device *hold_dev;
+	int count;
+};
+
+/*
  *  struct lwis_core
  *  This struct applies to all LWIS devices that are defined in the
  *  device tree.
@@ -70,6 +82,7 @@ struct lwis_core {
 	dev_t lwis_devt;
 	int device_major;
 	struct list_head lwis_dev_list;
+	struct lwis_dev_pwr_ref_cnt unified_dev_pwr_map[MAX_UNIFIED_POWER_DEVICE];
 	struct dentry *dbg_root;
 };
 
@@ -119,7 +132,7 @@ struct lwis_event_subscribe_operations {
 	/* Notify subscriber when an event is happening */
 	void (*notify_event_subscriber)(struct lwis_device *lwis_dev, int64_t trigger_event_id,
 					int64_t trigger_event_count,
-					int64_t trigger_event_timestamp, bool in_irq);
+					int64_t trigger_event_timestamp);
 	/* Clean up event subscription hash table when unloading top device */
 	void (*release)(struct lwis_device *lwis_dev);
 };
@@ -154,20 +167,34 @@ struct lwis_client_debug_info {
 	int cur_transaction_hist_idx;
 };
 
+/*
+ * struct lwis_register_io_info
+ * This struct is to store the register read write info
+ */
+struct lwis_register_io_info {
+	struct lwis_io_entry io_entry;
+	size_t access_size;
+	int64_t start_timestamp;
+};
+
 /* struct lwis_device_debug_info
  * This struct applies to each of the LWIS devices, and the purpose is to
  * store information in help debugability.
  */
 #define EVENT_DEBUG_HISTORY_SIZE 16
+#define IO_ENTRY_DEBUG_HISTORY_SIZE 8
 struct lwis_device_debug_info {
 	struct lwis_device_event_state_history event_hist[EVENT_DEBUG_HISTORY_SIZE];
 	int cur_event_hist_idx;
+	struct lwis_register_io_info io_entry_hist[IO_ENTRY_DEBUG_HISTORY_SIZE];
+	int cur_io_entry_hist_idx;
 };
 
 /*
  *  struct lwis_device
  *  This struct applies to each of the LWIS devices, e.g. /dev/lwis*
  */
+#define MAX_BTS_BLOCK_NUM 4
 struct lwis_device {
 	struct lwis_platform *platform;
 	int id;
@@ -193,6 +220,8 @@ struct lwis_device {
 
 	/* Enabled state of the device */
 	int enabled;
+	/* Mark if the client called device suspend */
+	bool is_suspended;
 	/* Mutex used to synchronize access between clients */
 	struct mutex client_lock;
 	/* Spinlock used to synchronize access to the device struct */
@@ -218,27 +247,39 @@ struct lwis_device {
 	struct dentry *dbg_event_file;
 	struct dentry *dbg_transaction_file;
 	struct dentry *dbg_buffer_file;
+	struct dentry *dbg_reg_io_file;
 #endif
 	/* Structure to store info to help debugging device data */
 	struct lwis_device_debug_info debug_info;
 
 	/* clock family this device belongs to */
 	int clock_family;
+#ifdef LWIS_BTS_BLOCK_NAME_ENABLED
+	/* number of BTS blocks */
+	int bts_block_num;
+	/* BTS block names*/
+	const char *bts_block_names[MAX_BTS_BLOCK_NUM];
+	/* indexes to bandwidth traffic shaper */
+	int bts_indexes[MAX_BTS_BLOCK_NUM];
+#else
 	/* index to bandwidth traffic shaper */
 	int bts_index;
+#endif
 	/* BTS scenario name */
 	const char *bts_scenario_name;
 	/* BTS scenario index */
 	unsigned int bts_scenario;
 
-	/* Does power-up-seqs present */
-	bool power_up_seqs_present;
+	/* Power sequence handler */
+	struct device_node *power_seq_handler;
 	/* Power up sequence information */
 	struct lwis_device_power_sequence_list *power_up_sequence;
-	/* Does power-down-seqs present */
-	bool power_down_seqs_present;
 	/* Power down sequence information */
 	struct lwis_device_power_sequence_list *power_down_sequence;
+	/* Suspend sequence information */
+	struct lwis_device_power_sequence_list *suspend_sequence;
+	/* Resume sequence information */
+	struct lwis_device_power_sequence_list *resume_sequence;
 	/* GPIOs list */
 	struct lwis_gpios_list *gpios_list;
 	/* GPIO interrupts list */
@@ -251,7 +292,6 @@ struct lwis_device {
 	bool is_read_only;
 	/* Adjust thread priority */
 	u32 transaction_thread_priority;
-	u32 periodic_io_thread_priority;
 
 	/* LWIS allocator block manager */
 	struct lwis_allocator_block_mgr *block_mgr;
@@ -259,8 +299,6 @@ struct lwis_device {
 	/* Worker thread */
 	struct kthread_worker transaction_worker;
 	struct task_struct *transaction_worker_thread;
-	struct kthread_worker periodic_io_worker;
-	struct task_struct *periodic_io_worker_thread;
 };
 
 /*
@@ -288,20 +326,18 @@ struct lwis_client {
 	DECLARE_HASHTABLE(enrolled_buffers, BUFFER_HASH_BITS);
 	/* Hash table of transactions keyed by trigger event ID */
 	DECLARE_HASHTABLE(transaction_list, TRANSACTION_HASH_BITS);
-	/* Transaction task-related variables */
-	struct tasklet_struct transaction_tasklet;
 	/* Spinlock used to synchronize access to transaction data structs */
 	spinlock_t transaction_lock;
 	/* List of transaction triggers */
-	struct list_head transaction_process_queue_tasklet;
 	struct list_head transaction_process_queue;
 	/* Transaction counter, which also provides transacton ID */
 	int64_t transaction_counter;
+	/* Hash table of pending transactions keyed by transaction id */
+	DECLARE_HASHTABLE(pending_transactions, TRANSACTION_HASH_BITS);
 	/* Hash table of hrtimer keyed by time out duration */
 	DECLARE_HASHTABLE(timer_list, PERIODIC_IO_HASH_BITS);
 	/* Work item */
 	struct kthread_work transaction_work;
-	struct kthread_work periodic_io_work;
 	/* Spinlock used to synchronize access to periodic io data structs */
 	spinlock_t periodic_io_lock;
 	/* Queue of all periodic_io pending processing */
@@ -351,6 +387,13 @@ int lwis_dev_power_up_locked(struct lwis_device *lwis_dev);
 int lwis_dev_power_down_locked(struct lwis_device *lwis_dev);
 
 /*
+ * Process lwis device power sequence list
+ */
+int lwis_dev_process_power_sequence(struct lwis_device *lwis_dev,
+				    struct lwis_device_power_sequence_list *list, bool set_active,
+				    bool skip_error);
+
+/*
  *  lwis_dev_power_seq_list_alloc:
  *  Allocate an instance of the lwis_device_power_sequence_info
  *  and initialize the data structures according to the number of
@@ -375,5 +418,26 @@ void lwis_dev_power_seq_list_print(struct lwis_device_power_sequence_list *list)
  * Use the customized function handle to print information from each device registered in LWIS.
  */
 void lwis_device_info_dump(const char *name, void (*func)(struct lwis_device *));
+
+/*
+ * lwis_device_crash_info_dump:
+ * Use the customized function handle to print information from each device registered in LWIS
+ * when usersapce crash.
+ */
+void lwis_device_crash_info_dump(struct lwis_device *lwis_dev);
+
+/*
+ * lwis_save_register_io_info: Saves the register io info in a history buffer
+ * for better debugability.
+ */
+void lwis_save_register_io_info(struct lwis_device *lwis_dev, struct lwis_io_entry *io_entry,
+                                size_t access_size);
+
+/*
+ * lwis_process_worker_queue:
+ * Function to process the transaction process queue and
+ * periodic io queue on the transaction thread
+ */
+void lwis_process_worker_queue(struct lwis_client *client);
 
 #endif /* LWIS_DEVICE_H_ */

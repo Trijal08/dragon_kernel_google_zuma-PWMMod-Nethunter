@@ -33,6 +33,16 @@ extern "C" {
  */
 
 /*
+ * Device tree strings have a maximum length of 31, according to specs.
+ * Adding 1 byte for the null character.
+ */
+#define LWIS_MAX_NAME_STRING_LEN 32
+/* Maximum clock number defined in device tree. */
+#define LWIS_MAX_CLOCK_NUM 20
+/* Maximum number of register blocks per device */
+#define LWIS_MAX_REG_NUM 20
+
+/*
  * lwis_device_types
  * top  : top level device that overlooks all the LWIS devices. Will be used to
  *        list the information of the other LWIS devices in the system.
@@ -40,31 +50,29 @@ extern "C" {
  * ioreg: for controlling mapped register I/O devices
  * slc  : for configuring system level cache partitions
  * dpm  : for dynamic power manager requests update.
+ * test : for test-specific devices.
  */
-#define DEVICE_TYPE_UNKNOWN -1
-#define DEVICE_TYPE_TOP 0
-#define DEVICE_TYPE_I2C 1
-#define DEVICE_TYPE_IOREG 2
-#define DEVICE_TYPE_SLC 3
-#define DEVICE_TYPE_DPM 4
-#define NUM_DEVICE_TYPES 5
+enum lwis_device_types {
+	DEVICE_TYPE_UNKNOWN = -1,
+	DEVICE_TYPE_TOP,
+	DEVICE_TYPE_I2C,
+	DEVICE_TYPE_IOREG,
+	DEVICE_TYPE_SLC,
+	DEVICE_TYPE_DPM,
+	DEVICE_TYPE_TEST,
+	NUM_DEVICE_TYPES
+};
 
-// Qos clock family.
-#define CLOCK_FAMILY_INVALID -1
-#define CLOCK_FAMILY_CAM 0
-#define CLOCK_FAMILY_INTCAM 1
-#define CLOCK_FAMILY_TNR 2
-#define CLOCK_FAMILY_MIF 3
-#define CLOCK_FAMILY_INT 4
-#define NUM_CLOCK_FAMILY 5
-
-/* Device tree strings have a maximum length of 31, according to specs.
-   Adding 1 byte for the null character. */
-#define LWIS_MAX_NAME_STRING_LEN 32
-/* Maximum clock number defined in device tree. */
-#define LWIS_MAX_CLOCK_NUM 20
-/* Maximum reg number defined in device tree. */
-#define LWIS_MAX_REG_NUM 20
+/* Qos clock family. */
+enum lwis_clock_family {
+	CLOCK_FAMILY_INVALID = -1,
+	CLOCK_FAMILY_CAM,
+	CLOCK_FAMILY_INTCAM,
+	CLOCK_FAMILY_TNR,
+	CLOCK_FAMILY_MIF,
+	CLOCK_FAMILY_INT,
+	NUM_CLOCK_FAMILY
+};
 
 struct lwis_clk_setting {
 	// clock name defined in device tree.
@@ -240,6 +248,13 @@ struct lwis_echo {
 #define LWIS_TRANSACTION_FAILURE_EVENT_FLAG (1ULL << 62)
 #define LWIS_HW_IRQ_EVENT_FLAG (1ULL << 61)
 #define LWIS_PERIODIC_IO_EVENT_FLAG (1ULL << 60)
+#define LWIS_OVERFLOW_IRQ_EVENT_FLAG (1ULL << 59)
+
+// Status code for unsignaled LWIS fence
+#define LWIS_FENCE_STATUS_NOT_SIGNALED -1
+
+// Interval in ms for the Heartbeat Event if enabled
+#define LWIS_HEARTBEAT_EVENT_INTERVAL_MS 10
 
 struct lwis_event_info {
 	// IOCTL Inputs
@@ -268,6 +283,43 @@ struct lwis_event_control_list {
 	struct lwis_event_control *event_controls;
 };
 
+enum lwis_transaction_trigger_node_types {
+	LWIS_TRIGGER_EVENT,
+	LWIS_TRIGGER_FENCE,
+	LWIS_TRIGGER_FENCE_PLACEHOLDER
+};
+
+struct lwis_transaction_trigger_event {
+	int64_t id;
+	int64_t counter;
+	int32_t precondition_fence_fd;
+};
+
+struct lwis_transaction_trigger_node {
+	int32_t type; //lwis_transaction_trigger_node_types
+	union {
+		int32_t fence_fd;
+		struct lwis_transaction_trigger_event event;
+	};
+};
+
+enum lwis_transaction_trigger_node_operator {
+	LWIS_TRIGGER_NODE_OPERATOR_NONE,
+	LWIS_TRIGGER_NODE_OPERATOR_AND,
+	LWIS_TRIGGER_NODE_OPERATOR_OR,
+};
+
+#define LWIS_TRIGGER_NODES_MAX_NUM 16
+struct lwis_transaction_trigger_condition {
+	size_t num_nodes;
+	int32_t operator_type; //lwis_transaction_trigger_node_operator
+	struct lwis_transaction_trigger_node trigger_nodes[LWIS_TRIGGER_NODES_MAX_NUM];
+};
+
+// Status code for completion fences
+#define LWIS_NO_COMPLETION_FENCE -1
+#define LWIS_CREATE_COMPLETION_FENCE -2
+
 // Invalid ID for Transaction id and Periodic IO id
 #define LWIS_ID_INVALID (-1LL)
 #define LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE (-1LL)
@@ -276,13 +328,18 @@ struct lwis_transaction_info {
 	// Input
 	int64_t trigger_event_id;
 	int64_t trigger_event_counter;
+#ifdef LWIS_FENCE_ENABLED
+	struct lwis_transaction_trigger_condition trigger_condition;
+	int32_t completion_fence_fd;
+#endif
 	size_t num_io_entries;
 	struct lwis_io_entry *io_entries;
 	bool run_in_event_context;
-	bool run_at_real_time;
+	// Use reserved to keep the original interface
+	bool reserved;
 	int64_t emit_success_event_id;
 	int64_t emit_error_event_id;
-	bool allow_counter_eq;
+	bool is_level_triggered;
 	// Output
 	int64_t id;
 	// Only will be set if trigger_event_id is specified.
@@ -354,6 +411,10 @@ struct lwis_qos_setting {
 	int64_t peak_bw;
 	// RT BW (total peak)
 	int64_t rt_bw;
+#ifdef LWIS_BTS_BLOCK_NAME_ENABLED
+	// Bts client name
+	char bts_block_name[LWIS_MAX_NAME_STRING_LEN];
+#endif
 };
 
 struct lwis_dpm_qos_requirements {
@@ -363,39 +424,158 @@ struct lwis_dpm_qos_requirements {
 	size_t num_settings;
 };
 
+enum lwis_cmd_id {
+	LWIS_CMD_ID_ECHO = 0x100,
+	LWIS_CMD_ID_TIME_QUERY = 0x200,
+
+	LWIS_CMD_ID_GET_DEVICE_INFO = 0x10000,
+	LWIS_CMD_ID_DEVICE_ENABLE = 0x10100,
+	LWIS_CMD_ID_DEVICE_DISABLE = 0x10200,
+	LWIS_CMD_ID_DEVICE_RESET = 0x10300,
+	LWIS_CMD_ID_DEVICE_SUSPEND = 0x10400,
+	LWIS_CMD_ID_DEVICE_RESUME = 0x10500,
+	LWIS_CMD_ID_DUMP_DEBUG_STATE = 0x10600,
+
+	LWIS_CMD_ID_DMA_BUFFER_ENROLL = 0x20000,
+	LWIS_CMD_ID_DMA_BUFFER_DISENROLL = 0x20100,
+	LWIS_CMD_ID_DMA_BUFFER_CPU_ACCESS = 0x20200,
+	LWIS_CMD_ID_DMA_BUFFER_ALLOC = 0x20300,
+	LWIS_CMD_ID_DMA_BUFFER_FREE = 0x20400,
+
+	LWIS_CMD_ID_REG_IO = 0x30000,
+
+	LWIS_CMD_ID_EVENT_CONTROL_GET = 0x40000,
+	LWIS_CMD_ID_EVENT_CONTROL_SET = 0x40100,
+	LWIS_CMD_ID_EVENT_DEQUEUE = 0x40200,
+
+	LWIS_CMD_ID_TRANSACTION_SUBMIT = 0x50000,
+	LWIS_CMD_ID_TRANSACTION_CANCEL = 0x50100,
+	LWIS_CMD_ID_TRANSACTION_REPLACE = 0x50200,
+
+	LWIS_CMD_ID_PERIODIC_IO_SUBMIT = 0x60000,
+	LWIS_CMD_ID_PERIODIC_IO_CANCEL = 0x60100,
+
+	LWIS_CMD_ID_DPM_CLK_UPDATE = 0x70000,
+	LWIS_CMD_ID_DPM_QOS_UPDATE = 0x70100,
+	LWIS_CMD_ID_DPM_GET_CLOCK = 0x70200,
+
+	LWIS_CMD_ID_FENCE_CREATE = 0x80000
+};
+
+struct lwis_cmd_pkt {
+	uint32_t cmd_id;
+	int32_t ret_code;
+	struct lwis_cmd_pkt *next;
+};
+
+struct lwis_cmd_echo {
+	struct lwis_cmd_pkt header;
+	struct lwis_echo msg;
+};
+
+struct lwis_cmd_time_query {
+	struct lwis_cmd_pkt header;
+	int64_t timestamp_ns;
+};
+
+struct lwis_cmd_device_info {
+	struct lwis_cmd_pkt header;
+	struct lwis_device_info info;
+};
+
+struct lwis_cmd_io_entries {
+	struct lwis_cmd_pkt header;
+	struct lwis_io_entries io;
+};
+
+struct lwis_cmd_dma_buffer_enroll {
+	struct lwis_cmd_pkt header;
+	struct lwis_buffer_info info;
+};
+
+struct lwis_cmd_dma_buffer_disenroll {
+	struct lwis_cmd_pkt header;
+	struct lwis_enrolled_buffer_info info;
+};
+
+struct lwis_cmd_dma_buffer_cpu_access {
+	struct lwis_cmd_pkt header;
+	struct lwis_buffer_cpu_access_op op;
+};
+
+struct lwis_cmd_dma_buffer_alloc {
+	struct lwis_cmd_pkt header;
+	struct lwis_alloc_buffer_info info;
+};
+
+struct lwis_cmd_dma_buffer_free {
+	struct lwis_cmd_pkt header;
+	int32_t fd;
+};
+
+struct lwis_cmd_event_control_get {
+	struct lwis_cmd_pkt header;
+	struct lwis_event_control ctl;
+};
+
+struct lwis_cmd_event_control_set {
+	struct lwis_cmd_pkt header;
+	struct lwis_event_control_list list;
+};
+
+struct lwis_cmd_event_dequeue {
+	struct lwis_cmd_pkt header;
+	struct lwis_event_info info;
+};
+
+struct lwis_cmd_transaction_info {
+	struct lwis_cmd_pkt header;
+	struct lwis_transaction_info info;
+};
+
+struct lwis_cmd_transaction_cancel {
+	struct lwis_cmd_pkt header;
+	int64_t id;
+};
+
+struct lwis_cmd_periodic_io_info {
+	struct lwis_cmd_pkt header;
+	struct lwis_periodic_io_info info;
+};
+
+struct lwis_cmd_periodic_io_cancel {
+	struct lwis_cmd_pkt header;
+	int64_t id;
+};
+
+struct lwis_cmd_dpm_clk_update {
+	struct lwis_cmd_pkt header;
+	struct lwis_dpm_clk_settings settings;
+};
+
+struct lwis_cmd_dpm_qos_update {
+	struct lwis_cmd_pkt header;
+	struct lwis_dpm_qos_requirements reqs;
+};
+
+struct lwis_cmd_dpm_clk_get {
+	struct lwis_cmd_pkt header;
+	struct lwis_qos_setting setting;
+};
+
+#ifdef LWIS_FENCE_ENABLED
+struct lwis_cmd_fence_create {
+	struct lwis_cmd_pkt header;
+	int32_t fd;
+};
+#endif
+
 /*
  *  IOCTL Commands
  */
 
 #define LWIS_IOC_TYPE 'L'
-
-#define LWIS_GET_DEVICE_INFO _IOWR(LWIS_IOC_TYPE, 1, struct lwis_device_info)
-#define LWIS_BUFFER_ENROLL _IOWR(LWIS_IOC_TYPE, 2, struct lwis_buffer_info)
-#define LWIS_BUFFER_DISENROLL _IOWR(LWIS_IOC_TYPE, 3, struct lwis_enrolled_buffer_info)
-#define LWIS_BUFFER_CPU_ACCESS _IOWR(LWIS_IOC_TYPE, 4, struct lwis_buffer_cpu_access_op)
-#define LWIS_DEVICE_ENABLE _IO(LWIS_IOC_TYPE, 6)
-#define LWIS_DEVICE_DISABLE _IO(LWIS_IOC_TYPE, 7)
-#define LWIS_BUFFER_ALLOC _IOWR(LWIS_IOC_TYPE, 8, struct lwis_alloc_buffer_info)
-#define LWIS_BUFFER_FREE _IOWR(LWIS_IOC_TYPE, 9, int32_t)
-#define LWIS_TIME_QUERY _IOWR(LWIS_IOC_TYPE, 10, int64_t)
-#define LWIS_REG_IO _IOWR(LWIS_IOC_TYPE, 11, struct lwis_io_entries)
-#define LWIS_ECHO _IOWR(LWIS_IOC_TYPE, 12, struct lwis_echo)
-#define LWIS_DEVICE_RESET _IOWR(LWIS_IOC_TYPE, 13, struct lwis_io_entries)
-
-#define LWIS_EVENT_CONTROL_GET _IOWR(LWIS_IOC_TYPE, 20, struct lwis_event_control)
-#define LWIS_EVENT_CONTROL_SET _IOW(LWIS_IOC_TYPE, 21, struct lwis_event_control_list)
-#define LWIS_EVENT_DEQUEUE _IOWR(LWIS_IOC_TYPE, 22, struct lwis_event_info)
-
-#define LWIS_TRANSACTION_SUBMIT _IOWR(LWIS_IOC_TYPE, 30, struct lwis_transaction_info)
-#define LWIS_TRANSACTION_CANCEL _IOWR(LWIS_IOC_TYPE, 31, int64_t)
-#define LWIS_TRANSACTION_REPLACE _IOWR(LWIS_IOC_TYPE, 32, struct lwis_transaction_info)
-
-#define LWIS_PERIODIC_IO_SUBMIT _IOWR(LWIS_IOC_TYPE, 40, struct lwis_periodic_io_info)
-#define LWIS_PERIODIC_IO_CANCEL _IOWR(LWIS_IOC_TYPE, 41, int64_t)
-
-#define LWIS_DPM_CLK_UPDATE _IOW(LWIS_IOC_TYPE, 50, struct lwis_dpm_clk_settings)
-#define LWIS_DPM_QOS_UPDATE _IOW(LWIS_IOC_TYPE, 51, struct lwis_dpm_qos_requirements)
-#define LWIS_DPM_GET_CLOCK _IOW(LWIS_IOC_TYPE, 52, struct lwis_qos_setting)
+#define LWIS_CMD_PACKET _IOWR(LWIS_IOC_TYPE, 100, struct lwis_cmd_pkt)
 
 /*
  * Event payloads

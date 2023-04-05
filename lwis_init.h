@@ -26,4 +26,7 @@ int lwis_slc_device_init(void);
 /* lwis_device_dpm.c */
 int lwis_dpm_device_init(void);
 
+/* lwis_device_test.c */
+int lwis_test_device_init(void);
+
 #endif // LWIS_INIT_H_

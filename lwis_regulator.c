@@ -86,7 +86,7 @@ int lwis_regulator_get(struct lwis_regulator_list *list, char *name, int voltage
 	}
 
 	list->reg[index].reg = reg;
-	strlcpy(list->reg[index].name, name, LWIS_MAX_NAME_STRING_LEN);
+	strscpy(list->reg[index].name, name, LWIS_MAX_NAME_STRING_LEN);
 	list->reg[index].voltage = voltage;
 
 	return index;

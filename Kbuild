@@ -3,6 +3,7 @@ lwis-objs += lwis_device_dpm.o
 lwis-objs += lwis_device_i2c.o
 lwis-objs += lwis_device_ioreg.o
 lwis-objs += lwis_device_slc.o
+lwis-objs += lwis_device_test.o
 lwis-objs += lwis_device_top.o
 lwis-objs += lwis_clock.o
 lwis-objs += lwis_gpio.o
@@ -33,6 +34,11 @@ endif
 ifeq ($(CONFIG_SOC_GS201), y)
 lwis-objs += platform/busan/lwis_platform_busan.o
 lwis-objs += platform/busan/lwis_platform_busan_dma.o
+# ccflags-y += -DLWIS_FENCE_ENABLED -DLWIS_BTS_BLOCK_NAME_ENABLED
+endif
+
+ifneq ($(filter -DLWIS_FENCE_ENABLED, $(ccflags-y)),)
+lwis-objs += lwis_fence.o
 endif
 
 # Device tree specific file
@@ -42,4 +48,4 @@ endif
 
 obj-$(CONFIG_LWIS) += lwis.o
 
-ccflags-y = -I$(abspath $(KERNEL_SRC)/$(M)) -I$(abspath $(KBUILD_SRC)/drivers/soc/google)
+ccflags-y += -I$(abspath $(KERNEL_SRC)/$(M)) -I$(abspath $(KBUILD_SRC)/drivers/soc/google)
