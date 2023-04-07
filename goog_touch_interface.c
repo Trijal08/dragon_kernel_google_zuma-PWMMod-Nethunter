@@ -1344,7 +1344,7 @@ static void panel_bridge_enable(struct drm_bridge *bridge)
 		container_of(bridge, struct goog_touch_interface, panel_bridge);
 
 	if (gti->panel_is_lp_mode) {
-		GOOG_INFO(gti, "skip screen-on because of panel_is_lp_mode enabled!\n");
+		GOOG_DBG(gti, "skip screen-on because of panel_is_lp_mode enabled!\n");
 		return;
 	}
 
