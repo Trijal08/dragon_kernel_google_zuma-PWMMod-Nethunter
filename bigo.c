@@ -90,9 +90,6 @@ static void bigo_coredump(struct bigo_core *core, const char *crash_info)
 static inline int on_first_instance_open(struct bigo_core *core)
 {
 	int rc;
-	struct sched_param param = {
-		.sched_priority =  MAX_RT_PRIO / 4 - 2
-	};
 
 	core->worker_thread = kthread_run(bigo_worker_thread, (void*)core,
 					"bigo_worker_thread");
@@ -102,7 +99,8 @@ static inline int on_first_instance_open(struct bigo_core *core)
 		pr_err("failed to create worker thread rc = %d\n", rc);
 		goto exit;
 	}
-	sched_setscheduler_nocheck(core->worker_thread, SCHED_FIFO, &param);
+
+	sched_set_normal(core->worker_thread, -10);
 
 	rc = bigo_pt_client_enable(core);
 	if (rc) {
