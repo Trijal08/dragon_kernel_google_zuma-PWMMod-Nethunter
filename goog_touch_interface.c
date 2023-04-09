@@ -329,6 +329,8 @@ static void goog_init_proc(struct goog_touch_interface *gti)
 /*-----------------------------------------------------------------------------
  * GTI/sysfs: forward declarations, structures and functions.
  */
+static ssize_t config_name_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 static ssize_t force_active_show(
 	struct device *dev, struct device_attribute *attr, char *buf);
 static ssize_t force_active_store(struct device *dev,
@@ -341,6 +343,8 @@ static ssize_t fw_grip_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t fw_grip_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t fw_name_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 static ssize_t fw_palm_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t fw_palm_store(struct device *dev,
@@ -359,6 +363,8 @@ static ssize_t offload_enabled_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t offload_enabled_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t panel_id_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 static ssize_t ping_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t reset_show(struct device *dev,
@@ -379,6 +385,8 @@ static ssize_t sensing_enabled_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t sensing_enabled_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t test_limits_name_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 static ssize_t v4l2_enabled_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t v4l2_enabled_store(struct device *dev,
@@ -388,38 +396,46 @@ static ssize_t vrr_enabled_show(struct device *dev,
 static ssize_t vrr_enabled_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 
+static DEVICE_ATTR_RO(config_name);
 static DEVICE_ATTR_RW(force_active);
 static DEVICE_ATTR_RW(fw_coord_filter);
 static DEVICE_ATTR_RW(fw_grip);
+static DEVICE_ATTR_RO(fw_name);
 static DEVICE_ATTR_RW(fw_palm);
 static DEVICE_ATTR_RO(fw_ver);
 static DEVICE_ATTR_RW(irq_enabled);
 static DEVICE_ATTR_RW(mf_mode);
 static DEVICE_ATTR_RW(offload_enabled);
+static DEVICE_ATTR_RO(panel_id);
 static DEVICE_ATTR_RO(ping);
 static DEVICE_ATTR_RW(reset);
 static DEVICE_ATTR_RW(scan_mode);
 static DEVICE_ATTR_RW(screen_protector_mode_enabled);
 static DEVICE_ATTR_RO(self_test);
 static DEVICE_ATTR_RW(sensing_enabled);
+static DEVICE_ATTR_RO(test_limits_name);
 static DEVICE_ATTR_RW(v4l2_enabled);
 static DEVICE_ATTR_RW(vrr_enabled);
 
 static struct attribute *goog_attributes[] = {
+	&dev_attr_config_name.attr,
 	&dev_attr_force_active.attr,
 	&dev_attr_fw_coord_filter.attr,
 	&dev_attr_fw_grip.attr,
+	&dev_attr_fw_name.attr,
 	&dev_attr_fw_palm.attr,
 	&dev_attr_fw_ver.attr,
 	&dev_attr_irq_enabled.attr,
 	&dev_attr_mf_mode.attr,
 	&dev_attr_offload_enabled.attr,
+	&dev_attr_panel_id.attr,
 	&dev_attr_ping.attr,
 	&dev_attr_reset.attr,
 	&dev_attr_scan_mode.attr,
 	&dev_attr_screen_protector_mode_enabled.attr,
 	&dev_attr_self_test.attr,
 	&dev_attr_sensing_enabled.attr,
+	&dev_attr_test_limits_name.attr,
 	&dev_attr_v4l2_enabled.attr,
 	&dev_attr_vrr_enabled.attr,
 	NULL,
@@ -428,6 +444,24 @@ static struct attribute *goog_attributes[] = {
 static struct attribute_group goog_attr_group = {
 	.attrs = goog_attributes,
 };
+
+static ssize_t config_name_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t buf_idx = 0;
+	struct goog_touch_interface *gti = dev_get_drvdata(dev);
+
+	if (gti->config_name[0] == '\0') {
+		buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
+			"error: not supported!\n");
+	} else {
+		buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
+			"result: %s\n", gti->config_name);
+	}
+	GOOG_INFO(gti, "%s", buf);
+
+	return buf_idx;
+}
 
 static ssize_t force_active_show(
 	struct device *dev, struct device_attribute *attr, char *buf)
@@ -606,6 +640,24 @@ static ssize_t fw_grip_store(struct device *dev,
 		GOOG_INFO(gti, "fw_grip_mode: %u\n", fw_grip_mode);
 
 	return size;
+}
+
+static ssize_t fw_name_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t buf_idx = 0;
+	struct goog_touch_interface *gti = dev_get_drvdata(dev);
+
+	if (gti->fw_name[0] == '\0') {
+		buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
+			"error: not supported!\n");
+	} else {
+		buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
+			"result: %s\n", gti->fw_name);
+	}
+	GOOG_INFO(gti, "%s", buf);
+
+	return buf_idx;
 }
 
 static ssize_t fw_palm_show(struct device *dev,
@@ -801,6 +853,24 @@ static ssize_t offload_enabled_store(struct device *dev,
 	}
 
 	return size;
+}
+
+static ssize_t panel_id_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t buf_idx = 0;
+	struct goog_touch_interface *gti = dev_get_drvdata(dev);
+
+	if (gti->panel_id < 0) {
+		buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
+			"error: not supported!\n");
+	} else {
+		buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
+			"result: %d\n", gti->panel_id);
+	}
+	GOOG_INFO(gti, "%s", buf);
+
+	return buf_idx;
 }
 
 static ssize_t ping_show(struct device *dev,
@@ -1070,6 +1140,24 @@ static ssize_t sensing_enabled_store(struct device *dev,
 		GOOG_INFO(gti, "sensing_enabled= %u\n", gti->cmd.sensing_cmd.setting);
 
 	return size;
+}
+
+static ssize_t test_limits_name_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t buf_idx = 0;
+	struct goog_touch_interface *gti = dev_get_drvdata(dev);
+
+	if (gti->test_limits_name[0] == '\0') {
+		buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
+			"error: not supported!\n");
+	} else {
+		buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
+			"result: %s\n", gti->test_limits_name);
+	}
+	GOOG_INFO(gti, "%s", buf);
+
+	return buf_idx;
 }
 
 static ssize_t v4l2_enabled_show(struct device *dev,
@@ -1592,7 +1680,7 @@ int goog_get_firmware_name(struct device_node *node, int id, char *name, size_t 
 
 	err = of_property_read_string_index(node, "goog,firmware_names", id, &fw_name);
 	if (err == 0) {
-		strncpy(name, fw_name, size);
+		strlcpy(name, fw_name, size);
 		pr_info("%s: found firmware name: %s\n", __func__, name);
 	} else {
 		pr_warn("%s: failed to find firmware name!\n", __func__);
@@ -2997,6 +3085,12 @@ void goog_init_options(struct goog_touch_interface *gti,
 		gti->ignore_force_active = of_property_read_bool(np, "goog,ignore-force-active");
 		gti->coord_filter_enabled = of_property_read_bool(np, "goog,coord-filter-enabled");
 		gti->panel_id = goog_get_panel_id(np);
+		if (gti->panel_id >= 0) {
+			goog_get_firmware_name(np, gti->panel_id, gti->fw_name, sizeof(gti->fw_name));
+			goog_get_config_name(np, gti->panel_id, gti->config_name, sizeof(gti->config_name));
+			goog_get_test_limits_name(np, gti->panel_id, gti->test_limits_name,
+					sizeof(gti->test_limits_name));
+		}
 	}
 
 	/* Initialize default functions. */
