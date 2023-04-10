@@ -341,6 +341,11 @@ enum {
 	FTS_BUS_REF_BUGREPORT		= 0x20,
 };
 
+enum fts_display_state : u32 {
+	FTS_DISPLAY_STATE_OFF = 0,
+	FTS_DISPLAY_STATE_ON,
+};
+
 /* Motion filter finite state machine (FSM) states
  * FTS_MF_FILTERED        - default coordinate filtering
  * FTS_MF_UNFILTERED      - unfiltered single-touch coordinates
@@ -886,6 +891,7 @@ struct fts_ts_info {
 #ifdef DYNAMIC_REFRESH_RATE
 	int display_refresh_rate;	/* Display rate in Hz */
 #endif
+	enum fts_display_state display_state;	/* Display state */
 	bool sensor_sleep;		/* True if suspend called */
 	struct wakeup_source *wakesrc;	/* Wake Lock struct */
 
