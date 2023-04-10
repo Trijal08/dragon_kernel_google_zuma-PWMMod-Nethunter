@@ -20,6 +20,14 @@ config TOUCHSCREEN_TBN
 	  To compile this driver as a module, choose M here: the module will be
 	  called touch_bus_negotiator.
 
+config TOUCHSCREEN_TBN_AOC_CHANNEL_MODE
+	bool "AOC channel mode for TBN"
+	depends on TOUCHSCREEN_TBN
+	help
+	  Say Y here if you want to enable AOC channel mode for TBN.
+
+	  If unsure, say N.
+
 config TOUCHSCREEN_OFFLOAD
 	tristate "Touchscreen algorithm offload"
 	depends on (TOUCHSCREEN_FTS || TOUCHSCREEN_SEC_TS)

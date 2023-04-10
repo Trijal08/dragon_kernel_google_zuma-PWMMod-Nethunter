@@ -18,6 +18,7 @@ filegroup(
         "Kconfig",
     ]),
     visibility = [
+        "//private/devices/google:__subpackages__",
         "//private/google-modules/soc/gs:__pkg__",
     ],
 )
@@ -29,6 +30,7 @@ kernel_module(
         "**/*.h",
         "Kbuild",
     ]) + [
+        "//private/google-modules/aoc:headers",
         "//private/google-modules/display:headers",
         "//private/google-modules/display/include:headers",
         "//private/google-modules/soc/gs:gs_soc_headers",
@@ -41,6 +43,7 @@ kernel_module(
     ],
     kernel_build = "//private/google-modules/soc/gs:gs_kernel_build",
     visibility = [
+        "//private/devices/google:__subpackages__",
         "//private/google-modules/soc/gs:__pkg__",
         "//private/google-modules/touch:__subpackages__",
     ],
