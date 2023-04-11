@@ -18,18 +18,4 @@
  */
 int lwis_ioctl_handler(struct lwis_client *lwis_client, unsigned int type, unsigned long param);
 
-/*
- *  lwis_ioctl_util_synchronous_process_io_entries: Synchronous process lwis_io_entry
- */
-int lwis_ioctl_util_synchronous_process_io_entries(struct lwis_device *lwis_dev, int num_io_entries,
-						   struct lwis_io_entry *io_entries,
-						   struct lwis_io_entry *user_msg);
-
-/*
- *  lwis_ioctl_util_construct_io_entry: Allocate kernel lwis_io_entry from user space input
- */
-int lwis_ioctl_util_construct_io_entry(struct lwis_client *client,
-				       struct lwis_io_entry *user_entries, size_t num_io_entries,
-				       struct lwis_io_entry **io_entries);
-
 #endif /* LWIS_IOCTL_H_ */

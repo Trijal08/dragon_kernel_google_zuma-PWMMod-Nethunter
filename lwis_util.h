@@ -78,7 +78,6 @@ int lwis_create_kthread_workers(struct lwis_device *lwis_dev);
 /*
  * lwis_set_kthread_priority: Set kthread priority.
  */
-int lwis_set_kthread_priority(struct lwis_device *lwis_dev, struct task_struct *task,
-			      u32 priority);
+int lwis_set_kthread_priority(struct lwis_device *lwis_dev, struct task_struct *task, u32 priority);
 
 #endif // LWIS_UTIL_H_

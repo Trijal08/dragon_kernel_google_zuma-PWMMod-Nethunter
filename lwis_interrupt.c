@@ -134,9 +134,6 @@ int lwis_interrupt_get(struct lwis_interrupt_list *list, int index,
 		return -EINVAL;
 	}
 
-	spin_lock_irqsave(&list->irq[index].lock, flags);
-	list->irq[index].irq = irq;
-
 	if (list->irq[index].irq_type == AGGREGATE_INTERRUPT) {
 		ret = request_irq(irq, lwis_interrupt_aggregate_isr, IRQF_SHARED,
 				  list->irq[index].full_name, &list->irq[index]);
@@ -149,10 +146,13 @@ int lwis_interrupt_get(struct lwis_interrupt_list *list, int index,
 		return ret;
 	}
 
-	if (lwis_plaform_set_default_irq_affinity(list->irq[index].irq) != 0) {
+	if (lwis_plaform_set_default_irq_affinity(irq) != 0) {
 		dev_warn(list->lwis_dev->dev, "Interrupt %s cannot set affinity.\n",
 			 list->irq[index].full_name);
 	}
+
+	spin_lock_irqsave(&list->irq[index].lock, flags);
+	list->irq[index].irq = irq;
 	spin_unlock_irqrestore(&list->irq[index].lock, flags);
 
 	return 0;
@@ -327,12 +327,13 @@ static void lwis_interrupt_emit_events(struct lwis_interrupt *irq, uint64_t sour
 
 		/* Check if this event needs to be emitted */
 		if ((source_value >> event->int_reg_bit) & 0x1) {
-			int64_t event_id;
+			lwis_device_event_emit(irq->lwis_dev, event->event_id, NULL, 0);
 			/* Check if this overflow event needs to combine event id + overflow flag */
-			event_id = ((overflow_value >> event->int_reg_bit) & 0x1) ?
-					   (event->event_id | LWIS_OVERFLOW_IRQ_EVENT_FLAG) :
-					   event->event_id;
-			lwis_device_event_emit(irq->lwis_dev, event_id, NULL, 0);
+			if ((overflow_value >> event->int_reg_bit) & 0x1) {
+				lwis_device_event_emit(
+					irq->lwis_dev,
+					event->event_id | LWIS_OVERFLOW_IRQ_EVENT_FLAG, NULL, 0);
+			}
 
 			/* Clear this interrupt */
 			reset_value |= (1ULL << event->int_reg_bit);
@@ -413,6 +414,16 @@ static irqreturn_t lwis_interrupt_regular_isr(int irq_number, void *data)
 	lwis_interrupt_emit_events(irq, source_value, overflow_value);
 error:
 	return IRQ_HANDLED;
+}
+
+int lwis_fake_event_inject(void *data)
+{
+	struct lwis_interrupt *irq = (struct lwis_interrupt *)data;
+	uint64_t source_value = 0x00000020ll, overflow_value = 0;
+
+	lwis_interrupt_emit_events(irq, source_value, overflow_value);
+
+	return irq->irq;
 }
 
 static int lwis_interrupt_handle_aggregation(struct lwis_interrupt *irq, uint64_t source_value)

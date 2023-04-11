@@ -10,7 +10,6 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME "-ioreg-dev: " fmt
 
-#include "lwis_debug.h"
 #include "lwis_device_ioreg.h"
 
 #include <linux/device.h>
@@ -69,7 +68,7 @@ static int lwis_ioreg_device_disable(struct lwis_device *lwis_dev)
 static int lwis_ioreg_register_io(struct lwis_device *lwis_dev, struct lwis_io_entry *entry,
 				  int access_size)
 {
-	lwis_debug_save_register_io_to_history(lwis_dev, entry, access_size);
+	lwis_save_register_io_info(lwis_dev, entry, access_size);
 	return lwis_ioreg_io_entry_rw((struct lwis_ioreg_device *)lwis_dev, entry, access_size);
 }
 
@@ -139,12 +138,11 @@ static int lwis_ioreg_device_probe(struct platform_device *plat_dev)
 
 	if (ioreg_dev->base_dev.transaction_thread_priority != 0) {
 		ret = lwis_set_kthread_priority(&ioreg_dev->base_dev,
-			ioreg_dev->base_dev.transaction_worker_thread,
-			ioreg_dev->base_dev.transaction_thread_priority);
+						ioreg_dev->base_dev.transaction_worker_thread,
+						ioreg_dev->base_dev.transaction_thread_priority);
 		if (ret) {
 			dev_err(ioreg_dev->base_dev.dev,
-				"Failed to set LWIS IOREG transaction kthread priority (%d)",
-				ret);
+				"Failed to set LWIS IOREG transaction kthread priority (%d)", ret);
 			lwis_base_unprobe(&ioreg_dev->base_dev);
 			goto error_probe;
 		}
@@ -163,54 +161,12 @@ error_probe:
 static int lwis_ioreg_device_suspend(struct device *dev)
 {
 	struct lwis_device *lwis_dev = dev_get_drvdata(dev);
-	struct lwis_client *lwis_client, *n;
-	int ret = 0;
 
-	if (lwis_dev->enabled == 0) {
-		return ret;
+	if (lwis_dev->enabled != 0) {
+		dev_warn(lwis_dev->dev, "Can't suspend because %s is in use!\n", lwis_dev->name);
+		return -EBUSY;
 	}
 
-	/* Send an error event to userspace to handle the system suspend */
-	lwis_device_error_event_emit(lwis_dev, LWIS_ERROR_EVENT_ID_SYSTEM_SUSPEND,
-				     /*payload=*/NULL, /*payload_size=*/0);
-
-	list_for_each_entry_safe (lwis_client, n, &lwis_dev->clients, node) {
-		if (!lwis_client->is_enabled) {
-			continue;
-		}
-
-		/* Clear event states for this client */
-		lwis_client_event_states_clear(lwis_client);
-
-		/* Flush all periodic io to complete */
-		ret = lwis_periodic_io_client_flush(lwis_client);
-		if (ret) {
-			dev_err(lwis_dev->dev,
-				"Failed to wait for in-process periodic io to complete\n");
-		}
-
-		/* Flush all pending transactions */
-		ret = lwis_transaction_client_flush(lwis_client);
-		if (ret) {
-			dev_err(lwis_dev->dev, "Failed to flush pending transactions\n");
-		}
-
-		/* Run cleanup transactions. */
-		lwis_transaction_client_cleanup(lwis_client);
-
-		lwis_client->is_enabled = false;
-	}
-
-	mutex_lock(&lwis_dev->client_lock);
-	ret = lwis_dev_power_down_locked(lwis_dev);
-	if (ret < 0) {
-		dev_err(lwis_dev->dev, "Failed to power down device\n");
-	}
-
-	lwis_device_event_states_clear_locked(lwis_dev);
-	lwis_dev->enabled = 0;
-	dev_warn(lwis_dev->dev, "Device disabled when system suspend\n");
-	mutex_unlock(&lwis_dev->client_lock);
 	return 0;
 }
 

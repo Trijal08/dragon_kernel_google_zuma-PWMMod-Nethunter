@@ -34,6 +34,7 @@ struct lwis_allocator_block_pool {
 
 struct lwis_allocator_block_mgr {
 	spinlock_t lock;
+	struct lwis_allocator_block_pool pool_4k;
 	struct lwis_allocator_block_pool pool_8k;
 	struct lwis_allocator_block_pool pool_16k;
 	struct lwis_allocator_block_pool pool_32k;

@@ -93,7 +93,7 @@ static int lwis_slc_enable(struct lwis_device *lwis_dev)
 
 	/* Initialize SLC partitions and get a handle */
 	slc_dev->partition_handle = pt_client_register(node, NULL, NULL);
-	if (IS_ERR(slc_dev->partition_handle)) {
+	if (IS_ERR_OR_NULL(slc_dev->partition_handle)) {
 		ret = PTR_ERR(slc_dev->partition_handle);
 		dev_err(lwis_dev->dev, "Failed to register PT client (%d)\n", ret);
 		slc_dev->partition_handle = NULL;
@@ -216,7 +216,14 @@ int lwis_slc_buffer_free(struct lwis_device *lwis_dev, int fd)
 	if (fp == NULL) {
 		return -EBADF;
 	}
-	slc_pt = fp->private_data;
+
+	if (fp->f_op != &pt_file_ops) {
+		dev_err(lwis_dev->dev, "SLC file ops is not equal to pt_file_ops\n");
+		fput(fp);
+		return -EINVAL;
+	}
+
+	slc_pt = (struct slc_partition *)fp->private_data;
 
 	if (slc_pt->fd != fd) {
 		dev_warn(lwis_dev->dev, "Stale SLC buffer free for fd %d with ptid %d\n", fd,

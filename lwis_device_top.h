@@ -32,7 +32,6 @@ struct lwis_top_device {
 	struct kthread_work subscribe_work;
 	struct list_head emitted_event_list_work;
 
-
 	/* Subscription thread */
 	struct kthread_worker subscribe_worker;
 	struct task_struct *subscribe_worker_thread;

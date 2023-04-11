@@ -123,9 +123,9 @@ int lwis_create_kthread_workers(struct lwis_device *lwis_dev)
 	scnprintf(t_name, LWIS_MAX_NAME_STRING_LEN, "lwis_t_%s", lwis_dev->name);
 
 	kthread_init_worker(&lwis_dev->transaction_worker);
-	lwis_dev->transaction_worker_thread = kthread_run(kthread_worker_fn,
-			&lwis_dev->transaction_worker, t_name);
-	if (IS_ERR(lwis_dev->transaction_worker_thread)) {
+	lwis_dev->transaction_worker_thread =
+		kthread_run(kthread_worker_fn, &lwis_dev->transaction_worker, t_name);
+	if (IS_ERR_OR_NULL(lwis_dev->transaction_worker_thread)) {
 		dev_err(lwis_dev->dev, "transaction kthread_run failed\n");
 		return -EINVAL;
 	}
@@ -133,16 +133,15 @@ int lwis_create_kthread_workers(struct lwis_device *lwis_dev)
 	return 0;
 }
 
-int lwis_set_kthread_priority(struct lwis_device *lwis_dev, struct task_struct *task,
-			      u32 priority)
+int lwis_set_kthread_priority(struct lwis_device *lwis_dev, struct task_struct *task, u32 priority)
 {
 	int policy;
 	struct sched_param param;
 	int ret;
 
 	if (priority >= MAX_PRIO) {
-		dev_err(lwis_dev->dev, "transaction_thread_priority(%d) >= Max(%d)",
-			priority, MAX_PRIO);
+		dev_err(lwis_dev->dev, "transaction_thread_priority(%d) >= Max(%d)", priority,
+			MAX_PRIO);
 		return -EINVAL;
 	}
 	if (priority < MAX_RT_PRIO) {

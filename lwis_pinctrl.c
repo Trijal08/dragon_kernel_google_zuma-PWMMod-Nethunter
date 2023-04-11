@@ -25,7 +25,7 @@ int lwis_pinctrl_set_state(struct pinctrl *pc, char *state_str)
 	}
 
 	state = pinctrl_lookup_state(pc, state_str);
-	if (IS_ERR(state)) {
+	if (IS_ERR_OR_NULL(state)) {
 		pr_err("Cannot find mclk state %s\n", state_str);
 		return PTR_ERR(state);
 	}

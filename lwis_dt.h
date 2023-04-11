@@ -16,6 +16,7 @@
 #include "lwis_device.h"
 #include "lwis_device_i2c.h"
 #include "lwis_device_ioreg.h"
+#include "lwis_device_test.h"
 #include "lwis_device_top.h"
 
 /*
@@ -41,5 +42,11 @@ int lwis_ioreg_device_parse_dt(struct lwis_ioreg_device *ioreg_dev);
  *  top devices.
  */
 int lwis_top_device_parse_dt(struct lwis_top_device *top_dev);
+
+/*
+ *  lwis_test_device_parse_dt: Parse device configurations specifically for
+ *  TEST devices.
+ */
+int lwis_test_device_parse_dt(struct lwis_test_device *test_dev);
 
 #endif /* LWIS_DT_H_ */

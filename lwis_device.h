@@ -45,6 +45,7 @@
 #define TRANSACTION_HASH_BITS 8
 #define PERIODIC_IO_HASH_BITS 8
 #define BTS_UNSUPPORTED -1
+#define MAX_UNIFIED_POWER_DEVICE 8
 
 /* Forward declaration for lwis_device. This is needed for the declaration for
    lwis_device_subclass_operations data struct. */
@@ -59,6 +60,16 @@ int lwis_allocator_init(struct lwis_device *lwis_dev);
 void lwis_allocator_release(struct lwis_device *lwis_dev);
 
 /*
+ * struct lwis_dev_pwr_ref_cnt
+ * This struct is to store the power up/down sequence reference count
+ */
+struct lwis_dev_pwr_ref_cnt {
+	struct device_node *dev_node_seq;
+	struct lwis_device *hold_dev;
+	int count;
+};
+
+/*
  *  struct lwis_core
  *  This struct applies to all LWIS devices that are defined in the
  *  device tree.
@@ -71,6 +82,7 @@ struct lwis_core {
 	dev_t lwis_devt;
 	int device_major;
 	struct list_head lwis_dev_list;
+	struct lwis_dev_pwr_ref_cnt unified_dev_pwr_map[MAX_UNIFIED_POWER_DEVICE];
 	struct dentry *dbg_root;
 };
 
@@ -235,28 +247,26 @@ struct lwis_device {
 	struct dentry *dbg_event_file;
 	struct dentry *dbg_transaction_file;
 	struct dentry *dbg_buffer_file;
+	struct dentry *dbg_reg_io_file;
 #endif
 	/* Structure to store info to help debugging device data */
 	struct lwis_device_debug_info debug_info;
 
 	/* clock family this device belongs to */
 	int clock_family;
-#ifdef LWIS_BTS_BLOCK_NAME_ENABLED
 	/* number of BTS blocks */
 	int bts_block_num;
 	/* BTS block names*/
 	const char *bts_block_names[MAX_BTS_BLOCK_NUM];
 	/* indexes to bandwidth traffic shaper */
 	int bts_indexes[MAX_BTS_BLOCK_NUM];
-#else
-	/* index to bandwidth traffic shaper */
-	int bts_index;
-#endif
 	/* BTS scenario name */
 	const char *bts_scenario_name;
 	/* BTS scenario index */
 	unsigned int bts_scenario;
 
+	/* Power sequence handler */
+	struct device_node *power_seq_handler;
 	/* Power up sequence information */
 	struct lwis_device_power_sequence_list *power_up_sequence;
 	/* Power down sequence information */
@@ -410,6 +420,13 @@ void lwis_device_info_dump(const char *name, void (*func)(struct lwis_device *))
  * when usersapce crash.
  */
 void lwis_device_crash_info_dump(struct lwis_device *lwis_dev);
+
+/*
+ * lwis_save_register_io_info: Saves the register io info in a history buffer
+ * for better debugability.
+ */
+void lwis_save_register_io_info(struct lwis_device *lwis_dev, struct lwis_io_entry *io_entry,
+				size_t access_size);
 
 /*
  * lwis_process_worker_queue:

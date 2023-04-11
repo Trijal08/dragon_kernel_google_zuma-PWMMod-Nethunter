@@ -117,6 +117,9 @@ allocator_get_block_pool(struct lwis_allocator_block_mgr *block_mgr, int idx)
 	struct lwis_allocator_block_pool *block_pool;
 
 	switch (idx) {
+	case 12:
+		block_pool = &block_mgr->pool_4k;
+		break;
 	case 13:
 		block_pool = &block_mgr->pool_8k;
 		break;
@@ -178,6 +181,7 @@ int lwis_allocator_init(struct lwis_device *lwis_dev)
 	hash_init(block_mgr->allocated_blocks);
 
 	/* Initialize block pools */
+	strscpy(block_mgr->pool_4k.name, "lwis-block-4k", LWIS_MAX_NAME_STRING_LEN);
 	strscpy(block_mgr->pool_8k.name, "lwis-block-8k", LWIS_MAX_NAME_STRING_LEN);
 	strscpy(block_mgr->pool_16k.name, "lwis-block-16k", LWIS_MAX_NAME_STRING_LEN);
 	strscpy(block_mgr->pool_32k.name, "lwis-block-32k", LWIS_MAX_NAME_STRING_LEN);
@@ -219,6 +223,7 @@ void lwis_allocator_release(struct lwis_device *lwis_dev)
 		return;
 	}
 
+	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_4k);
 	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_8k);
 	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_16k);
 	allocator_block_pool_free_locked(lwis_dev, &block_mgr->pool_32k);
@@ -252,15 +257,6 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size)
 	}
 
 	/*
-	 * Linux already has slab allocator to cache the allocated memory within a page.
-	 * The default page size is 4K. We can leverage linux's slab implementation for
-	 * small size memory recycling.
-	 */
-	if (size <= 4 * 1024) {
-		return kmalloc(size, GFP_KERNEL);
-	}
-
-	/*
 	   fls() has better performance profile, it's currently used to mimic the
 	   behavior of kmalloc_index().
 
@@ -290,6 +286,11 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size)
 	     if (size <=  32 * 1024 * 1024) return 25;
 	*/
 	idx = fls(size - 1);
+
+	/* Set 4K as the minimal block size */
+	if (idx < 12) {
+		idx = 12;
+	}
 
 	/*
 	 * For the large size memory allocation, we usually use kvmalloc() to allocate
@@ -389,6 +390,7 @@ void lwis_allocator_free(struct lwis_device *lwis_dev, void *ptr)
 	}
 
 	if (block == NULL) {
+		dev_err(lwis_dev->dev, "Allocator free ptr not found\n");
 		kfree(ptr);
 		return;
 	}

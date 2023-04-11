@@ -81,7 +81,7 @@ int lwis_regulator_get(struct lwis_regulator_list *list, char *name, int voltage
 
 	/* Make sure regulator exists */
 	reg = devm_regulator_get(dev, name);
-	if (IS_ERR(reg)) {
+	if (IS_ERR_OR_NULL(reg)) {
 		return PTR_ERR(reg);
 	}
 
