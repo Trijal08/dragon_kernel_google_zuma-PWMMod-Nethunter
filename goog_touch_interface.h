@@ -18,15 +18,16 @@
 #include "touch_offload.h"
 #include "uapi/input/touch_offload.h"
 
-#define GOOG_LOG_NAME "GTI"
-#define GOOG_DBG(fmt, args...)    pr_debug("[%s] %s: " fmt, GOOG_LOG_NAME,\
+#define GTI_NAME "goog_touch_interface"
+#define GOOG_LOG_NAME(gti) ((gti && gti->dev) ? dev_name(gti->dev) : "GTI")
+#define GOOG_DBG(gti, fmt, args...)    pr_debug("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
 					__func__, ##args)
-#define GOOG_LOG(fmt, args...)    pr_info("[%s] " fmt, GOOG_LOG_NAME, ##args)
-#define GOOG_INFO(fmt, args...)    pr_info("[%s] %s: " fmt, GOOG_LOG_NAME,\
+#define GOOG_LOG(gti, fmt, args...)    pr_info("[%s] " fmt, GOOG_LOG_NAME(gti), ##args)
+#define GOOG_INFO(gti, fmt, args...)	pr_info("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
 					__func__, ##args)
-#define GOOG_WARN(fmt, args...)    pr_warn("[%s] %s: " fmt, GOOG_LOG_NAME,\
+#define GOOG_WARN(gti, fmt, args...)    pr_warn("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
 					__func__, ##args)
-#define GOOG_ERR(fmt, args...)    pr_err("[%s] %s: " fmt, GOOG_LOG_NAME,\
+#define GOOG_ERR(gti, fmt, args...)    pr_err("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
 					__func__, ##args)
 #define MAX_SLOTS 10
 
@@ -48,6 +49,7 @@ enum gti_cmd_type : u32 {
 	GTI_CMD_GET_OPS_START = 0x200,
 	GTI_CMD_GET_CONTEXT_DRIVER,
 	GTI_CMD_GET_CONTEXT_STYLUS,
+	GTI_CMD_GET_COORD_FILTER_ENABLED,
 	GTI_CMD_GET_FW_VERSION,
 	GTI_CMD_GET_GRIP_MODE,
 	GTI_CMD_GET_IRQ_MODE,
@@ -66,6 +68,7 @@ enum gti_cmd_type : u32 {
 	/* GTI_CMD_SET operations. */
 	GTI_CMD_SET_OPS_START = 0x400,
 	GTI_CMD_SET_CONTINUOUS_REPORT,
+	GTI_CMD_SET_COORD_FILTER_ENABLED,
 	GTI_CMD_SET_GRIP_MODE,
 	GTI_CMD_SET_HEATMAP_ENABLED,
 	GTI_CMD_SET_IRQ_MODE,
@@ -80,6 +83,11 @@ enum gti_continuous_report_setting : u32 {
 	GTI_CONTINUOUS_REPORT_DISABLE = 0,
 	GTI_CONTINUOUS_REPORT_ENABLE,
 	GTI_CONTINUOUS_REPORT_DRIVER_DEFAULT,
+};
+
+enum gti_coord_filter_setting : u32 {
+	GTI_COORD_FILTER_DISABLE = 0,
+	GTI_COORD_FILTER_ENABLE,
 };
 
 enum gti_display_state_setting : u32 {
@@ -143,8 +151,8 @@ enum gti_ping_mode : u32 {
 };
 
 enum gti_pm_state : u32 {
-	GTI_PM_RESUME = 0,
-	GTI_PM_SUSPEND,
+	GTI_PM_SUSPEND = 0,
+	GTI_PM_RESUME,
 };
 
 #define GTI_PM_WAKELOCK_TYPE_LOCK_MASK 0xFFFF
@@ -159,6 +167,17 @@ enum gti_pm_wakelock_type : u32 {
 	GTI_PM_WAKELOCK_TYPE_FORCE_ACTIVE = (1 << 4),
 	GTI_PM_WAKELOCK_TYPE_BUGREPORT = (1 << 5),
 	GTI_PM_WAKELOCK_TYPE_OFFLOAD_REPORT = (1 << 6),
+	GTI_PM_WAKELOCK_TYPE_SENSOR_DATA = (1 << 7),
+};
+
+enum gti_proc_type : u32 {
+	GTI_PROC_MS_BASE,
+	GTI_PROC_MS_DIFF,
+	GTI_PROC_MS_RAW,
+	GTI_PROC_SS_BASE,
+	GTI_PROC_SS_DIFF,
+	GTI_PROC_SS_RAW,
+	GTI_PROC_NUM,
 };
 
 enum gti_reset_mode : u32 {
@@ -221,17 +240,14 @@ enum gti_sensor_data_type : u32 {
 			TOUCH_SCAN_TYPE_SELF | TOUCH_DATA_TYPE_BASELINE,
 };
 
-enum gti_vendor_dev_pm_state : u32 {
-	GTI_VENDOR_DEV_RESUME = 0,
-	GTI_VENDOR_DEV_SUSPEND,
-};
-
 enum gti_fw_status : u32 {
 	GTI_FW_STATUS_RESET = 0,
 	GTI_FW_STATUS_PALM_ENTER,
 	GTI_FW_STATUS_PALM_EXIT,
 	GTI_FW_STATUS_GRIP_ENTER,
 	GTI_FW_STATUS_GRIP_EXIT,
+	GTI_FW_STATUS_WATER_ENTER,
+	GTI_FW_STATUS_WATER_EXIT,
 	GTI_FW_STATUS_NOISE_MODE,
 };
 
@@ -246,8 +262,9 @@ enum gti_noise_mode_level : u8 {
  * Structures.
  */
 
-struct gti_context_driver_cmd {
-	struct {
+struct gti_context_changed {
+	union {
+		struct {
 		u32 screen_state : 1;
 		u32 display_refresh_rate : 1;
 		u32 touch_report_rate : 1;
@@ -256,7 +273,13 @@ struct gti_context_driver_cmd {
 		u32 charger_state : 1;
 		u32 hinge_angle : 1;
 		u32 offload_timestamp : 1;
-	} contents;
+		};
+		u32 value;
+	};
+};
+
+struct gti_context_driver_cmd {
+	struct gti_context_changed context_changed;
 
 	u8 screen_state;
 	u8 display_refresh_rate;
@@ -303,6 +326,10 @@ struct gti_debug_input {
 	int slot;
 	struct gti_debug_coord pressed;
 	struct gti_debug_coord released;
+};
+
+struct gti_coord_filter_cmd {
+	enum gti_coord_filter_setting setting;
 };
 
 struct gti_display_state_cmd {
@@ -373,6 +400,7 @@ struct gti_sensor_data_cmd {
  * @context_driver_cmd: command to update touch offload driver context.
  * @context_stylus_cmd: command to update touch offload stylus context.
  * @continuous_report_cmd: command to set continuous reporting.
+ * @coord_filter_cmd: command to set/get coordinate filter enabled.
  * @display_state_cmd: command to notify display state.
  * @display_vrefresh_cmd: command to notify display vertical refresh rate.
  * @fw_version_cmd: command to get fw version.
@@ -394,6 +422,7 @@ struct gti_union_cmd_data {
 	struct gti_context_driver_cmd context_driver_cmd;
 	struct gti_context_stylus_cmd context_stylus_cmd;
 	struct gti_continuous_report_cmd continuous_report_cmd;
+	struct gti_coord_filter_cmd coord_filter_cmd;
 	struct gti_display_state_cmd display_state_cmd;
 	struct gti_display_vrefresh_cmd display_vrefresh_cmd;
 	struct gti_fw_version_cmd fw_version_cmd;
@@ -418,12 +447,14 @@ struct gti_union_cmd_data {
  */
 struct gti_fw_status_data {
 	enum gti_noise_mode_level noise_level;
+	u8 water_mode;
 };
 
 /**
  * struct gti_optional_configuration - optional configuration by vendor driver.
  * @get_context_driver: vendor driver operation to update touch offload driver context.
  * @get_context_stylus: vendor driver operation to update touch offload stylus context.
+ * @get_coord_filter_enabled: vendor driver operation to get the coordinate filter enabled.
  * @get_fw_version: vendor driver operation to get fw version info.
  * @get_grip_mode: vendor driver operation to get the grip mode setting.
  * @get_irq_mode: vendor driver operation to get irq mode setting.
@@ -439,6 +470,7 @@ struct gti_fw_status_data {
  * @reset: vendor driver operation to exec reset.
  * @selftest: vendor driver operation to exec self-test.
  * @set_continuous_report: vendor driver operation to apply the continuous reporting setting.
+ * @set_coord_filter_enabled: vendor driver operation to apply the coordinate filter enabled.
  * @set_grip_mode: vendor driver operation to apply the grip setting.
  * @set_heatmap_enabled: vendor driver operation to apply the heatmap setting.
  * @set_irq_mode: vendor driver operation to apply the irq setting.
@@ -451,6 +483,7 @@ struct gti_fw_status_data {
 struct gti_optional_configuration {
 	int (*get_context_driver)(void *private_data, struct gti_context_driver_cmd *cmd);
 	int (*get_context_stylus)(void *private_data, struct gti_context_stylus_cmd *cmd);
+	int (*get_coord_filter_enabled)(void *private_data, struct gti_coord_filter_cmd *cmd);
 	int (*get_fw_version)(void *private_data, struct gti_fw_version_cmd *cmd);
 	int (*get_grip_mode)(void *private_data, struct gti_grip_cmd *cmd);
 	int (*get_irq_mode)(void *private_data, struct gti_irq_cmd *cmd);
@@ -467,6 +500,7 @@ struct gti_optional_configuration {
 	int (*reset)(void *private_data, struct gti_reset_cmd *cmd);
 	int (*selftest)(void *private_data, struct gti_selftest_cmd *cmd);
 	int (*set_continuous_report)(void *private_data, struct gti_continuous_report_cmd *cmd);
+	int (*set_coord_filter_enabled)(void *private_data, struct gti_coord_filter_cmd *cmd);
 	int (*set_grip_mode)(void *private_data, struct gti_grip_cmd *cmd);
 	int (*set_heatmap_enabled)(void *private_data, struct gti_heatmap_cmd *cmd);
 	int (*set_irq_mode)(void *private_data, struct gti_irq_cmd *cmd);
@@ -521,6 +555,8 @@ struct gti_pm {
  * @panel_bridge: struct that used to register panel bridge notification.
  * @connector: struct that used to get panel status.
  * @cmd: struct that used by vendor default handler.
+ * @proc_dir: struct that used for procfs.
+ * @proc_heatmap: struct that used for heatmap procfs.
  * @input_timestamp: input timestamp from touch vendor driver.
  * @mf_downtime: timestamp for motion filter control.
  * @display_vrefresh: display vrefresh in Hz.
@@ -539,18 +575,23 @@ struct gti_pm {
  * @tbn_register_mask: the tbn_mask that used to request/release touch bus.
  * @pm: struct that used by gti pm.
  * @pm_qos_req: struct that used by pm qos.
+ * @fw_status: firmware status such as water_mode, noise_level, etc.
+ * @context_changed: flags that indicate driver status changing.
  * @panel_is_lp_mode: display is in low power mode.
- * @offload_enable: touch offload is enabled or not.
- * @v4l2_enable: v4l2 is enabled or not.
- * @tbn_enable: tbn is enabled or not.
+ * @offload_enabled: touch offload is enabled or not.
+ * @v4l2_enabled: v4l2 is enabled or not.
+ * @tbn_enabled: tbn is enabled or not.
+ * @coord_filter_enabled: coordinate filter is enabled or not.
  * @input_timestamp_changed: input timestamp changed from touch vendor driver.
  * @ignore_grip_update: Ignore fw_grip status updates made on offload state change.
  * @default_grip_enabled: the grip default setting.
  * @ignore_palm_update: Ignore fw_palm status updates made on offload state change.
  * @default_palm_enabled: the palm default setting.
- * @wakeup_before_force_active_enabled: waking up the screen to force active.
+ * @ignore_coord_filter_update: Ignore fw_coordinate_filter status updates.
+ * @fw_coord_filter_enabled: the current setting of coordinate filter.
+ * @default_coord_filter_enabled: the default setting of coordinate filter.
  * @lptw_triggered: LPTW is triggered or not.
- * @wakeup_before_force_active_delay: the ms delay after waking up screen to force active.
+ * @ignore_force_active: Ignore the force_active sysfs request.
  * @offload_id: id that used by touch offload.
  * @heatmap_buf: heatmap buffer that used by v4l2.
  * @heatmap_buf_size: heatmap buffer size that used by v4l2.
@@ -559,6 +600,9 @@ struct gti_pm {
  * @slot_bit_changed: bitmap of slot state changed for this input process cycle.
  * @slot_bit_active: bitmap of active slot during GTI lifecycle.
  * @dev_id: dev_t used for google interface driver.
+ * @panel_id: id of the display panel.
+ * @charger_state: indicates a USB charger is connected.
+ * @charger_notifier: notifier for power_supply updates.
  * @irq_index: irq count that handle by GTI.
  * @input_index: the count of slot bit changed during goog_input_process().
  * @vendor_irq_handler: irq handler that register by vendor driver.
@@ -586,6 +630,8 @@ struct goog_touch_interface {
 	struct drm_bridge panel_bridge;
 	struct drm_connector *connector;
 	struct gti_union_cmd_data cmd;
+	struct proc_dir_entry *proc_dir;
+	struct proc_dir_entry *proc_heatmap[GTI_PROC_NUM];
 	ktime_t input_timestamp;
 	ktime_t mf_downtime;
 
@@ -608,18 +654,24 @@ struct goog_touch_interface {
 	struct gti_pm pm;
 	struct pm_qos_request pm_qos_req;
 
+	struct gti_fw_status_data fw_status;
+	struct gti_context_changed context_changed;
+
 	bool panel_is_lp_mode;
 	bool offload_enabled;
 	bool v4l2_enabled;
 	bool tbn_enabled;
+	bool coord_filter_enabled;
 	bool input_timestamp_changed;
 	bool ignore_grip_update;
 	bool default_grip_enabled;
 	bool ignore_palm_update;
 	bool default_palm_enabled;
-	bool wakeup_before_force_active_enabled;
+	bool ignore_coord_filter_update;
+	bool fw_coord_filter_enabled;
+	bool default_coord_filter_enabled;
 	bool lptw_triggered;
-	unsigned int wakeup_before_force_active_delay;
+	bool ignore_force_active;
 	union {
 		u8 offload_id_byte[4];
 		u32 offload_id;
@@ -631,6 +683,10 @@ struct goog_touch_interface {
 	unsigned long slot_bit_changed;
 	unsigned long slot_bit_active;
 	dev_t dev_id;
+	int panel_id;
+
+	u8 charger_state;
+	struct notifier_block charger_notifier;
 
 	u64 irq_index;
 	u64 input_index;
@@ -682,7 +738,7 @@ inline int goog_request_threaded_irq(struct goog_touch_interface *gti,
 		unsigned long irqflags, const char *devname, void *dev_id);
 
 int goog_process_vendor_cmd(struct goog_touch_interface *gti, enum gti_cmd_type cmd_type);
-int goog_input_process(struct goog_touch_interface *gti, bool report_from_irq);
+int goog_input_process(struct goog_touch_interface *gti, bool reset_data);
 struct goog_touch_interface *goog_touch_interface_probe(
 		void *private_data,
 		struct device *dev,
@@ -713,6 +769,11 @@ void gti_debug_hc_dump(struct goog_touch_interface *gti);
 void gti_debug_input_dump(struct goog_touch_interface *gti);
 
 int goog_get_lptw_triggered(struct goog_touch_interface *gti);
+
+int goog_get_panel_id(struct device_node *node);
+int goog_get_firmware_name(struct device_node *node, int id, char *name, size_t size);
+int goog_get_config_name(struct device_node *node, int id, char *name, size_t size);
+int goog_get_test_limits_name(struct device_node *node, int id, char *name, size_t size);
 
 #endif // _GOOG_TOUCH_INTERFACE_
 

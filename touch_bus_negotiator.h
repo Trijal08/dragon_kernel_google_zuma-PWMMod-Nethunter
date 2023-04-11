@@ -19,6 +19,7 @@ enum tbn_mode {
 	TBN_MODE_DISABLED = 0,
 	TBN_MODE_GPIO,
 	TBN_MODE_AOC_CHANNEL,
+	TBN_MODE_MOCK,
 };
 
 enum tbn_bus_owner {
