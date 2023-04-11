@@ -635,16 +635,11 @@ static int bigo_worker_thread(void *data)
 		}
 
 		rc = bigo_run_job(core, job);
-		if (rc) {
-			pr_err("Error running job\n");
-			goto done;
-		}
 
 		if (inst->is_secure) {
-			rc = exynos_smc(SMC_PROTECTION_SET, 0, BIGO_SMC_ID,
-					SMC_PROTECTION_DISABLE);
-			if (rc)
-				pr_err("failed to disable SMC_PROTECTION_SET: %d\n", rc);
+			if (exynos_smc(SMC_PROTECTION_SET, 0, BIGO_SMC_ID,
+					SMC_PROTECTION_DISABLE))
+				pr_err("failed to disable SMC_PROTECTION_SET\n");
 		}
 
 	done:
