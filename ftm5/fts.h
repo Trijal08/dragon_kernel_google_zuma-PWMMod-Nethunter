@@ -262,8 +262,6 @@ struct fts_hw_platform_data {
 	const char *device_name;
 	int x_axis_max;
 	int y_axis_max;
-	int udfps_x;
-	int udfps_y;
 	bool auto_fw_update;
 	bool separate_save_golden_ms_raw_cmd;
 	bool skip_fpi_for_unset_mpflag;
@@ -760,6 +758,8 @@ struct fts_ts_info {
 	int cover_enabled;	/* Cover mode */
 	int grip_enabled;	/* Grip mode */
 	int palm_enabled;	/* Palm mode */
+
+	bool coord_filter_disabled;
 
 #if IS_ENABLED(CONFIG_GOOG_TOUCH_INTERFACE)
 	struct goog_touch_interface *gti;
