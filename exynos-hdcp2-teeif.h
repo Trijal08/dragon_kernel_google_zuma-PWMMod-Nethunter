@@ -38,7 +38,9 @@ enum {
 	HDCP_TEEI_SET_RCV_ID_LIST,
 	HDCP_TEEI_GEN_STREAM_MANAGE,
 	HDCP_TEEI_VERIFY_M_PRIME,
-	HDCP_TEEI_WRAP_KEY,
+	HDCP_TEEI_KSV_EXCHANGE,
+	HDCP_TEEI_VERIFY_R_PRIME,
+	HDCP_TEEI_VERIFY_V_PRIME,
 	HDCP_TEEI_MSG_END
 };
 
@@ -48,6 +50,12 @@ enum {
 #define HDCP_WSM_SIZE	(1024)
 #define AKE_INFO_SIZE	(128)
 
+#define HDCP_BINFO_DEVS_COUNT_MAX       (0x7F)
+#define HDCP_BINFO_SIZE                 (2)
+#define HDCP_SHA1_SIZE                  (20)
+#define HDCP_KSV_SIZE                   (5)
+#define HDCP_KSV_MAX_LEN                (HDCP_KSV_SIZE * HDCP_BINFO_DEVS_COUNT_MAX)
+#define HDCP_SHA1_MAX_INPUT_LEN         (HDCP_BINFO_SIZE + HDCP_KSV_MAX_LEN + HDCP_M0_SIZE)
 #define HDCP_RX_MODULUS_LEN		(1024 / 8)
 #define HDCP_RX_PUB_EXP_LEN		(24 / 8)
 #define HDCP_AKE_ENCKEY_BYTE_LEN	(1024 / 8)
@@ -216,11 +224,23 @@ typedef struct {
 
 typedef struct {
 	uint32_t id;
-	uint8_t key[HDCP_WRAP_KEY];
-	uint8_t enc_key[HDCP_WRAP_MAX_SIZE];
-	uint32_t wrapped;
-	uint32_t key_len;
-} hci_wrap_key_t;
+	uint64_t bksv;
+	uint64_t an;
+	uint64_t aksv;
+} hci_ksvexchange_t;
+
+typedef struct {
+	uint32_t id;
+	uint16_t r_prime;
+} hci_verifyrprime_t;
+
+typedef struct {
+	uint32_t id;
+	uint32_t ksv_len;
+	uint16_t binfo;
+	uint8_t ksv[HDCP_KSV_MAX_LEN];
+	uint8_t v_prime[HDCP_SHA1_SIZE];
+} hci_verifyvprime_t;
 
 /* todo: define WSM message format for AKE */
 struct hci_message {
@@ -241,7 +261,9 @@ struct hci_message {
 		hci_setrcvlist_t setrcvlist;
 		hci_genstreaminfo_t genstrminfo;
 		hci_verifymprime_t verifymprime;
-		hci_wrap_key_t wrap_key;
+		hci_ksvexchange_t ksvexchange;
+		hci_verifyrprime_t verifyrprime;
+		hci_verifyvprime_t verifyvprime;
 		uint8_t data[HDCP_WSM_SIZE];
 	};
 };
@@ -255,11 +277,9 @@ enum hdcp_auth_cmd {
 	HDCP_CMD_AUTH_RESP = (1U << 31),
 	HDCP_CMD_REINIT = 0,
 	HDCP_CMD_PROTOCOL,
-	HDCP_CMD_NOTIFY_INTR_NUM,
-	HDCP_CMD_AUTH_START,
-	HDCP_CMD_AUTH_DONE,
-	HDCP_CMD_AUTH_CANCEL,
-	HDCP_CMD_PROTECTION_CHECK,
+	HDCP_CMD_ENCRYPTION_SET,
+	HDCP_CMD_ENCRYPTION_GET,
+	HDCP_CMD_AUTH_MANUAL_START,
 	HDCP_CMD_SESSION_SET,
 	HDCP_CMD_SET_TEST_MODE,
 	HDCP_CMD_CONNECT_INFO,
@@ -268,8 +288,10 @@ enum hdcp_auth_cmd {
 void hdcp_tee_init(void);
 int hdcp_tee_open(void);
 int hdcp_tee_close(void);
+int hdcp_tee_enable_enc_22(void);
+int hdcp_tee_enable_enc_13(void);
+int hdcp_tee_disable_enc(void);
 int hdcp_tee_send_cmd(uint32_t cmd);
-int hdcp_tee_notify_intr_num(irq_hw_number_t hwirq);
 int hdcp_tee_check_protection(int* version);
 int hdcp_tee_set_test_mode(bool enable);
 int hdcp_tee_connect_info(int connect_info);
@@ -311,4 +333,10 @@ int teei_gen_stream_manage(uint16_t stream_num,
 		uint8_t *k,
 		uint8_t *streamid_type);
 int teei_verify_m_prime(uint8_t *m_prime, uint8_t *input, size_t input_len);
+
+int teei_verify_r_prime(uint16_t rprime);
+int teei_ksv_exchange(uint64_t bksv, uint64_t *aksv, uint64_t *an);
+int teei_verify_v_prime(uint16_t binfo, uint8_t *ksv, uint32_t ksv_len,
+	uint8_t *vprime);
+
 #endif

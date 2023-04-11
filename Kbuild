@@ -5,6 +5,7 @@
 
 ccflags-y       += -I$(srctree)/include/
 
+exynos-hdcp2-y += exynos-hdcp1-auth.o
 exynos-hdcp2-y += exynos-hdcp2-main.o
 exynos-hdcp2-y += exynos-hdcp2-teeif.o
 exynos-hdcp2-y += exynos-hdcp2-session.o

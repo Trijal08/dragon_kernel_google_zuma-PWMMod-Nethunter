@@ -226,9 +226,9 @@ static int dp_hdcp_protocol_self_test_internal(void) {
 	size_t i;
 	int rc, version;
 
-	hdcp_dplink_connect_state(DP_HDCP_READY);
+	hdcp_dplink_connect_state(DP_CONNECT);
 
-	rc = hdcp_tee_send_cmd(HDCP_CMD_AUTH_START);
+	rc = hdcp_tee_send_cmd(HDCP_CMD_AUTH_MANUAL_START);
 	if (rc) {
 		hdcp_err("starting authentication failed: %d", rc);
 		return rc;
@@ -271,7 +271,7 @@ int dp_hdcp_protocol_self_test(void) {
 		return rc;
 	}
 	rc = dp_hdcp_protocol_self_test_internal();
-	hdcp_tee_send_cmd(HDCP_CMD_AUTH_CANCEL);
+	hdcp_tee_disable_enc();
 	hdcp_tee_set_test_mode(false);
 
 	return rc;

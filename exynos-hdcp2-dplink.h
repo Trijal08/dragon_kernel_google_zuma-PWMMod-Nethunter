@@ -13,9 +13,9 @@
 #include "exynos-hdcp2.h"
 
 enum auth_signal {
-	HDCP_DRM_OFF	= 0x100,
-	HDCP_DRM_ON	= 0x200,
-	HDCP_RP_READY	= 0x300,
+	HDCP_OFF	= 0x100,
+	HDCP1_ON	= 0x200,
+	HDCP2_ON	= 0x300,
 };
 
 enum drm_state {

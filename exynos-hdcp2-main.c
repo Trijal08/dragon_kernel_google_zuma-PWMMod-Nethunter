@@ -103,16 +103,13 @@ static void exynos_hdcp_worker(struct work_struct *work)
 	}
 
 	hdcp_info("Exynos HDCP interrupt occur by LDFW.\n");
-	hdcp_dplink_auth_check(HDCP_DRM_ON);
+	hdcp_dplink_auth_control(HDCP2_ON);
 }
 
 static irqreturn_t exynos_hdcp_irq_handler(int irq, void *dev_id)
 {
 	if (h_ctx.enabled) {
-		if (dp_hdcp_state == DP_HDCP_READY)
-			schedule_delayed_work(&h_ctx.work, msecs_to_jiffies(0));
-		else
-			schedule_delayed_work(&h_ctx.work, msecs_to_jiffies(2500));
+		schedule_delayed_work(&h_ctx.work, msecs_to_jiffies(0));
 	}
 
 	return IRQ_HANDLED;
@@ -120,8 +117,6 @@ static irqreturn_t exynos_hdcp_irq_handler(int irq, void *dev_id)
 
 static int exynos_hdcp_probe(struct platform_device *pdev)
 {
-	struct irq_data *hdcp_irqd = NULL;
-	irq_hw_number_t hwirq = 0;
 	int err;
 
 	h_ctx.irq = irq_of_parse_and_map(pdev->dev.of_node, 0);
@@ -130,15 +125,7 @@ static int exynos_hdcp_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	/* Get irq_data for secure log */
-	hdcp_irqd = irq_get_irq_data(h_ctx.irq);
-	if (!hdcp_irqd) {
-		dev_err(&pdev->dev, "Fail to get irq_data\n");
-		return -EINVAL;
-	}
-
 	/* Get hardware interrupt number */
-	hwirq = irqd_to_hwirq(hdcp_irqd);
 	err = devm_request_irq(&pdev->dev, h_ctx.irq,
 			exynos_hdcp_irq_handler,
 			IRQF_TRIGGER_RISING, pdev->name, NULL);
@@ -158,8 +145,6 @@ static int exynos_hdcp_probe(struct platform_device *pdev)
 	/* Set workqueue for Secure log as bottom half */
 	INIT_DELAYED_WORK(&h_ctx.work, exynos_hdcp_worker);
 	h_ctx.enabled = true;
-
-	err = hdcp_tee_notify_intr_num(hwirq);
 
 	hdcp_info("Exynos HDCP driver probe done! (%d)\n", err);
 	return err;

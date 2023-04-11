@@ -26,6 +26,10 @@
 #define TZ_MSG_TIMEOUT 10000
 #define HDCP_TA_PORT "com.android.trusty.hdcp.auth"
 
+#define HDCP_V2_3 (5)
+#define HDCP_V1   (1)
+#define HDCP_NONE (0)
+
 struct hdcp_auth_req {
 	uint32_t cmd;
 	int32_t arg;
@@ -241,21 +245,25 @@ static int hdcp_tee_comm_xchg(uint32_t cmd, int32_t arg, int32_t *rsp,
 	return ret;
 }
 
-static irq_hw_number_t saved_hwirq = 0;
-
 int hdcp_tee_send_cmd(uint32_t cmd) {
-	if (HDCP_CMD_AUTH_START == cmd)
-		hdcp_tee_comm_xchg(HDCP_CMD_NOTIFY_INTR_NUM, saved_hwirq, NULL, NULL);
 	return hdcp_tee_comm_xchg(cmd, 0, NULL, NULL);
 }
 
-int hdcp_tee_check_protection(int* version) {
-	return hdcp_tee_comm_xchg(HDCP_CMD_PROTECTION_CHECK, 0, version, NULL);
+int hdcp_tee_enable_enc_22(void) {
+	return hdcp_tee_comm_xchg(HDCP_CMD_ENCRYPTION_SET, HDCP_V2_3, NULL,
+		NULL);
 }
 
-int hdcp_tee_notify_intr_num(irq_hw_number_t hwirq) {
-	saved_hwirq = hwirq;
-	return 0;
+int hdcp_tee_enable_enc_13(void) {
+	return hdcp_tee_comm_xchg(HDCP_CMD_ENCRYPTION_SET, HDCP_V1, NULL, NULL);
+}
+
+int hdcp_tee_disable_enc(void) {
+	return hdcp_tee_comm_xchg(HDCP_CMD_ENCRYPTION_SET, HDCP_NONE, NULL, NULL);
+}
+
+int hdcp_tee_check_protection(int* version) {
+	return hdcp_tee_comm_xchg(HDCP_CMD_ENCRYPTION_GET, 0, version, NULL);
 }
 
 int hdcp_tee_set_test_mode(bool enable) {
@@ -574,4 +582,44 @@ int teei_verify_m_prime(uint8_t *m_prime, uint8_t *input, size_t input_len)
 	ret = hdcp_tee_comm(hci);
 
 	return ret;
+}
+
+int teei_ksv_exchange(uint64_t bksv, uint64_t *aksv, uint64_t *an) {
+	int ret = 0;
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
+
+	hci->cmd_id = HDCP_TEEI_KSV_EXCHANGE;
+	hci->ksvexchange.bksv = bksv;
+
+	if ((ret = hdcp_tee_comm(hci)) < 0)
+		return ret;
+
+	*aksv = hci->ksvexchange.aksv;
+	*an = hci->ksvexchange.an;
+	return 0;
+}
+
+int teei_verify_r_prime(uint16_t rprime) {
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
+
+	hci->cmd_id = HDCP_TEEI_VERIFY_R_PRIME;
+	hci->verifyrprime.r_prime = rprime;
+
+	return hdcp_tee_comm(hci);
+}
+
+int teei_verify_v_prime(uint16_t binfo, uint8_t *ksv, uint32_t ksv_len,
+	uint8_t *vprime) {
+	struct hci_message msg;
+	struct hci_message *hci = &msg;
+
+	hci->cmd_id = HDCP_TEEI_VERIFY_V_PRIME;
+	hci->verifyvprime.ksv_len = ksv_len;
+	hci->verifyvprime.binfo = binfo;
+	memcpy(hci->verifyvprime.ksv, ksv, ksv_len);
+	memcpy(hci->verifyvprime.v_prime, vprime, HDCP_SHA1_SIZE);
+
+	return hdcp_tee_comm(hci);
 }

@@ -23,7 +23,16 @@ static int (*pdp_dpcd_read_for_hdcp22)(u32 address, u32 length, u8 *data);
 static int (*pdp_dpcd_write_for_hdcp22)(u32 address, u32 length, u8 *data);
 
 /* Address define for HDCP within DPCD address space */
-static uint32_t dpcd_addr[NUM_HDCP22_MSG_NAME] = {
+static uint32_t dpcd_addr[NUM_HDCP_MSG_NAME] = {
+	DPCD_ADDR_HDCP13_Bksv,
+	DPCD_ADDR_HDCP13_Ri_prime,
+	DPCD_ADDR_HDCP13_Aksv,
+	DPCD_ADDR_HDCP13_An,
+	DPCD_ADDR_HDCP13_Vprime,
+	DPCD_ADDR_HDCP13_Bcaps,
+	DPCD_ADDR_HDCP13_Bstatus,
+	DPCD_ADDR_HDCP13_Binfo,
+	DPCD_ADDR_HDCP13_Ksv_fifo,
 	DPCD_ADDR_HDCP22_Rtx,
 	DPCD_ADDR_HDCP22_TxCaps,
 	DPCD_ADDR_HDCP22_cert_rx,
@@ -76,58 +85,12 @@ int hdcp_dplink_get_stream_info(uint16_t *num, uint8_t *strm_id)
 
 int hdcp_dplink_recv(uint32_t msg_name, uint8_t *data, uint32_t size)
 {
-	int i;
-	int ret;
-	int remain;
-
-	if (size > DPCD_PACKET_SIZE) {
-		for (i = 0; i < (size / DPCD_PACKET_SIZE); i++) {
-			ret = pdp_dpcd_read_for_hdcp22(
-				dpcd_addr[msg_name] + i * DPCD_PACKET_SIZE,
-				DPCD_PACKET_SIZE,
-				&data[i * DPCD_PACKET_SIZE]);
-			if (ret) {
-				hdcp_err("dpcd read fail. ret(%d)\n", ret);
-				return ret;
-			}
-		}
-
-		remain = size % DPCD_PACKET_SIZE;
-		if (remain) {
-			ret = pdp_dpcd_read_for_hdcp22(
-				dpcd_addr[msg_name] + i * DPCD_PACKET_SIZE,
-				remain,
-				&data[i * DPCD_PACKET_SIZE]);
-			if (ret) {
-				hdcp_err("dpcd read fail. ret(%d)\n", ret);
-				return ret;
-			}
-		}
-		return 0;
-	} else
-		return pdp_dpcd_read_for_hdcp22(dpcd_addr[msg_name], size, data);
+	return pdp_dpcd_read_for_hdcp22(dpcd_addr[msg_name], size, data);
 }
 
 int hdcp_dplink_send(uint32_t msg_name, uint8_t *data, uint32_t size)
 {
-	int i;
-	int ret;
-
-	if (size > DPCD_PACKET_SIZE) {
-		for (i = 0; i < (size / DPCD_PACKET_SIZE); i++) {
-			ret = pdp_dpcd_write_for_hdcp22(
-				dpcd_addr[msg_name] + i * DPCD_PACKET_SIZE,
-				DPCD_PACKET_SIZE,
-				&data[i * DPCD_PACKET_SIZE]);
-			if (ret) {
-				hdcp_err("dpcd write fail. ret(%d)\n", ret);
-				return ret;
-			}
-		}
-		return 0;
-	}
-	else
-		return pdp_dpcd_write_for_hdcp22(dpcd_addr[msg_name], size, data);
+	return pdp_dpcd_write_for_hdcp22(dpcd_addr[msg_name], size, data);
 }
 
 void dp_register_func_for_hdcp22(void (*func0)(u32 en), int (*func1)(u32 address, u32 length, u8 *data), int (*func2)(u32 address, u32 length, u8 *data))

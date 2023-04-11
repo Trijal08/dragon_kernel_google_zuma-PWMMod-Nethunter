@@ -10,15 +10,15 @@
  * (at your option) any later version.
  */
 
-#ifndef __EXYNOS_HDCP2_LOG_H__
-#define __EXYNOS_HDCP2_LOG_H__
+#ifndef __EXYNOS_HDCP_LOG_H__
+#define __EXYNOS_HDCP_LOG_H__
 
-#undef HDCP_DEBUG
+#define HDCP_DEBUG
 
 #ifdef HDCP_DEBUG
 #define hdcp_debug(fmt, args...)				\
 	do {							\
-		printk(KERN_ERR "[HDCP2]%s:%d: " fmt,	\
+		printk(KERN_ERR "exynos-drm-hdcp: %s:%d: " fmt,	\
 				__func__, __LINE__, ##args);	\
 	} while (0)
 #else
@@ -27,13 +27,13 @@
 
 #define hdcp_err(fmt, args...)				\
 	do {						\
-		printk(KERN_ERR "[HDCP2]%s:%d: " fmt,	\
+		printk(KERN_ERR "exynos-drm-hdcp: %s:%d: " fmt,	\
 		       __func__, __LINE__, ##args);	\
 	} while (0)
 
 #define hdcp_info(fmt, args...)				\
 	do {						\
-		printk(KERN_INFO "[HDCP2]%s:%d: " fmt,	\
+		printk(KERN_INFO "exynos-drm-hdcp: %s:%d: " fmt,	\
 			__func__, __LINE__, ##args);	\
 	} while (0)
 #endif

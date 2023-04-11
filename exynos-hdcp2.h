@@ -257,13 +257,13 @@ enum hdcp_result hdcp_unwrap_key(char *wkey);
 enum dp_state {
 	DP_DISCONNECT,
 	DP_CONNECT,
-	DP_HDCP_READY,
 };
 
 enum auth_state {
 	HDCP_AUTH_PROCESS_IDLE  = 0x1,
 	HDCP_AUTH_PROCESS_STOP  = 0x2,
-	HDCP_AUTH_PROCESS_DONE  = 0x3
+	HDCP1_AUTH_PROCESS_DONE = 0x3,
+	HDCP2_AUTH_PROCESS_DONE = 0x4
 };
 
 #endif

@@ -26,6 +26,9 @@ int hdcp_dplink_set_integrity_fail(void);
 int hdcp_dplink_cancel_auth(void);
 int hdcp_dplink_stream_manage(void);
 int hdcp_dplink_auth_check(enum auth_signal);
+int hdcp_dplink_auth_control(enum auth_signal);
 void hdcp_dplink_clear_all(void);
 void hdcp_dplink_connect_state(enum dp_state state);
+int hdcp_dplink_handle_hdcp13_irq(void);
+int hdcp_dplink_handle_hdcp22_irq(void);
 #endif

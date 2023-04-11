@@ -149,7 +149,7 @@ int do_dplink_auth(struct hdcp_link_info *lk_handle)
 			if (hdcp_enabled)
 				hdcp_dplink_config(DP_HDCP22_ENABLE);
 			/* Transmitter has completed the authentication protocol */
-			ret = hdcp_tee_send_cmd(HDCP_CMD_AUTH_DONE);
+			ret = hdcp_tee_enable_enc_22();
 			return HDCP_SUCCESS;
 		case LINK_ST_A6_WAIT_RECEIVER_ID_LIST:
 			rval = dplink_wait_for_receiver_id_list(lk_data);
@@ -198,7 +198,7 @@ int do_dplink_auth(struct hdcp_link_info *lk_handle)
 				UPDATE_LINK_STATE(lk_data, LINK_ST_H1_TX_LOW_VALUE_CONTENT);
 			} else {
 				UPDATE_LINK_STATE(lk_data, LINK_ST_A5_AUTHENTICATED);
-				auth_proc_state = HDCP_AUTH_PROCESS_DONE;
+				auth_proc_state = HDCP2_AUTH_PROCESS_DONE;
 			}
 			break;
 		default:
