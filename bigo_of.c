@@ -171,6 +171,16 @@ static int bigo_of_parse_bw_table(struct bigo_core *core)
 			kfree(bw);
 			goto err_entry;
 		}
+		/* *-bw-afbc entry is optional */
+		if (of_property_read_u32(np, "rd-bw-afbc", &bw->rd_bw_afbc) < 0)
+			bw->rd_bw_afbc = bw->rd_bw;
+
+		if (of_property_read_u32(np, "wr-bw-afbc", &bw->wr_bw_afbc) < 0)
+			bw->wr_bw_afbc = bw->wr_bw;
+
+		if (of_property_read_u32(np, "pk-bw-afbc", &bw->pk_bw_afbc) < 0)
+			bw->pk_bw_afbc = bw->pk_bw;
+
 		list_add_tail(&bw->list, &core->pm.bw);
 	}
 	return rc;

@@ -19,6 +19,7 @@
 #include <linux/soc/samsung/exynos-smc.h>
 #include <linux/kthread.h>
 #include <linux/arm-smccc.h>
+#include <uapi/linux/sched/types.h>
 
 #include "bigo_io.h"
 #include "bigo_iommu.h"
@@ -37,7 +38,7 @@
 #define DEFAULT_FPS 60
 #define BIGO_SMC_ID 0xd
 #define BIGO_MAX_INST_NUM 16
-#define BIGO_HBD_BIT BIT(17)
+#define BIGO_HBD_BIT BIT(21)
 
 #define BIGO_IDLE_TIMEOUT_MS 1000
 
@@ -45,6 +46,7 @@
 
 enum misc_command {
      BIGO_GET_PADDING_SIZE,
+     BIGO_CONFIG_AFBC,
 };
 
 static int bigo_worker_thread(void *data);
@@ -97,6 +99,8 @@ static inline int on_first_instance_open(struct bigo_core *core)
 		pr_err("failed to create worker thread rc = %d\n", rc);
 		goto exit;
 	}
+
+	sched_set_normal(core->worker_thread, -10);
 
 	rc = bigo_pt_client_enable(core);
 	if (rc) {
@@ -310,6 +314,13 @@ inline void bigo_config_priority(struct bigo_inst *inst, __s32 priority)
 	mutex_unlock(&inst->lock);
 }
 
+inline void bigo_config_afbc(struct bigo_inst *inst)
+{
+	mutex_lock(&inst->lock);
+	inst->afbc = true;
+	mutex_unlock(&inst->lock);
+}
+
 static int copy_regs_from_user(struct bigo_core *core,
 			struct bigo_ioc_regs *desc,
 			void __user *user_desc,
@@ -516,17 +527,20 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 
 				misc.ret = res.a0;
 				misc.data0 = res.a1;
-
-				if (copy_to_user(user_desc, &misc, sizeof(misc))) {
-					pr_err("Failed to copy to user\n");
-					rc = -EFAULT;
-				}
-
+				break;
+			}
+			case BIGO_CONFIG_AFBC: {
+				bigo_config_afbc(inst);
+				misc.ret = 0;
 				break;
 			}
 			default:
 				rc = -EINVAL;
 				break;
+		}
+		if (copy_to_user(user_desc, &misc, sizeof(misc))) {
+			pr_err("Failed to copy to user\n");
+			rc = -EFAULT;
 		}
 		break;
 	}
