@@ -206,8 +206,7 @@ int lwis_buffer_enroll(struct lwis_client *lwis_client, struct lwis_enrolled_buf
 		return PTR_ERR(buffer->dma_buf);
 	}
 
-	buffer->dma_buf_attachment =
-		dma_buf_attach(buffer->dma_buf, &lwis_client->lwis_dev->plat_dev->dev);
+	buffer->dma_buf_attachment = dma_buf_attach(buffer->dma_buf, lwis_client->lwis_dev->k_dev);
 	if (IS_ERR_OR_NULL(buffer->dma_buf_attachment)) {
 		dev_err(lwis_client->lwis_dev->dev,
 			"Could not attach dma buffer for fd: %d (errno: %ld)", buffer->info.fd,

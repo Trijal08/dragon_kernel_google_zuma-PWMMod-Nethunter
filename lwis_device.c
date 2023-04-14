@@ -656,8 +656,7 @@ int lwis_dev_process_power_sequence(struct lwis_device *lwis_dev,
 
 			if (set_active) {
 				struct gpio_descs *gpios = NULL;
-				gpios = lwis_gpio_list_get(&lwis_dev->plat_dev->dev,
-							   list->seq_info[i].name);
+				gpios = lwis_gpio_list_get(lwis_dev->k_dev, list->seq_info[i].name);
 				if (IS_ERR_OR_NULL(gpios)) {
 					gpios_info->gpios = NULL;
 					ret = PTR_ERR(gpios);
@@ -774,7 +773,7 @@ int lwis_dev_process_power_sequence(struct lwis_device *lwis_dev,
 			bool set_state = true;
 
 			if (set_active) {
-				lwis_dev->mclk_ctrl = devm_pinctrl_get(&lwis_dev->plat_dev->dev);
+				lwis_dev->mclk_ctrl = devm_pinctrl_get(lwis_dev->k_dev);
 				if (IS_ERR_OR_NULL(lwis_dev->mclk_ctrl)) {
 					dev_err(lwis_dev->dev, "Failed to get mclk\n");
 					ret = PTR_ERR(lwis_dev->mclk_ctrl);
@@ -892,7 +891,7 @@ static int lwis_dev_power_up_by_default(struct lwis_device *lwis_dev)
 	if (lwis_dev->enable_gpios_present) {
 		struct gpio_descs *gpios;
 
-		gpios = lwis_gpio_list_get(&lwis_dev->plat_dev->dev, "enable");
+		gpios = lwis_gpio_list_get(lwis_dev->k_dev, "enable");
 		if (IS_ERR_OR_NULL(gpios)) {
 			dev_err(lwis_dev->dev, "Failed to obtain enable gpio list (%ld)\n",
 				PTR_ERR(gpios));
@@ -921,7 +920,7 @@ static int lwis_dev_power_up_by_default(struct lwis_device *lwis_dev)
 	if (lwis_dev->shared_enable_gpios_present) {
 		struct gpio_descs *gpios;
 
-		gpios = lwis_gpio_list_get(&lwis_dev->plat_dev->dev, "shared-enable");
+		gpios = lwis_gpio_list_get(lwis_dev->k_dev, "shared-enable");
 		if (IS_ERR_OR_NULL(gpios)) {
 			if (PTR_ERR(gpios) == -EBUSY) {
 				dev_warn(lwis_dev->dev,
@@ -945,7 +944,7 @@ static int lwis_dev_power_up_by_default(struct lwis_device *lwis_dev)
 	if (lwis_dev->mclk_present) {
 		bool activate_mclk = true;
 
-		lwis_dev->mclk_ctrl = devm_pinctrl_get(&lwis_dev->plat_dev->dev);
+		lwis_dev->mclk_ctrl = devm_pinctrl_get(lwis_dev->k_dev);
 		if (IS_ERR_OR_NULL(lwis_dev->mclk_ctrl)) {
 			dev_err(lwis_dev->dev, "Failed to get mclk\n");
 			ret = PTR_ERR(lwis_dev->mclk_ctrl);
@@ -987,7 +986,7 @@ static int lwis_dev_power_up_by_default(struct lwis_device *lwis_dev)
 	if (lwis_dev->reset_gpios_present) {
 		struct gpio_descs *gpios;
 
-		gpios = lwis_gpio_list_get(&lwis_dev->plat_dev->dev, "reset");
+		gpios = lwis_gpio_list_get(lwis_dev->k_dev, "reset");
 		if (IS_ERR_OR_NULL(gpios)) {
 			dev_err(lwis_dev->dev, "Failed to obtain reset gpio list (%ld)\n",
 				PTR_ERR(gpios));
@@ -1169,7 +1168,7 @@ static int lwis_dev_power_down_by_default(struct lwis_device *lwis_dev)
 		}
 
 		/* Release ownership of the GPIO pins */
-		lwis_gpio_list_put(lwis_dev->reset_gpios, &lwis_dev->plat_dev->dev);
+		lwis_gpio_list_put(lwis_dev->reset_gpios, lwis_dev->k_dev);
 		lwis_dev->reset_gpios = NULL;
 	}
 
@@ -1182,7 +1181,7 @@ static int lwis_dev_power_down_by_default(struct lwis_device *lwis_dev)
 		}
 
 		/* Release "ownership" of the GPIO pins */
-		lwis_gpio_list_put(lwis_dev->shared_enable_gpios, &lwis_dev->plat_dev->dev);
+		lwis_gpio_list_put(lwis_dev->shared_enable_gpios, lwis_dev->k_dev);
 		lwis_dev->shared_enable_gpios = NULL;
 	}
 
@@ -1195,7 +1194,7 @@ static int lwis_dev_power_down_by_default(struct lwis_device *lwis_dev)
 		}
 
 		/* Release "ownership" of the GPIO pins */
-		lwis_gpio_list_put(lwis_dev->enable_gpios, &lwis_dev->plat_dev->dev);
+		lwis_gpio_list_put(lwis_dev->enable_gpios, lwis_dev->k_dev);
 		lwis_dev->enable_gpios = NULL;
 	}
 
@@ -1466,7 +1465,7 @@ void lwis_save_register_io_info(struct lwis_device *lwis_dev, struct lwis_io_ent
 /*
  *  lwis_base_probe: Create a device instance for each of the LWIS device.
  */
-int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_dev)
+int lwis_base_probe(struct lwis_device *lwis_dev)
 {
 	int ret = 0;
 
@@ -1477,7 +1476,7 @@ int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_d
 	if (ret >= 0) {
 		lwis_dev->id = ret;
 	} else {
-		dev_err(&plat_dev->dev, "Unable to allocate minor ID (%d)\n", ret);
+		dev_err(lwis_dev->k_dev, "Unable to allocate minor ID (%d)\n", ret);
 		return ret;
 	}
 
@@ -1513,7 +1512,6 @@ int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_d
 	list_add(&lwis_dev->dev_list, &core.lwis_dev_list);
 	mutex_unlock(&core.lock);
 
-	lwis_dev->plat_dev = plat_dev;
 	ret = lwis_base_setup(lwis_dev);
 	if (ret) {
 		pr_err("Error initializing LWIS device\n");
@@ -1528,8 +1526,6 @@ int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_d
 		ret = PTR_ERR(lwis_dev->dev);
 		goto error_init;
 	}
-
-	platform_set_drvdata(plat_dev, lwis_dev);
 
 	/* Call platform-specific probe function */
 	lwis_platform_probe(lwis_dev);
@@ -1604,8 +1600,7 @@ void lwis_base_unprobe(struct lwis_device *unprobe_lwis_dev)
 				lwis_dev->irq_gpios_info.irq_list = NULL;
 			}
 			if (lwis_dev->irq_gpios_info.gpios) {
-				lwis_gpio_list_put(lwis_dev->irq_gpios_info.gpios,
-						   &lwis_dev->plat_dev->dev);
+				lwis_gpio_list_put(lwis_dev->irq_gpios_info.gpios, lwis_dev->k_dev);
 				lwis_dev->irq_gpios_info.gpios = NULL;
 			}
 
@@ -1831,7 +1826,7 @@ static void __exit lwis_driver_exit(void)
 			if (lwis_release_client(client))
 				pr_info("Failed to release client.");
 		}
-		pm_runtime_disable(&lwis_dev->plat_dev->dev);
+		pm_runtime_disable(lwis_dev->k_dev);
 		/* Release device clock list */
 		if (lwis_dev->clocks) {
 			lwis_clock_list_free(lwis_dev->clocks);
@@ -1865,17 +1860,16 @@ static void __exit lwis_driver_exit(void)
 			lwis_interrupt_list_free(lwis_dev->irq_gpios_info.irq_list);
 		}
 		if (lwis_dev->irq_gpios_info.gpios) {
-			lwis_gpio_list_put(lwis_dev->irq_gpios_info.gpios,
-					   &lwis_dev->plat_dev->dev);
+			lwis_gpio_list_put(lwis_dev->irq_gpios_info.gpios, lwis_dev->k_dev);
 		}
 		if (lwis_dev->reset_gpios) {
-			lwis_gpio_list_put(lwis_dev->reset_gpios, &lwis_dev->plat_dev->dev);
+			lwis_gpio_list_put(lwis_dev->reset_gpios, lwis_dev->k_dev);
 		}
 		if (lwis_dev->enable_gpios) {
-			lwis_gpio_list_put(lwis_dev->enable_gpios, &lwis_dev->plat_dev->dev);
+			lwis_gpio_list_put(lwis_dev->enable_gpios, lwis_dev->k_dev);
 		}
 		if (lwis_dev->shared_enable_gpios) {
-			lwis_gpio_list_put(lwis_dev->shared_enable_gpios, &lwis_dev->plat_dev->dev);
+			lwis_gpio_list_put(lwis_dev->shared_enable_gpios, lwis_dev->k_dev);
 		}
 		/* Release event subscription components */
 		if (lwis_dev->type == DEVICE_TYPE_TOP) {

@@ -208,12 +208,15 @@ static int lwis_dpm_device_probe(struct platform_device *plat_dev)
 	dpm_dev->base_dev.type = DEVICE_TYPE_DPM;
 	dpm_dev->base_dev.vops = dpm_vops;
 	dpm_dev->base_dev.subscribe_ops = dpm_subscribe_ops;
+	dpm_dev->base_dev.plat_dev = plat_dev;
+	dpm_dev->base_dev.k_dev = &plat_dev->dev;
 
 	/* Call the base device probe function */
-	ret = lwis_base_probe((struct lwis_device *)dpm_dev, plat_dev);
+	ret = lwis_base_probe(&dpm_dev->base_dev);
 	if (ret) {
 		dev_err(dev, "Error in lwis base probe, ret: %d\n", ret);
 	}
+	platform_set_drvdata(plat_dev, &dpm_dev->base_dev);
 
 	return ret;
 }

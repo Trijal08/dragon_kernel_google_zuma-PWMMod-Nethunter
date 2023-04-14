@@ -40,7 +40,7 @@ int lwis_platform_probe(struct lwis_device *lwis_dev)
 	lwis_dev->platform = platform;
 
 	/* Enable runtime power management for the platform device */
-	pm_runtime_enable(&lwis_dev->plat_dev->dev);
+	pm_runtime_enable(lwis_dev->k_dev);
 
 	/* Only IOREG devices will access DMA resources */
 	if (lwis_dev->type != DEVICE_TYPE_IOREG) {
@@ -69,7 +69,7 @@ static int lwis_iommu_fault_handler(struct iommu_fault *fault, void *param)
 
 	pr_err("############ LWIS IOMMU PAGE FAULT ############\n");
 	pr_err("\n");
-	of_for_each_phandle (&it, ret, lwis_dev->plat_dev->dev.of_node, "iommus", 0, 0) {
+	of_for_each_phandle (&it, ret, lwis_dev->k_dev->of_node, "iommus", 0, 0) {
 		u64 iommus_reg;
 		const char *port_name = NULL;
 		struct device_node *iommus_info = of_node_get(it.node);
@@ -135,17 +135,16 @@ int lwis_platform_device_enable(struct lwis_device *lwis_dev)
 	}
 
 	/* Upref the runtime power management controls for the platform dev */
-	ret = pm_runtime_get_sync(&lwis_dev->plat_dev->dev);
+	ret = pm_runtime_get_sync(lwis_dev->k_dev);
 	if (ret < 0) {
 		pr_err("Unable to enable platform device\n");
 		return ret;
 	}
 
-	if (of_find_property(lwis_dev->plat_dev->dev.of_node, "iommus", &iommus_len) &&
-	    iommus_len) {
+	if (of_find_property(lwis_dev->k_dev->of_node, "iommus", &iommus_len) && iommus_len) {
 		/* Activate IOMMU for the platform device */
-		ret = iommu_register_device_fault_handler(&lwis_dev->plat_dev->dev,
-							  lwis_iommu_fault_handler, lwis_dev);
+		ret = iommu_register_device_fault_handler(lwis_dev->k_dev, lwis_iommu_fault_handler,
+							  lwis_dev);
 		if (ret < 0) {
 			pr_err("Failed to register fault handler for the device: %d\n", ret);
 			return ret;
@@ -215,14 +214,13 @@ int lwis_platform_device_disable(struct lwis_device *lwis_dev)
 
 	lwis_platform_remove_qos(lwis_dev);
 
-	if (of_find_property(lwis_dev->plat_dev->dev.of_node, "iommus", &iommus_len) &&
-	    iommus_len) {
+	if (of_find_property(lwis_dev->k_dev->of_node, "iommus", &iommus_len) && iommus_len) {
 		/* Deactivate IOMMU */
-		iommu_unregister_device_fault_handler(&lwis_dev->plat_dev->dev);
+		iommu_unregister_device_fault_handler(lwis_dev->k_dev);
 	}
 
 	/* Disable platform device */
-	return pm_runtime_put_sync(&lwis_dev->plat_dev->dev);
+	return pm_runtime_put_sync(lwis_dev->k_dev);
 }
 
 int lwis_platform_update_qos(struct lwis_device *lwis_dev, int value, int32_t clock_family)

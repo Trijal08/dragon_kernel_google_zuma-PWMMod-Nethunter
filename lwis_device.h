@@ -214,6 +214,7 @@ struct lwis_device {
 	int32_t type;
 	char name[LWIS_MAX_NAME_STRING_LEN];
 	struct device *dev;
+	struct device *k_dev;
 	struct platform_device *plat_dev;
 	bool reset_gpios_present;
 	struct gpio_descs *reset_gpios;
@@ -372,7 +373,7 @@ struct lwis_client {
  *  lwis_base_probe: Common probe function that will be used for all types
  *  of devices.
  */
-int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_dev);
+int lwis_base_probe(struct lwis_device *lwis_dev);
 
 /*
  *  lwis_base_unprobe: Cleanup a device instance

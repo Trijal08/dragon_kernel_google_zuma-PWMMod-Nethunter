@@ -246,24 +246,28 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 {
 	int ret = 0;
 	struct lwis_i2c_device *i2c_dev;
+	struct device *dev = &plat_dev->dev;
 
 	/* Allocate I2C device specific data construct */
 	i2c_dev = kzalloc(sizeof(struct lwis_i2c_device), GFP_KERNEL);
 	if (!i2c_dev) {
-		pr_err("Failed to allocate i2c device structure\n");
+		dev_err(dev, "Failed to allocate i2c device structure\n");
 		return -ENOMEM;
 	}
 
 	i2c_dev->base_dev.type = DEVICE_TYPE_I2C;
 	i2c_dev->base_dev.vops = i2c_vops;
 	i2c_dev->base_dev.subscribe_ops = i2c_subscribe_ops;
+	i2c_dev->base_dev.plat_dev = plat_dev;
+	i2c_dev->base_dev.k_dev = &plat_dev->dev;
 
 	/* Call the base device probe function */
-	ret = lwis_base_probe(&i2c_dev->base_dev, plat_dev);
+	ret = lwis_base_probe(&i2c_dev->base_dev);
 	if (ret) {
-		pr_err("Error in lwis base probe\n");
+		dev_err(dev, "Error in lwis base probe\n");
 		goto error_probe;
 	}
+	platform_set_drvdata(plat_dev, &i2c_dev->base_dev);
 
 	/* Call I2C device specific setup function */
 	ret = lwis_i2c_device_setup(i2c_dev);

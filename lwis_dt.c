@@ -41,7 +41,7 @@ static int parse_gpios(struct lwis_device *lwis_dev, char *name, bool *is_presen
 
 	*is_present = false;
 
-	dev = &lwis_dev->plat_dev->dev;
+	dev = lwis_dev->k_dev;
 
 	count = gpiod_count(dev, name);
 
@@ -86,7 +86,7 @@ static int parse_irq_gpios(struct lwis_device *lwis_dev)
 	lwis_dev->irq_gpios_info.is_shared = false;
 	lwis_dev->irq_gpios_info.is_pulse = false;
 
-	dev = &lwis_dev->plat_dev->dev;
+	dev = lwis_dev->k_dev;
 	count = gpiod_count(dev, "irq");
 	/* No irq GPIO pins found, just return */
 	if (count <= 0) {
@@ -214,7 +214,7 @@ static int parse_settle_time(struct lwis_device *lwis_dev)
 	struct device_node *dev_node;
 	struct device *dev;
 
-	dev = &lwis_dev->plat_dev->dev;
+	dev = lwis_dev->k_dev;
 	dev_node = dev->of_node;
 	lwis_dev->enable_gpios_settle_time = 0;
 
@@ -235,7 +235,7 @@ static int parse_regulators(struct lwis_device *lwis_dev)
 	int voltage;
 	int voltage_count;
 
-	dev = &lwis_dev->plat_dev->dev;
+	dev = lwis_dev->k_dev;
 	dev_node = dev->of_node;
 
 	count = of_property_count_elems_of_size(dev_node, "regulators", sizeof(u32));
@@ -301,7 +301,7 @@ static int parse_clocks(struct lwis_device *lwis_dev)
 	u32 rate;
 	int clock_family;
 
-	dev = &lwis_dev->plat_dev->dev;
+	dev = lwis_dev->k_dev;
 	dev_node = dev->of_node;
 
 	count = of_property_count_strings(dev_node, "clock-names");
@@ -381,7 +381,7 @@ static int parse_pinctrls(struct lwis_device *lwis_dev, char *expected_state)
 	struct pinctrl *pc;
 	struct pinctrl_state *pinctrl_state;
 
-	dev = &lwis_dev->plat_dev->dev;
+	dev = lwis_dev->k_dev;
 	dev_node = dev->of_node;
 
 	lwis_dev->mclk_present = false;
@@ -638,7 +638,7 @@ static int parse_interrupts(struct lwis_device *lwis_dev)
 	struct of_phandle_iterator it;
 
 	plat_dev = lwis_dev->plat_dev;
-	dev_node = plat_dev->dev.of_node;
+	dev_node = lwis_dev->k_dev->of_node;
 
 	/* Test device type DEVICE_TYPE_TEST used for test, platform independent. */
 	if (lwis_dev->type == DEVICE_TYPE_TEST) {
@@ -837,7 +837,7 @@ static int parse_phys(struct lwis_device *lwis_dev)
 	int count;
 	const char *name;
 
-	dev = &(lwis_dev->plat_dev->dev);
+	dev = lwis_dev->k_dev;
 	dev_node = dev->of_node;
 
 	count = of_count_phandle_with_args(dev_node, "phys", "#phy-cells");
@@ -888,7 +888,7 @@ static void parse_bitwidths(struct lwis_device *lwis_dev)
 	u32 addr_bitwidth = 32;
 	u32 value_bitwidth = 32;
 
-	dev = &(lwis_dev->plat_dev->dev);
+	dev = lwis_dev->k_dev;
 	dev_node = dev->of_node;
 
 	of_property_read_u32(dev_node, "reg-addr-bitwidth", &addr_bitwidth);
@@ -929,7 +929,7 @@ static int parse_power_seqs(struct lwis_device *lwis_dev, const char *seq_name,
 	scnprintf(str_seq_type, LWIS_MAX_NAME_STRING_LEN, "%s-seq-types", seq_name);
 	scnprintf(str_seq_delay, LWIS_MAX_NAME_STRING_LEN, "%s-seq-delays-us", seq_name);
 
-	dev = &lwis_dev->plat_dev->dev;
+	dev = lwis_dev->k_dev;
 	dev_node = dev->of_node;
 	*list = NULL;
 	if (dev_node_seq) {
@@ -1011,7 +1011,7 @@ static int parse_power_seqs(struct lwis_device *lwis_dev, const char *seq_name,
 
 			gpios_info = &lwis_dev->gpios_list->gpios_info[type_gpio_count];
 			seq_item_name = (*list)->seq_info[i].name;
-			dev = &lwis_dev->plat_dev->dev;
+			dev = lwis_dev->k_dev;
 			descs = lwis_gpio_list_get(dev, seq_item_name);
 			if (IS_ERR_OR_NULL(descs)) {
 				pr_err("Error parsing GPIO list %s (%ld)\n", seq_item_name,
@@ -1061,7 +1061,7 @@ static int parse_power_seqs(struct lwis_device *lwis_dev, const char *seq_name,
 				continue;
 			}
 
-			dev = &lwis_dev->plat_dev->dev;
+			dev = lwis_dev->k_dev;
 			seq_item_name = (*list)->seq_info[i].name;
 
 			ret = lwis_regulator_get(lwis_dev->regulators, seq_item_name,
@@ -1096,7 +1096,7 @@ static int parse_unified_power_seqs(struct lwis_device *lwis_dev)
 	int count;
 	int ret = 0;
 
-	dev = &lwis_dev->plat_dev->dev;
+	dev = lwis_dev->k_dev;
 	dev_node = dev->of_node;
 
 	count = of_property_count_elems_of_size(dev_node, "power-seq", sizeof(u32));
@@ -1135,7 +1135,7 @@ static int parse_pm_hibernation(struct lwis_device *lwis_dev)
 {
 	struct device_node *dev_node;
 
-	dev_node = lwis_dev->plat_dev->dev.of_node;
+	dev_node = lwis_dev->k_dev->of_node;
 	lwis_dev->pm_hibernation = 1;
 
 	of_property_read_u32(dev_node, "pm-hibernation", &lwis_dev->pm_hibernation);
@@ -1147,7 +1147,7 @@ static int parse_access_mode(struct lwis_device *lwis_dev)
 {
 	struct device_node *dev_node;
 
-	dev_node = lwis_dev->plat_dev->dev.of_node;
+	dev_node = lwis_dev->k_dev->of_node;
 
 	lwis_dev->is_read_only = of_property_read_bool(dev_node, "lwis,read-only");
 
@@ -1158,7 +1158,7 @@ static int parse_thread_priority(struct lwis_device *lwis_dev)
 {
 	struct device_node *dev_node;
 
-	dev_node = lwis_dev->plat_dev->dev.of_node;
+	dev_node = lwis_dev->k_dev->of_node;
 	lwis_dev->transaction_thread_priority = 0;
 
 	of_property_read_u32(dev_node, "transaction-thread-priority",
@@ -1199,7 +1199,7 @@ static int parse_i2c_lock_group_id(struct lwis_i2c_device *i2c_dev)
 	struct device_node *dev_node;
 	int ret;
 
-	dev_node = i2c_dev->base_dev.plat_dev->dev.of_node;
+	dev_node = i2c_dev->base_dev.k_dev->of_node;
 	/* Set i2c_lock_group_id value to default */
 	i2c_dev->i2c_lock_group_id = MAX_I2C_LOCK_NUM - 1;
 
@@ -1240,7 +1240,7 @@ int lwis_base_parse_dt(struct lwis_device *lwis_dev)
 	const char *name_str;
 	int ret = 0;
 
-	dev = &(lwis_dev->plat_dev->dev);
+	dev = lwis_dev->k_dev;
 	dev_node = dev->of_node;
 
 	if (!dev_node) {
@@ -1381,7 +1381,7 @@ int lwis_i2c_device_parse_dt(struct lwis_i2c_device *i2c_dev)
 	struct device_node *dev_node_i2c;
 	int ret;
 
-	dev_node = i2c_dev->base_dev.plat_dev->dev.of_node;
+	dev_node = i2c_dev->base_dev.k_dev->of_node;
 
 	dev_node_i2c = of_parse_phandle(dev_node, "i2c-bus", 0);
 	if (!dev_node_i2c) {
@@ -1425,7 +1425,7 @@ int lwis_ioreg_device_parse_dt(struct lwis_ioreg_device *ioreg_dev)
 	int reg_tuple_size;
 	const char *name;
 
-	dev_node = ioreg_dev->base_dev.plat_dev->dev.of_node;
+	dev_node = ioreg_dev->base_dev.k_dev->of_node;
 	reg_tuple_size = of_n_addr_cells(dev_node) + of_n_size_cells(dev_node);
 
 	blocks = of_property_count_elems_of_size(dev_node, "reg", reg_tuple_size * sizeof(u32));
