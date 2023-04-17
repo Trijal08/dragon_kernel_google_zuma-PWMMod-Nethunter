@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Platform device driver for HDCP selftest.
+ * Copyright (c) 2022 Samsung Electronics Co., Ltd.
  *
- * Copyright (C) 2023 Google LLC
+ * Samsung DisplayPort driver.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  */
+#include "selftest.h"
 
-#include "exynos-hdcp2-selftest.h"
-
+#include <drm/drm_dp_helper.h>
 #include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
 
 #include <linux/soc/samsung/exynos-smc.h>
 
-#include "exynos-hdcp2.h"
-#include "exynos-hdcp2-dplink.h"
-#include "exynos-hdcp2-dplink-if.h"
-#include "exynos-hdcp2-dplink-inter.h"
-#include "exynos-hdcp2-dplink-reg.h"
-#include "exynos-hdcp2-dplink-protocol-msg.h"
-#include "exynos-hdcp2-teeif.h"
-#include "exynos-hdcp2.h"
-#include "exynos-hdcp2-log.h"
+#include "exynos-hdcp-interface.h"
+#include "teeif.h"
+#include "hdcp-log.h"
 
 #define HDCP_NO_DIGITAL_OUTPUT (0xff)
 #define HDCP_V2_3 (5)
 
+static const uint8_t bcaps[] = { 0x0 };
+static const uint8_t rx_caps[] = { 0x02, 0x00, 0x03 };
 static const uint8_t cert_rx[] = {
 	0x74, 0x5b, 0xb8, 0xbd, 0x04, 0xaf, 0xb5, 0xc5, 0xc6, 0x7b, 0xc5, 0x3a,
 	0x34, 0x90, 0xa9, 0x54, 0xc0, 0x8f, 0xb7, 0xeb, 0xa1, 0x54, 0xd2, 0x4f,
@@ -93,27 +93,26 @@ static const uint8_t Mprime[] = {
 	0xdd, 0x26, 0xe9, 0x52, 0x6e, 0x0e, 0x1d, 0x69, 0xc8, 0x84, 0xe4, 0xcc,
 	0xc8, 0x09, 0xaa, 0xc7, 0x71, 0xe9, 0x97, 0xb5, 0x61, 0x89, 0x09, 0x6e,
 	0x4d, 0x94, 0x24, 0xc2, 0x1b, 0x64, 0x58, 0xc6 };
-static const uint8_t RxStatus[] = { DP_RXSTATUS_READY |
-				    DP_RXSTATUS_HPRIME_AVAILABLE |
-				    DP_RXSTATUS_PAIRING_AVAILABLE };
+static const uint8_t RxStatus[] = { 0x7 };
 
 static int pdp_dpcd_read_for_hdcp22_emu(u32 address, u32 length, u8 *data)
 {
 	int ret = 0;
 
-	const size_t banks[] = {
-		DPCD_ADDR_HDCP22_cert_rx, DPCD_ADDR_HDCP22_Hprime,
-		DPCD_ADDR_HDCP22_Ekh_km_r, DPCD_ADDR_HDCP22_Lprime,
-		DPCD_ADDR_HDCP22_RxInfo, DPCD_ADDR_HDCP22_seq_num_V,
-		DPCD_ADDR_HDCP22_Vprime, DPCD_ADDR_HDCP22_Rec_ID_list,
-		DPCD_ADDR_HDCP22_Mprime, DPCD_ADDR_HDCP22_RxStatus };
-	const size_t banks_size[] = {
-		sizeof(cert_rx), sizeof(Hprime), sizeof(Ekh_km_r),
-		sizeof(Lprime), sizeof(RxInfo), sizeof(seq_num_V),
-		sizeof(Vprime), sizeof(Rec_ID_list), sizeof(Mprime),
-		sizeof(RxStatus) };
+	const size_t banks[] = { DP_AUX_HDCP_BCAPS,
+		DP_HDCP_2_2_REG_RX_CAPS_OFFSET, DP_HDCP_2_2_REG_CERT_RX_OFFSET,
+		DP_HDCP_2_2_REG_HPRIME_OFFSET, DP_HDCP_2_2_REG_EKH_KM_RD_OFFSET,
+		DP_HDCP_2_2_REG_LPRIME_OFFSET, DP_HDCP_2_2_REG_RXINFO_OFFSET,
+		DP_HDCP_2_2_REG_SEQ_NUM_V_OFFSET, DP_HDCP_2_2_REG_VPRIME_OFFSET,
+		DP_HDCP_2_2_REG_RECV_ID_LIST_OFFSET, DP_HDCP_2_2_REG_MPRIME_OFFSET,
+		DP_HDCP_2_2_REG_RXSTATUS_OFFSET };
+	const size_t banks_size[] = { sizeof(bcaps),
+		sizeof(rx_caps), sizeof(cert_rx), sizeof(Hprime),
+		sizeof(Ekh_km_r), sizeof(Lprime), sizeof(RxInfo),
+		sizeof(seq_num_V), sizeof(Vprime), sizeof(Rec_ID_list),
+		sizeof(Mprime), sizeof(RxStatus) };
 	const uint8_t *bank_ptr[] = {
-		cert_rx, Hprime, Ekh_km_r, Lprime, RxInfo,
+		bcaps, rx_caps, cert_rx, Hprime, Ekh_km_r, Lprime, RxInfo,
 		seq_num_V, Vprime, Rec_ID_list, Mprime, RxStatus };
 	size_t bank_idx;
 	size_t bank_offset = 0;
@@ -129,7 +128,7 @@ static int pdp_dpcd_read_for_hdcp22_emu(u32 address, u32 length, u8 *data)
 		hdcp_err("read impossible for DPCD[%x] with length(%u) as it "
 			 "exceeds bank size (%zu) for bank(%zu)\n",
 			 address, length, banks_size[bank_idx], bank_idx);
-		return -1;
+		return -EIO;
 	}
 
 	memcpy(data, bank_ptr[bank_idx] + bank_offset, length);
@@ -157,10 +156,9 @@ static const uint8_t m[] = {
 	0x18, 0xfa, 0xe4, 0x20, 0x6a, 0xfb, 0x51, 0x49, 0x3b, 0xa0, 0xbe, 0xde,
 	0x0c, 0x46, 0xa9, 0x91 };
 static const uint8_t rn[] = { 0x32, 0x75, 0x3e, 0xa8, 0x78, 0xa6, 0x38, 0x1c };
-static const uint8_t Edkey0_ks[] = {
-	0x4c, 0x32, 0x47, 0x12, 0xc4, 0xbe, 0xc6, 0x69 };
-static const uint8_t Edkey1_ks[] = {
-	0x0a, 0xc2, 0x19, 0x64, 0xde, 0x91, 0xf1, 0x83 };
+static const uint8_t Edkey_ks[] = {
+	0x4c, 0x32, 0x47, 0x12, 0xc4, 0xbe, 0xc6, 0x69, 0x0a, 0xc2, 0x19, 0x64,
+	0xde, 0x91, 0xf1, 0x83 };
 static const uint8_t riv[] = { 0x40, 0x2b, 0x6b, 0x43, 0xc5, 0xe8, 0x86, 0xd8 };
 static const uint8_t V[] = { 0x63, 0x6d, 0xc5, 0x08, 0x4d, 0x6c, 0xb1, 0x0e,
 			     0x93, 0xa5, 0x28, 0x67, 0x0f, 0x34, 0x1f, 0x88 };
@@ -172,21 +170,20 @@ static int pdp_dpcd_write_for_hdcp22_emu(u32 address, u32 length, u8 *data)
 {
 	size_t i;
 	const size_t banks[] = {
-		DPCD_ADDR_HDCP22_Rtx, DPCD_ADDR_HDCP22_TxCaps,
-		DPCD_ADDR_HDCP22_Ekpub_km, DPCD_ADDR_HDCP22_Ekh_km_w,
-		DPCD_ADDR_HDCP22_m, DPCD_ADDR_HDCP22_rn,
-		DPCD_ADDR_HDCP22_Edkey0_ks, DPCD_ADDR_HDCP22_Edkey1_ks,
-		DPCD_ADDR_HDCP22_riv, DPCD_ADDR_HDCP22_V,
-		DPCD_ADDR_HDCP22_seq_num_M, DPCD_ADDR_HDCP22_k,
-		DPCD_ADDR_HDCP22_stream_IDtype, DPCD_ADDR_HDCP22_Type };
+		DP_HDCP_2_2_REG_RTX_OFFSET, DP_HDCP_2_2_REG_TXCAPS_OFFSET,
+		DP_HDCP_2_2_REG_EKPUB_KM_OFFSET, DP_HDCP_2_2_REG_EKH_KM_WR_OFFSET,
+		DP_HDCP_2_2_REG_M_OFFSET, DP_HDCP_2_2_REG_RN_OFFSET,
+		DP_HDCP_2_2_REG_EDKEY_KS_OFFSET, DP_HDCP_2_2_REG_RIV_OFFSET,
+		DP_HDCP_2_2_REG_V_OFFSET, DP_HDCP_2_2_REG_SEQ_NUM_M_OFFSET,
+		DP_HDCP_2_2_REG_K_OFFSET, DP_HDCP_2_2_REG_STREAM_ID_TYPE_OFFSET,
+		DP_HDCP_2_2_REG_STREAM_TYPE_OFFSET };
 	const size_t banks_size[] = {
 		sizeof(Rtx), sizeof(TxCaps), sizeof(Ekpub_km), sizeof(Ekh_km_w),
-		sizeof(m), sizeof(rn), sizeof(Edkey0_ks), sizeof(Edkey1_ks),
-		sizeof(riv), sizeof(V), sizeof(seq_num_M), sizeof(k),
-		sizeof(stream_IDtype), 0 };
+		sizeof(m), sizeof(rn), sizeof(Edkey_ks), sizeof(riv), sizeof(V),
+		sizeof(seq_num_M), sizeof(k), sizeof(stream_IDtype), 0 };
 	const uint8_t *bank_ptr[] = {
-		Rtx, TxCaps, Ekpub_km, Ekh_km_w, m, rn, Edkey0_ks,
-		Edkey1_ks, riv, V, seq_num_M, k, stream_IDtype, NULL };
+		Rtx, TxCaps, Ekpub_km, Ekh_km_w, m, rn, Edkey_ks, riv, V,
+		seq_num_M, k, stream_IDtype, NULL };
 	size_t bank_idx;
 	size_t bank_offset = 0;
 
@@ -201,7 +198,7 @@ static int pdp_dpcd_write_for_hdcp22_emu(u32 address, u32 length, u8 *data)
 		hdcp_err("write impossible for DPCD[%x] with length(%u) as it "
 			 "exceeds bank size (%zu) for bank(%zu)\n",
 			 address, length, banks_size[bank_idx], bank_idx);
-		return -1;
+		return -EIO;
 	}
 
 	if (memcmp(data, bank_ptr[bank_idx] + bank_offset, length) != 0) {
@@ -211,7 +208,7 @@ static int pdp_dpcd_write_for_hdcp22_emu(u32 address, u32 length, u8 *data)
 			hdcp_err("%02x %02x\n", *(data + i),
 				 *(bank_ptr[bank_idx] + bank_offset + i));
 		}
-		return -1;
+		return -EIO;
 	}
 
 	return 0;
@@ -228,12 +225,6 @@ static int dp_hdcp_protocol_self_test_internal(void) {
 
 	hdcp_dplink_connect_state(DP_CONNECT);
 
-	rc = hdcp_tee_send_cmd(HDCP_CMD_AUTH_MANUAL_START);
-	if (rc) {
-		hdcp_err("starting authentication failed: %d", rc);
-		return rc;
-	}
-
 	version = -1;
 	for (i = 0; i < 50; ++i) {
 		rc = hdcp_tee_check_protection(&version);
@@ -249,10 +240,10 @@ static int dp_hdcp_protocol_self_test_internal(void) {
 	}
 
 	hdcp_err("FAIL selftest: HDCP_VERSION(%d)\n", version);
-	return -1;
+	return -EIO;
 }
 
-int dp_hdcp_protocol_self_test(void) {
+int hdcp_protocol_self_test(void) {
 	int rc;
 
 	rc = exynos_smc(SMC_HDCP_NOTIFY_INTR_NUM, 1, 0, 0);
@@ -271,7 +262,7 @@ int dp_hdcp_protocol_self_test(void) {
 		return rc;
 	}
 	rc = dp_hdcp_protocol_self_test_internal();
-	hdcp_tee_disable_enc();
+	hdcp_dplink_connect_state(DP_DISCONNECT);
 	hdcp_tee_set_test_mode(false);
 
 	return rc;

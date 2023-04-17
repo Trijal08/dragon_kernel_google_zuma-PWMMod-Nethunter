@@ -5,8 +5,7 @@ load("//build/kernel/kleaf:kernel.bzl", "kernel_module")
 filegroup(
     name = "headers",
     srcs = [
-        "exynos-hdcp2-dplink-inter.h",
-        "exynos-hdcp2-dplink-if.h",
+        "exynos-hdcp-interface.h",
     ],
     visibility = [
         "//private/google-modules/display:__pkg__",

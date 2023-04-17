@@ -1,7 +1,8 @@
-/* drivers/soc/samsung/exynos-hdcp/exynos-hdcp2-teeif.h
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2022 Samsung Electronics Co., Ltd.
  *
- * Copyright (c) 2016 Samsung Electronics Co., Ltd.
- *		http://www.samsung.com
+ * Samsung DisplayPort driver.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -9,6 +10,8 @@
  */
 #ifndef __EXYNOS_HDCP2_TEEIF_H__
 #define __EXYNOS_HDCP2_TEEIF_H__
+
+#include <linux/types.h>
 
 /* SMC list for HDCP functions */
 #define SMC_HDCP_INIT			((unsigned int)0x82004010)
@@ -227,6 +230,7 @@ typedef struct {
 	uint64_t bksv;
 	uint64_t an;
 	uint64_t aksv;
+	uint32_t is_repeater;
 } hci_ksvexchange_t;
 
 typedef struct {
@@ -335,7 +339,8 @@ int teei_gen_stream_manage(uint16_t stream_num,
 int teei_verify_m_prime(uint8_t *m_prime, uint8_t *input, size_t input_len);
 
 int teei_verify_r_prime(uint16_t rprime);
-int teei_ksv_exchange(uint64_t bksv, uint64_t *aksv, uint64_t *an);
+int teei_ksv_exchange(uint64_t bksv, uint32_t is_repeater,
+	uint64_t *aksv, uint64_t *an);
 int teei_verify_v_prime(uint16_t binfo, uint8_t *ksv, uint32_t ksv_len,
 	uint8_t *vprime);
 

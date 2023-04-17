@@ -1,8 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * drivers/soc/samsung/exynos-hdcp/exynos-hdcp2-teeif.c
+ * Copyright (c) 2022 Samsung Electronics Co., Ltd.
  *
- * Copyright (c) 2016 Samsung Electronics Co., Ltd.
- *		http://www.samsung.com
+ * Samsung DisplayPort driver.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -17,9 +17,8 @@
 #include <asm/cacheflush.h>
 #include <linux/dma-mapping.h>
 
-#include "exynos-hdcp2-teeif.h"
-#include "exynos-hdcp2.h"
-#include "exynos-hdcp2-log.h"
+#include "teeif.h"
+#include "hdcp-log.h"
 
 #define TZ_CON_TIMEOUT  5000
 #define TZ_BUF_TIMEOUT 10000
@@ -115,7 +114,7 @@ int hdcp_tee_open(void)
 	struct tipc_chan *chan;
 
 	if (hdcp_ta_ctx.chan) {
-		hdcp_info("HCI is already connected\n");
+		hdcp_debug("HCI is already connected\n");
 		return 0;
 	}
 
@@ -527,11 +526,11 @@ int teei_set_rcvlist_info(uint8_t *rx_info,
 
 	ret = hdcp_tee_comm(hci);
 	if (ret != 0) {
-		*valid = 1;
+		*valid = 0;
 		return ret;
 	}
 	memcpy(v, hci->setrcvlist.v, HDCP_RP_HMAC_V_LEN / 2);
-	*valid = 0;
+	*valid = 1;
 
 	return 0;
 }
@@ -584,13 +583,15 @@ int teei_verify_m_prime(uint8_t *m_prime, uint8_t *input, size_t input_len)
 	return ret;
 }
 
-int teei_ksv_exchange(uint64_t bksv, uint64_t *aksv, uint64_t *an) {
+int teei_ksv_exchange(uint64_t bksv, uint32_t is_repeater, uint64_t *aksv,
+	uint64_t *an) {
 	int ret = 0;
 	struct hci_message msg;
 	struct hci_message *hci = &msg;
 
 	hci->cmd_id = HDCP_TEEI_KSV_EXCHANGE;
 	hci->ksvexchange.bksv = bksv;
+	hci->ksvexchange.is_repeater = is_repeater;
 
 	if ((ret = hdcp_tee_comm(hci)) < 0)
 		return ret;
