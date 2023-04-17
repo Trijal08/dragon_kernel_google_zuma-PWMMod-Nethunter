@@ -2413,7 +2413,7 @@ int gti_charger_state_change(struct notifier_block *nb, unsigned long action,
 int goog_offload_probe(struct goog_touch_interface *gti)
 {
 	int ret;
-	int err;
+	int err = 0;
 	u16 values[2];
 	struct device_node *np = gti->vendor_dev->of_node;
 	const char *offload_dev_name = NULL;
@@ -2430,8 +2430,8 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 			"%s_%s", DEVICE_NAME, offload_dev_name);
 	}
 
-	if (gti->panel_id >= 0) {
-		offload_ids_size = of_property_count_u8_elems(np, "goog,touch_offload_ids");
+	offload_ids_size = of_property_count_u8_elems(np, "goog,touch_offload_ids");
+	if (offload_ids_size > 0 && gti->panel_id >= 0) {
 		id_size = sizeof(gti->offload_id);
 
 		offload_ids_array = devm_kzalloc(gti->vendor_dev, offload_ids_size, GFP_KERNEL);
