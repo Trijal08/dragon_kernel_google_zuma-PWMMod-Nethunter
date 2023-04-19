@@ -3683,7 +3683,7 @@ static irqreturn_t gti_irq_handler(int irq, void *data)
 
 static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 {
-	irqreturn_t ret;
+	irqreturn_t ret = IRQ_NONE;
 	struct goog_touch_interface *gti = (struct goog_touch_interface *)data;
 
 	ATRACE_BEGIN(__func__);
@@ -3696,6 +3696,12 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 	 */
 	mutex_lock(&gti->input_process_lock);
 
+	if (gti->pm.state == GTI_PM_SUSPEND) {
+		GOOG_WARN(gti, "Skipping stray interrupt, power_status: %d, wake locks: 0x%08x\n",
+				gti->pm.state, goog_pm_wake_get_locks(gti));
+		goto exit;
+	}
+
 	if (gti->vendor_irq_thread_fn)
 		ret = gti->vendor_irq_thread_fn(irq, gti->vendor_irq_cookie);
 	else
@@ -3703,6 +3709,7 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 
 	goog_input_process(gti, false);
 
+exit:
 	mutex_unlock(&gti->input_process_lock);
 
 	gti_debug_hc_update(gti, false);
