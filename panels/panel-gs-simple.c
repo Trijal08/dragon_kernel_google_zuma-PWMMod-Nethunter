@@ -12,6 +12,7 @@
 
 #include <drm/drm_device.h>
 #include <drm/drm_mipi_dsi.h>
+#include <drm/drm_modes.h>
 #include <drm/drm_panel.h>
 
 #include "gs_panel/drm_panel_funcs_defaults.h"
@@ -64,7 +65,7 @@ const struct brightness_capability panel_gs_simple_brightness_capability = {
 	},
 };
 
-static const struct gs_panel_mode_array panel_gs_simple_normal_modes = {
+static struct gs_panel_mode_array panel_gs_simple_normal_modes = {
 	.num_modes = 1,
 	.modes = {
 		{
@@ -91,6 +92,35 @@ static const struct gs_panel_mode_array panel_gs_simple_normal_modes = {
 		},
 	},
 };
+
+static int update_panel_timings_from_device_tree(struct device_node *np)
+{
+	/*
+	 * TODO(b/197774385): instead store in driver priv data, override
+	 * get_mode and get_modes methods, rather than modifying const mode
+	 * objects.
+	 */
+	struct drm_display_mode *mode =
+		(struct drm_display_mode *)&panel_gs_simple_normal_modes.modes[0].mode;
+	int ret = 0;
+
+	ret = of_get_drm_panel_display_mode(np, mode, NULL);
+	if (ret) {
+		pr_warn("%p of_get_drm_panel_display_mode returned %d\n", np, ret);
+	}
+	return ret;
+};
+
+/* Probe */
+
+static int panel_gs_simple_probe(struct mipi_dsi_device *dsi)
+{
+	update_panel_timings_from_device_tree(dsi->dev.of_node);
+
+	return gs_dsi_panel_common_probe(dsi);
+}
+
+/* Module description (cont.) */
 
 const struct gs_panel_brightness_desc panel_gs_simple_brightness_desc = {
 	.max_luminance = 10000000,
@@ -128,7 +158,7 @@ static struct mipi_dsi_driver panel_gs_simple_dsi_driver = {
 		.name = "panel-gs-simple",
 		.of_match_table = dsi_of_match,
 	},
-	.probe = gs_dsi_panel_common_probe,
+	.probe = panel_gs_simple_probe,
 	.remove = gs_dsi_panel_common_remove,
 };
 
