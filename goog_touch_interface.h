@@ -168,6 +168,7 @@ enum gti_pm_wakelock_type : u32 {
 	GTI_PM_WAKELOCK_TYPE_BUGREPORT = (1 << 5),
 	GTI_PM_WAKELOCK_TYPE_OFFLOAD_REPORT = (1 << 6),
 	GTI_PM_WAKELOCK_TYPE_SENSOR_DATA = (1 << 7),
+	GTI_PM_WAKELOCK_TYPE_FW_SETTINGS = (1 << 8),
 };
 
 enum gti_proc_type : u32 {
