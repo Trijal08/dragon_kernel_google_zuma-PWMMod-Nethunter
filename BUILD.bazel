@@ -6,6 +6,7 @@ filegroup(
         "*.h",
     ]),
     visibility = [
+        "//private/devices/google:__subpackages__",
         "//private/google-modules/aoc:__subpackages__",
     ],
 )
@@ -17,6 +18,7 @@ filegroup(
         "*.h",
     ]),
     visibility = [
+        "//private/devices/google:__subpackages__",
         "//private/google-modules/aoc:__subpackages__",
     ],
 )
