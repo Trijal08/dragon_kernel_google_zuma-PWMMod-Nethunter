@@ -21,18 +21,4 @@ void hdcp_dplink_connect_state(enum dp_state state);
 void hdcp_dplink_handle_irq(void);
 void dp_register_func_for_hdcp22(void (*func0)(u32 en), int (*func1)(u32 address, u32 length, u8 *data), int (*func2)(u32 address, u32 length, u8 *data));
 
-/* DEPRECATED */
-enum auth_signal {
-	HDCP_OFF,
-	HDCP1_ON,
-	HDCP2_ON,
-};
-
-int hdcp_dplink_auth_check(enum auth_signal);
-int hdcp_dplink_get_rxstatus(uint8_t *status);
-int hdcp_dplink_set_paring_available(void);
-int hdcp_dplink_set_hprime_available(void);
-int hdcp_dplink_set_rp_ready(void);
-int hdcp_dplink_set_reauth(void);
-
 #endif

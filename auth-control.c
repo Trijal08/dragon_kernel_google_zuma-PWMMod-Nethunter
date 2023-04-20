@@ -122,17 +122,3 @@ void hdcp_auth_worker_init(void) {
 void hdcp_auth_worker_deinit(void) {
 	cancel_delayed_work_sync(&hdcp_work);
 }
-
-/* DEPRECATED */
-int hdcp_dplink_auth_check(enum auth_signal signal) { return -1; }
-EXPORT_SYMBOL_GPL(hdcp_dplink_auth_check);
-int hdcp_dplink_get_rxstatus(uint8_t *status) { return -1; }
-EXPORT_SYMBOL_GPL(hdcp_dplink_get_rxstatus);
-int hdcp_dplink_set_paring_available(void) { return -1; }
-EXPORT_SYMBOL_GPL(hdcp_dplink_set_paring_available);
-int hdcp_dplink_set_hprime_available(void) { return -1; }
-EXPORT_SYMBOL_GPL(hdcp_dplink_set_hprime_available);
-int hdcp_dplink_set_rp_ready(void) { return -1; }
-EXPORT_SYMBOL_GPL(hdcp_dplink_set_rp_ready);
-int hdcp_dplink_set_reauth(void) { return -1; }
-EXPORT_SYMBOL_GPL(hdcp_dplink_set_reauth);
