@@ -90,16 +90,16 @@ enum gs_panel_state {
 /**
  * enum gs_panel_idle_mode - type of idle mode supported per mode
  * TODO: reword, rethink, refactor (code style for enums relevant)
- * @kIDLE_MODE_UNSUPPORTED: No idle mode is supported in this mode
- * @kIDLE_MODE_ON_INACTIVITY: In this mode the panel can go into idle automatically
+ * @GIDLE_MODE_UNSUPPORTED: No idle mode is supported in this mode
+ * @GIDLE_MODE_ON_INACTIVITY: In this mode the panel can go into idle automatically
  *                           after last frame update
- * @kIDLE_MODE_ON_SELF_REFRESH: Manually go into lower idle mode when display enters
+ * @GIDLE_MODE_ON_SELF_REFRESH: Manually go into lower idle mode when display enters
  *                             self refresh state
  */
 enum gs_panel_idle_mode {
-	kIDLE_MODE_UNSUPPORTED,
-	kIDLE_MODE_ON_INACTIVITY,
-	kIDLE_MODE_ON_SELF_REFRESH,
+	GIDLE_MODE_UNSUPPORTED,
+	GIDLE_MODE_ON_INACTIVITY,
+	GIDLE_MODE_ON_SELF_REFRESH,
 };
 
 /**

@@ -10,6 +10,12 @@
 #ifndef _GS_DCS_HELPER_H_
 #define _GS_DCS_HELPER_H_
 
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0))
+#include <drm/display/drm_dsc.h>
+#else
+#include <drm/drm_dsc.h>
+#endif
 #include <drm/drm_mipi_dsi.h>
 
 /** Private DSI msg flags **/
@@ -233,6 +239,26 @@ static inline ssize_t gs_dsi_dcs_write_buffer_force_batch_end(struct mipi_dsi_de
 	return gs_dsi_dcs_write_buffer(dsi, NULL, 0,
 				       GS_DSI_MSG_FORCE_FLUSH | GS_DSI_MSG_IGNORE_VBLANK);
 }
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 19, 0)) || IS_ENABLED(CONFIG_DRM_DISPLAY_DP_HELPER)
+/**
+ * gs_dcs_write_dsc_config() - function to write dsc configuration to panel
+ * @dev: struct device corresponding to dsi panel
+ * @dsc_cfg: dsc configuration to write
+ *
+ * This function wraps the packing and sending of the pps payload from the
+ * more user-readable drm_dsc_config structure. Makes use of the
+ * mipi_dsi_picture_parameter_set function for the actual transfer.
+ *
+ * Return: result of the underlying transfer function
+ */
+int gs_dcs_write_dsc_config(struct device *dev, const struct drm_dsc_config *dsc_cfg);
+#else
+static inline int gs_dcs_write_dsc_config(struct device *dev, const struct drm_dsc_config *dsc_cfg)
+{
+	return -ENOTSUPP;
+}
+#endif
 
 #define GS_DCS_WRITE_SEQ_FLAGS(dev, flags, seq...)                           \
 	do {                                                                 \

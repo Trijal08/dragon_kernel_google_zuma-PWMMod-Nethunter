@@ -10,6 +10,12 @@
 #include "gs_panel/dcs_helper.h"
 
 #include <linux/delay.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0)
+#include <drm/display/drm_dsc_helper.h>
+#else
+#include <drm/drm_dsc.h>
+#endif
 #include <drm/drm_mipi_dsi.h>
 #include <video/mipi_display.h>
 
@@ -131,3 +137,20 @@ ssize_t gs_dsi_dcs_write_buffer(struct mipi_dsi_device *dsi, const void *data, s
 	return ret;
 }
 EXPORT_SYMBOL(gs_dsi_dcs_write_buffer);
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 19, 0)) || IS_ENABLED(CONFIG_DRM_DISPLAY_DP_HELPER)
+int gs_dcs_write_dsc_config(struct device *dev, const struct drm_dsc_config *dsc_cfg)
+{
+	struct drm_dsc_picture_parameter_set pps;
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	int ret;
+
+	drm_dsc_pps_payload_pack(&pps, dsc_cfg);
+	ret = mipi_dsi_picture_parameter_set(dsi, &pps);
+	if (ret < 0) {
+		dev_err(dev, "failed to write pps(%d)\n", ret);
+	}
+	return ret;
+}
+EXPORT_SYMBOL(gs_dcs_write_dsc_config);
+#endif
