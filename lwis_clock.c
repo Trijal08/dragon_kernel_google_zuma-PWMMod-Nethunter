@@ -82,7 +82,7 @@ int lwis_clock_get(struct lwis_clock_list *list, char *name, struct device *dev,
 
 	/* Make sure clock exists */
 	clk = devm_clk_get(dev, name);
-	if (IS_ERR(clk)) {
+	if (IS_ERR_OR_NULL(clk)) {
 		pr_err("Clock %s not found\n", name);
 		return PTR_ERR(clk);
 	}

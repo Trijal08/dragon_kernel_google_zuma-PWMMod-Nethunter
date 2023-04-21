@@ -10,7 +10,6 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME "-i2c-dev: " fmt
 
-#include "lwis_debug.h"
 #include "lwis_device_i2c.h"
 
 #include <linux/device.h>
@@ -25,10 +24,12 @@
 #include <linux/slab.h>
 #include <uapi/linux/sched/types.h>
 
+#include "lwis_device.h"
 #include "lwis_i2c.h"
 #include "lwis_init.h"
 #include "lwis_periodic_io.h"
 #include "lwis_util.h"
+#include "lwis_trace.h"
 
 #ifdef CONFIG_OF
 #include "lwis_dt.h"
@@ -72,11 +73,10 @@ static int lwis_i2c_device_enable(struct lwis_device *lwis_dev)
 
 	/* Enable the I2C bus */
 	mutex_lock(i2c_dev->group_i2c_lock);
-
+	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, "lwis_i2c_device_enable");
 #if IS_ENABLED(CONFIG_INPUT_STMVL53L1)
 	if (is_shared_i2c_with_stmvl53l1(i2c_dev->state_pinctrl))
-		ret = shared_i2c_set_state(&i2c_dev->client->dev,
-					   i2c_dev->state_pinctrl,
+		ret = shared_i2c_set_state(&i2c_dev->client->dev, i2c_dev->state_pinctrl,
 					   I2C_ON_STRING);
 	else
 		ret = lwis_i2c_set_state(i2c_dev, I2C_ON_STRING);
@@ -85,6 +85,7 @@ static int lwis_i2c_device_enable(struct lwis_device *lwis_dev)
 #endif
 
 	mutex_unlock(i2c_dev->group_i2c_lock);
+	LWIS_ATRACE_FUNC_END(lwis_dev, "lwis_i2c_device_enable");
 	if (ret) {
 		dev_err(lwis_dev->dev, "Error enabling i2c bus (%d)\n", ret);
 		return ret;
@@ -103,13 +104,11 @@ static int lwis_i2c_device_disable(struct lwis_device *lwis_dev)
 	if (is_shared_i2c_with_stmvl53l1(i2c_dev->state_pinctrl)) {
 		/* Disable the shared i2c bus */
 		mutex_lock(i2c_dev->group_i2c_lock);
-		ret = shared_i2c_set_state(&i2c_dev->client->dev,
-					   i2c_dev->state_pinctrl,
+		ret = shared_i2c_set_state(&i2c_dev->client->dev, i2c_dev->state_pinctrl,
 					   I2C_OFF_STRING);
 		mutex_unlock(i2c_dev->group_i2c_lock);
 		if (ret) {
-			dev_err(lwis_dev->dev, "Error disabling i2c bus (%d)\n",
-				ret);
+			dev_err(lwis_dev->dev, "Error disabling i2c bus (%d)\n", ret);
 		}
 		return ret;
 	}
@@ -118,8 +117,10 @@ static int lwis_i2c_device_disable(struct lwis_device *lwis_dev)
 	if (!lwis_i2c_dev_is_in_use(lwis_dev)) {
 		/* Disable the I2C bus */
 		mutex_lock(i2c_dev->group_i2c_lock);
+		LWIS_ATRACE_FUNC_BEGIN(lwis_dev, "lwis_i2c_device_disable");
 		ret = lwis_i2c_set_state(i2c_dev, I2C_OFF_STRING);
 		mutex_unlock(i2c_dev->group_i2c_lock);
+		LWIS_ATRACE_FUNC_END(lwis_dev, "lwis_i2c_device_disable");
 		if (ret) {
 			dev_err(lwis_dev->dev, "Error disabling i2c bus (%d)\n", ret);
 			return ret;
@@ -139,9 +140,9 @@ static int lwis_i2c_register_io(struct lwis_device *lwis_dev, struct lwis_io_ent
 	if (in_interrupt()) {
 		return -EAGAIN;
 	}
-	lwis_debug_save_register_io_to_history(lwis_dev, entry, access_size);
+	lwis_save_register_io_info(lwis_dev, entry, access_size);
 
-	return lwis_i2c_io_entry_rw(i2c_dev, entry);
+	return lwis_i2c_io_entry_rw(i2c_dev, entry, lwis_dev);
 }
 
 static int lwis_i2c_addr_matcher(struct device *dev, void *data)
@@ -180,7 +181,6 @@ static int lwis_i2c_device_setup(struct lwis_i2c_device *i2c_dev)
 
 	/* Initialize device i2c lock */
 	i2c_dev->group_i2c_lock = &group_i2c_lock[i2c_dev->i2c_lock_group_id];
-
 	info.addr = i2c_dev->address;
 
 	i2c_dev->client = i2c_new_client_device(i2c_dev->adapter, &info);
@@ -207,7 +207,7 @@ static int lwis_i2c_device_setup(struct lwis_i2c_device *i2c_dev)
 	   pinctrl's are defined */
 	/* TODO: Need to figure out why this is parent's parent */
 	pinctrl = devm_pinctrl_get(dev->parent->parent);
-	if (IS_ERR(pinctrl)) {
+	if (IS_ERR_OR_NULL(pinctrl)) {
 		dev_err(i2c_dev->base_dev.dev, "Cannot instantiate pinctrl instance (%lu)\n",
 			PTR_ERR(pinctrl));
 		return PTR_ERR(pinctrl);
@@ -215,11 +215,11 @@ static int lwis_i2c_device_setup(struct lwis_i2c_device *i2c_dev)
 
 	/* Verify that on_i2c or off_i2c strings are present */
 	i2c_dev->pinctrl_default_state_only = false;
-	if (IS_ERR(pinctrl_lookup_state(pinctrl, I2C_OFF_STRING)) ||
-	    IS_ERR(pinctrl_lookup_state(pinctrl, I2C_ON_STRING))) {
+	if (IS_ERR_OR_NULL(pinctrl_lookup_state(pinctrl, I2C_OFF_STRING)) ||
+	    IS_ERR_OR_NULL(pinctrl_lookup_state(pinctrl, I2C_ON_STRING))) {
 		state = pinctrl_lookup_state(pinctrl, I2C_DEFAULT_STATE_STRING);
 		/* Default option also missing, return error */
-		if (IS_ERR(state)) {
+		if (IS_ERR_OR_NULL(state)) {
 			dev_err(i2c_dev->base_dev.dev,
 				"Pinctrl states {%s, %s, %s} not found (%lu)\n", I2C_OFF_STRING,
 				I2C_ON_STRING, I2C_DEFAULT_STATE_STRING, PTR_ERR(state));
@@ -270,19 +270,18 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 	/* Create associated kworker threads */
 	ret = lwis_create_kthread_workers(&i2c_dev->base_dev);
 	if (ret) {
-		dev_err(i2c_dev->base_dev.dev,"Failed to create lwis_i2c_kthread");
+		dev_err(i2c_dev->base_dev.dev, "Failed to create lwis_i2c_kthread");
 		lwis_base_unprobe(&i2c_dev->base_dev);
 		goto error_probe;
 	}
 
 	if (i2c_dev->base_dev.transaction_thread_priority != 0) {
 		ret = lwis_set_kthread_priority(&i2c_dev->base_dev,
-			i2c_dev->base_dev.transaction_worker_thread,
-			i2c_dev->base_dev.transaction_thread_priority);
+						i2c_dev->base_dev.transaction_worker_thread,
+						i2c_dev->base_dev.transaction_thread_priority);
 		if (ret) {
 			dev_err(i2c_dev->base_dev.dev,
-				"Failed to set LWIS I2C transaction kthread priority (%d)",
-				ret);
+				"Failed to set LWIS I2C transaction kthread priority (%d)", ret);
 			lwis_base_unprobe(&i2c_dev->base_dev);
 			goto error_probe;
 		}
@@ -301,59 +300,17 @@ error_probe:
 static int lwis_i2c_device_suspend(struct device *dev)
 {
 	struct lwis_device *lwis_dev = dev_get_drvdata(dev);
-	struct lwis_client *lwis_client, *n;
-	int ret = 0;
-
-	if (lwis_dev->enabled == 0) {
-		return ret;
-	}
 
 	if (lwis_dev->pm_hibernation == 0) {
+		/* Allow the device to enter PM hibernation, e.g., flash driver. */
+		return 0;
+	}
+
+	if (lwis_dev->enabled != 0) {
 		dev_warn(lwis_dev->dev, "Can't suspend because %s is in use!\n", lwis_dev->name);
 		return -EBUSY;
 	}
 
-	/* Send an error event to userspace to handle the system suspend */
-	lwis_device_error_event_emit(lwis_dev, LWIS_ERROR_EVENT_ID_SYSTEM_SUSPEND,
-				     /*payload=*/NULL, /*payload_size=*/0);
-
-	list_for_each_entry_safe (lwis_client, n, &lwis_dev->clients, node) {
-		if (!lwis_client->is_enabled) {
-			continue;
-		}
-
-		/* Clear event states for this client */
-		lwis_client_event_states_clear(lwis_client);
-
-		/* Flush all periodic io to complete */
-		ret = lwis_periodic_io_client_flush(lwis_client);
-		if (ret) {
-			dev_err(lwis_dev->dev,
-				"Failed to wait for in-process periodic io to complete\n");
-		}
-
-		/* Flush all pending transactions */
-		ret = lwis_transaction_client_flush(lwis_client);
-		if (ret) {
-			dev_err(lwis_dev->dev, "Failed to flush pending transactions\n");
-		}
-
-		/* Run cleanup transactions. */
-		lwis_transaction_client_cleanup(lwis_client);
-
-		lwis_client->is_enabled = false;
-	}
-
-	mutex_lock(&lwis_dev->client_lock);
-	ret = lwis_dev_power_down_locked(lwis_dev);
-	if (ret < 0) {
-		dev_err(lwis_dev->dev, "Failed to power down device\n");
-	}
-
-	lwis_device_event_states_clear_locked(lwis_dev);
-	lwis_dev->enabled = 0;
-	dev_warn(lwis_dev->dev, "Device disabled when system suspend\n");
-	mutex_unlock(&lwis_dev->client_lock);
 	return 0;
 }
 

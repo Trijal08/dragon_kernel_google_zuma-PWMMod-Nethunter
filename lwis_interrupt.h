@@ -24,7 +24,8 @@ enum lwis_interrupt_types {
 	REGULAR_INTERRUPT,
 	AGGREGATE_INTERRUPT,
 	LEAF_INTERRUPT,
-	GPIO_HW_INTERRUPT
+	GPIO_HW_INTERRUPT,
+	FAKEEVENT_INTERRUPT
 };
 
 /*
@@ -184,5 +185,7 @@ int lwis_interrupt_event_enable(struct lwis_interrupt_list *list, int64_t event_
  *  supplied list.
  */
 void lwis_interrupt_print(struct lwis_interrupt_list *list);
+
+int lwis_fake_event_inject(void *data);
 
 #endif /* LWIS_INTERRUPT_H_ */

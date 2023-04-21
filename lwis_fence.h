@@ -18,9 +18,8 @@
 
 #define LWIS_CLIENTS_HASH_BITS 8
 
-#ifdef LWIS_FENCE_ENABLED
 extern bool lwis_fence_debug;
-#endif
+
 struct lwis_fence {
 	int fd;
 	int status;
@@ -70,16 +69,13 @@ bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
 					  struct lwis_transaction *weak_transaction,
 					  int64_t event_id, int64_t event_counter);
 
-
-bool lwis_fence_triggered_condition_ready(struct lwis_transaction *transaction,
-					  int fence_status);
+bool lwis_fence_triggered_condition_ready(struct lwis_transaction *transaction, int fence_status);
 
 /*
  *  lwis_parse_trigger_condition: Add the transaction to the associated trigger
  *  fence and event lists.
  */
-int lwis_parse_trigger_condition(struct lwis_client *client,
-				 struct lwis_transaction *transaction);
+int lwis_parse_trigger_condition(struct lwis_client *client, struct lwis_transaction *transaction);
 
 /*
  *  lwis_fence_signal: Signals the lwis_fence with the provided error code.
@@ -115,30 +111,26 @@ static inline int lwis_initialize_transaction_fences(struct lwis_client *client,
 	return 0;
 }
 
-static inline
-bool lwis_triggered_by_condition(struct lwis_transaction *transaction)
+static inline bool lwis_triggered_by_condition(struct lwis_transaction *transaction)
 {
 	return false;
 }
 
-static inline
-bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
-					  struct lwis_transaction *weak_transaction,
-					  int64_t event_id, int64_t event_counter)
+static inline bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
+							struct lwis_transaction *weak_transaction,
+							int64_t event_id, int64_t event_counter)
 {
 	return false;
 }
 
-static inline
-bool lwis_fence_triggered_condition_ready(struct lwis_transaction *transaction,
-					  int fence_status)
+static inline bool lwis_fence_triggered_condition_ready(struct lwis_transaction *transaction,
+							int fence_status)
 {
 	return false;
 }
 
-static inline
-int lwis_parse_trigger_condition(struct lwis_client *client, struct
-				 lwis_transaction *transaction)
+static inline int lwis_parse_trigger_condition(struct lwis_client *client,
+					       struct lwis_transaction *transaction)
 {
 	return 0;
 }
