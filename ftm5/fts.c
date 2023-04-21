@@ -2495,6 +2495,11 @@ static int gti_default_handler(void *private_data, enum gti_cmd_type cmd_type,
 		/* Heatmap is always enabled. */
 		ret = 0;
 		break;
+	case GTI_CMD_GET_CONTEXT_DRIVER:
+	case GTI_CMD_GET_CONTEXT_STYLUS:
+		/* There is no context from this driver. */
+		ret = 0;
+		break;
 	default:
 		ret = -ESRCH;
 		break;
@@ -2848,6 +2853,41 @@ static int get_palm_mode(void *private_data, struct gti_palm_cmd *cmd)
 	return 0;
 }
 
+static int set_coord_filter_enabled(void *private_data, struct gti_coord_filter_cmd *cmd)
+{
+	struct fts_ts_info *info = private_data;
+	u8 write[3];
+	u8 disable;
+	int ret;
+
+	disable = cmd->setting == GTI_COORD_FILTER_DISABLE ? 1 : 0;
+
+	write[0] = (u8) FTS_CMD_CUSTOM_W;
+	write[1] = (u8) CUSTOM_CMD_DISABLE_COORD_FILTER;
+	write[2] = disable;
+
+	ret = fts_write(info, write, sizeof(write));
+	if (ret) {
+		dev_err(info->dev, "Failed to %s firmware coordinate filter.\n",
+			disable ? "disable" : "enable");
+	} else {
+		info->coord_filter_disabled = disable;
+		dev_info(info->dev, "%s firmware coordinate filter.\n",
+			info->coord_filter_disabled ? "Disable" : "Enable");
+	}
+
+	return ret;
+}
+
+static int get_coord_filter_enabled(void *private_data, struct gti_coord_filter_cmd *cmd)
+{
+	struct fts_ts_info *info = private_data;
+
+	cmd->setting = info->coord_filter_disabled ?
+			GTI_COORD_FILTER_DISABLE : GTI_COORD_FILTER_ENABLE;
+	return 0;
+}
+
 /**
  * Set the custom touch report rate.
  * buf[0]: FTS_CMD_CUSTOM_W
@@ -2879,6 +2919,54 @@ static int set_report_rate(void *private_data, struct gti_report_rate_cmd *cmd)
 	}
 
 	return ret;
+}
+
+static int get_irq_mode(void *private_data, struct gti_irq_cmd *cmd)
+{
+	struct fts_ts_info *info = private_data;
+
+	cmd->setting = info->irq_enabled ? GTI_IRQ_MODE_ENABLE : GTI_IRQ_MODE_DISABLE;
+
+	return 0;
+}
+
+static int set_irq_mode(void *private_data, struct gti_irq_cmd *cmd)
+{
+	struct fts_ts_info *info = private_data;
+
+	return fts_enableInterrupt(info, cmd->setting == GTI_IRQ_MODE_ENABLE);
+}
+
+static int set_reset(void *private_data, struct gti_reset_cmd *cmd)
+{
+	struct fts_ts_info *info = private_data;
+
+	/* Reset then sense on. */
+	if (cmd->setting == GTI_RESET_MODE_HW || cmd->setting == GTI_RESET_MODE_AUTO)
+		return cleanUp(info, true);
+	else
+		return -EOPNOTSUPP;
+}
+
+static int ping(void *private_data, struct gti_ping_cmd *cmd)
+{
+	struct fts_ts_info *info = private_data;
+	u16 chip_id;
+	int ret = 0;
+
+	ret = fts_writeReadU8UX(info, FTS_CMD_HW_REG_R, ADDR_SIZE_HW_REG,
+			ADDR_DCHIP_ID, (u8 *)&chip_id, 2, DUMMY_HW_REG);
+	if (ret) {
+		dev_err(info->dev, "Failed to read chip ID, ret = %#x.\n", ret);
+		return ret;
+	}
+
+	if (chip_id != ((info->board->dchip_id[1] << 8) | info->board->dchip_id[0])) {
+		dev_err(info->dev, "Wrong chip ID\n");
+		return -EINVAL;
+	}
+
+	return 0;
 }
 #endif
 
@@ -3257,6 +3345,9 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				     char *event)
 {
 	u8 grid_touch_status;
+#if IS_ENABLED(CONFIG_GOOG_TOUCH_INTERFACE)
+	struct gti_fw_status_data data = {0};
+#endif
 
 	switch (event[1]) {
 	case EVT_TYPE_STATUS_ECHO:
@@ -3403,6 +3494,9 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				" raw frame = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
+#if IS_ENABLED(CONFIG_GOOG_TOUCH_INTERFACE)
+			goog_notify_fw_status_changed(info->gti, GTI_FW_STATUS_WATER_ENTER, NULL);
+#endif
 			break;
 
 		case 0x01:
@@ -3410,6 +3504,9 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				" raw frame = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
+#if IS_ENABLED(CONFIG_GOOG_TOUCH_INTERFACE)
+			goog_notify_fw_status_changed(info->gti, GTI_FW_STATUS_WATER_ENTER, NULL);
+#endif
 			break;
 
 		case 0x02:
@@ -3417,6 +3514,9 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				" raw frame = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
+#if IS_ENABLED(CONFIG_GOOG_TOUCH_INTERFACE)
+			goog_notify_fw_status_changed(info->gti, GTI_FW_STATUS_WATER_ENTER, NULL);
+#endif
 			break;
 
 		case 0x03:
@@ -3424,6 +3524,9 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				" raw frame = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
+#if IS_ENABLED(CONFIG_GOOG_TOUCH_INTERFACE)
+			goog_notify_fw_status_changed(info->gti, GTI_FW_STATUS_WATER_EXIT, NULL);
+#endif
 			break;
 
 		case 0x04:
@@ -3431,6 +3534,9 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				" raw frame = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
+#if IS_ENABLED(CONFIG_GOOG_TOUCH_INTERFACE)
+			goog_notify_fw_status_changed(info->gti, GTI_FW_STATUS_WATER_EXIT, NULL);
+#endif
 			break;
 
 		case 0x05:
@@ -3438,6 +3544,9 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				" raw frame = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
+#if IS_ENABLED(CONFIG_GOOG_TOUCH_INTERFACE)
+			goog_notify_fw_status_changed(info->gti, GTI_FW_STATUS_WATER_EXIT, NULL);
+#endif
 			break;
 
 		default:
@@ -3473,6 +3582,10 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 		}
+#if IS_ENABLED(CONFIG_GOOG_TOUCH_INTERFACE)
+		data.noise_level = event[2] & 0x0F;
+		goog_notify_fw_status_changed(info->gti, GTI_FW_STATUS_NOISE_MODE, &data);
+#endif
 		break;
 
 	case EVT_TYPE_STATUS_STIMPAD:
@@ -4538,12 +4651,6 @@ static int fts_interrupt_install(struct fts_ts_info *info)
 	install_handler(info, STATUS_UPDATE, status);
 	install_handler(info, USER_REPORT, user_report);
 
-	/* disable interrupts in any case */
-	error = fts_enableInterrupt(info, false);
-	if (error) {
-		return error;
-	}
-
 	error = goog_request_threaded_irq(info->gti, info->client->irq, fts_isr,
 			fts_interrupt_handler, IRQF_ONESHOT | IRQF_TRIGGER_LOW,
 			FTS_TS_DRV_NAME, info);
@@ -4552,8 +4659,13 @@ static int fts_interrupt_install(struct fts_ts_info *info)
 	if (error) {
 		dev_err(info->dev, "Request irq failed\n");
 		kfree(info->event_dispatch_table);
+		goto exit;
 	}
 
+	/* disable interrupts in any case */
+	error = fts_enableInterrupt(info, false);
+
+exit:
 	return error;
 }
 
@@ -4909,12 +5021,12 @@ static void report_cancel_event(struct fts_ts_info *info)
 	mutex_lock(&info->input_report_mutex);
 #endif
 
-	/* Finger down on UDFPS area. */
+	/* Finger down. */
 	input_mt_slot(info->input_dev, 0);
 	input_report_key(info->input_dev, BTN_TOUCH, 1);
 	input_mt_report_slot_state(info->input_dev, MT_TOOL_FINGER, 1);
-	input_report_abs(info->input_dev, ABS_MT_POSITION_X, info->board->udfps_x);
-	input_report_abs(info->input_dev, ABS_MT_POSITION_Y, info->board->udfps_y);
+	input_report_abs(info->input_dev, ABS_MT_POSITION_X, 0);
+	input_report_abs(info->input_dev, ABS_MT_POSITION_Y, 0);
 	input_report_abs(info->input_dev, ABS_MT_TOUCH_MAJOR, 200);
 	input_report_abs(info->input_dev, ABS_MT_TOUCH_MINOR, 200);
 #ifndef SKIP_PRESSURE
@@ -5014,7 +5126,7 @@ static void fts_resume(struct fts_ts_info *info)
 	if (!info->sensor_sleep) return;
 
 	fts_pinctrl_setup(info, true);
-	if (info->board->udfps_x != 0 && info->board->udfps_y != 0)
+	if (goog_get_lptw_triggered(info->gti) == true)
 		check_finger_status(info);
 	fts_system_reset(info);
 	info->resume_bit = 1;
@@ -5411,14 +5523,6 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 	bdata->x_axis_max = coords[0];
 	bdata->y_axis_max = coords[1];
 
-	if (of_property_read_u32_array(np, "st,udfps-coords", coords, 2)) {
-		dev_err(dev, "st,udfps-coords not found\n");
-		coords[0] = 0;
-		coords[1] = 0;
-	}
-	bdata->udfps_x = coords[0];
-	bdata->udfps_y = coords[1];
-
 	bdata->sensor_inverted_x = 0;
 	if (of_property_read_bool(np, "st,sensor_inverted_x"))
 		bdata->sensor_inverted_x = 1;
@@ -5757,7 +5861,13 @@ static int fts_probe(struct spi_device *client)
 	options->get_grip_mode = get_grip_mode;
 	options->set_palm_mode = set_palm_mode;
 	options->get_palm_mode = get_palm_mode;
+	options->set_coord_filter_enabled = set_coord_filter_enabled;
+	options->get_coord_filter_enabled = get_coord_filter_enabled;
 	options->set_report_rate = set_report_rate;
+	options->get_irq_mode = get_irq_mode;
+	options->set_irq_mode = set_irq_mode;
+	options->reset = set_reset;
+	options->ping = ping;
 
 	info->gti = goog_touch_interface_probe(
 		info, info->dev, info->input_dev, gti_default_handler, options);
