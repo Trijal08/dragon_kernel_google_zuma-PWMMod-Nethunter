@@ -502,7 +502,9 @@ static long touch_offload_ioctl(struct file *file, unsigned int ioctl_num,
 		    (configure.config.filter_palm &&
 		     !context->caps.filter_palm) ||
 		    (configure.config.auto_reporting &&
-		     !context->caps.auto_reporting)) {
+		     !context->caps.auto_reporting) ||
+		    (configure.config.coord_filter &&
+		     !context->caps.coord_filter)) {
 			pr_err("%s: Invalid configuration enables unsupported features!\n",
 			       __func__);
 			err = -EINVAL;
@@ -727,8 +729,6 @@ EXPORT_SYMBOL(touch_offload_init);
 int touch_offload_cleanup(struct touch_offload_context *context)
 {
 	pr_debug("%s\n", __func__);
-
-	cdev_del(&context->dev);
 
 	device_destroy(context->cls, context->dev_num);
 

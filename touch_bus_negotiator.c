@@ -209,11 +209,11 @@ int tbn_handshaking(struct tbn_context *tbn, enum TbnOperation operation)
 		return -EINVAL;
 	}
 
-	reinit_completion(wait_for_completion);
-
 	if (tbn->mode == TBN_MODE_GPIO) {
 		int ap2aoc_val_org = gpio_get_value(tbn->ap2aoc_gpio);
 		int aoc2ap_val_org = gpio_get_value(tbn->aoc2ap_gpio);
+
+		reinit_completion(wait_for_completion);
 
 		irq_set_irq_type(tbn->aoc2ap_irq, irq_type);
 		enable_irq(tbn->aoc2ap_irq);
@@ -240,6 +240,8 @@ int tbn_handshaking(struct tbn_context *tbn, enum TbnOperation operation)
 		tbn->event_resp.lptw_triggered = false;
 		tbn->event_resp.err = 0;
 
+		reinit_completion(wait_for_completion);
+
 		send_tbn_event(tbn, operation);
 		if (wait_for_completion_timeout(wait_for_completion,
 			msecs_to_jiffies(timeout)) == 0) {
@@ -255,6 +257,8 @@ int tbn_handshaking(struct tbn_context *tbn, enum TbnOperation operation)
 			}
 		}
 #endif
+	} else if (tbn->mode == TBN_MODE_MOCK) {
+		dev_info(tbn->dev, "AP %s bus ... SUCCESS!\n", msg);
 	} else {
 		ret = -EINVAL;
 	}
@@ -476,6 +480,8 @@ static int tbn_probe(struct platform_device *pdev)
 			goto failed;
 		}
 #endif
+	} else if (tbn->mode == TBN_MODE_MOCK) {
+		err = 0;
 	} else {
 		dev_err(tbn->dev, "bus negotiator: invalid mode: %d\n", tbn->mode);
 		err = -EINVAL;
