@@ -1464,13 +1464,12 @@ static int bcm_spi_probe(struct spi_device *spi)
 
 	/* Request IRQ */
 	ret = devm_request_irq(&spi->dev, spi->irq, bcm_irq_handler,
-			IRQF_TRIGGER_HIGH, "ttyBCM", priv);
+			IRQF_TRIGGER_HIGH | IRQF_NO_AUTOEN, "ttyBCM", priv);
 	if (ret) {
 		dev_err(&spi->dev, "Failed to register BCM477x SPI TTY IRQ %d.\n",
 				spi->irq);
 		goto free_wq;
 	}
-	disable_irq(spi->irq);
 
 	dev_info(&spi->dev, "Probe OK. ssp-host-req=%d, irq=%d, priv=0x%pK\n",
 			host_req, spi->irq, priv);
