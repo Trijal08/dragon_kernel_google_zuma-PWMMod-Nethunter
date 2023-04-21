@@ -363,6 +363,8 @@ static ssize_t offload_enabled_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t offload_enabled_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t offload_id_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 static ssize_t panel_id_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t ping_show(struct device *dev,
@@ -406,7 +408,8 @@ static DEVICE_ATTR_RO(fw_ver);
 static DEVICE_ATTR_RW(irq_enabled);
 static DEVICE_ATTR_RW(mf_mode);
 static DEVICE_ATTR_RW(offload_enabled);
-static DEVICE_ATTR_RO(panel_id);
+static DEVICE_ATTR_ADMIN_RO(offload_id);
+static DEVICE_ATTR_ADMIN_RO(panel_id);
 static DEVICE_ATTR_RO(ping);
 static DEVICE_ATTR_RW(reset);
 static DEVICE_ATTR_RW(scan_mode);
@@ -428,6 +431,7 @@ static struct attribute *goog_attributes[] = {
 	&dev_attr_irq_enabled.attr,
 	&dev_attr_mf_mode.attr,
 	&dev_attr_offload_enabled.attr,
+	&dev_attr_offload_id.attr,
 	&dev_attr_panel_id.attr,
 	&dev_attr_ping.attr,
 	&dev_attr_reset.attr,
@@ -853,6 +857,19 @@ static ssize_t offload_enabled_store(struct device *dev,
 	}
 
 	return size;
+}
+
+static ssize_t offload_id_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t buf_idx = 0;
+	struct goog_touch_interface *gti = dev_get_drvdata(dev);
+
+	buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx, "result: %c%c%c%c\n",
+			gti->offload_id_byte[0], gti->offload_id_byte[1], gti->offload_id_byte[2],
+			gti->offload_id_byte[3]);
+	GOOG_INFO(gti, "%s", buf);
+	return buf_idx;
 }
 
 static ssize_t panel_id_show(struct device *dev,
