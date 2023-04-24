@@ -485,7 +485,7 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 	struct device *dev = &plat_dev->dev;
 
 	/* Allocate top device specific data construct */
-	top_dev = kzalloc(sizeof(struct lwis_top_device), GFP_KERNEL);
+	top_dev = devm_kzalloc(dev, sizeof(struct lwis_top_device), GFP_KERNEL);
 	if (!top_dev) {
 		dev_err(dev, "Failed to allocate top device structure\n");
 		return -ENOMEM;

@@ -242,7 +242,7 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 	struct device *dev = &plat_dev->dev;
 
 	/* Allocate I2C device specific data construct */
-	i2c_dev = kzalloc(sizeof(struct lwis_i2c_device), GFP_KERNEL);
+	i2c_dev = devm_kzalloc(dev, sizeof(struct lwis_i2c_device), GFP_KERNEL);
 	if (!i2c_dev) {
 		dev_err(dev, "Failed to allocate i2c device structure\n");
 		return -ENOMEM;

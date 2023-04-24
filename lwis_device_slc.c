@@ -242,7 +242,7 @@ static int lwis_slc_device_probe(struct platform_device *plat_dev)
 	struct device *dev = &plat_dev->dev;
 
 	/* Allocate SLC device specific data construct */
-	slc_dev = kzalloc(sizeof(struct lwis_slc_device), GFP_KERNEL);
+	slc_dev = devm_kzalloc(dev, sizeof(struct lwis_slc_device), GFP_KERNEL);
 	if (!slc_dev) {
 		dev_err(dev, "Failed to allocate slc device structure\n");
 		return -ENOMEM;

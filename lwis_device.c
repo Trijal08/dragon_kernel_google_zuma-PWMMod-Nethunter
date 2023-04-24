@@ -1882,7 +1882,6 @@ static void __exit lwis_driver_exit(void)
 		/* Destroy device */
 		device_destroy(core.dev_class, MKDEV(core.device_major, lwis_dev->id));
 		list_del(&lwis_dev->dev_list);
-		kfree(lwis_dev);
 	}
 
 	/* Deinit device classes */
