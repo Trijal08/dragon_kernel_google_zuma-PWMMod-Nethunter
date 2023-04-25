@@ -1656,6 +1656,21 @@ bool goog_check_spi_dma_enabled(struct spi_device *spi_dev)
 }
 EXPORT_SYMBOL(goog_check_spi_dma_enabled);
 
+int goog_get_max_touch_report_rate(struct goog_touch_interface *gti)
+{
+	int max_idx;
+
+	if (!gti ||
+		!gti->report_rate_table_size ||
+		!gti->touch_report_rate_table) {
+		return -EOPNOTSUPP;
+	}
+
+	max_idx = gti->report_rate_table_size - 1;
+	return gti->touch_report_rate_table[max_idx];
+}
+EXPORT_SYMBOL(goog_get_max_touch_report_rate);
+
 int goog_get_panel_id(struct device_node *node)
 {
 	int id = -1;
@@ -2311,7 +2326,7 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 
 	error = goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_FW_SETTINGS);
 	if (error < 0)
-		GOOG_DBG(gti, "Error while releasing FW_SETTING wakelock: %d!\n", error);
+		GOOG_DBG(gti, "Error while releasing FW_SETTINGS wakelock: %d!\n", error);
 }
 
 static void goog_offload_set_running(struct goog_touch_interface *gti, bool running)

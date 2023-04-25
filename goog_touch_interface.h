@@ -753,15 +753,15 @@ struct goog_touch_interface *goog_touch_interface_probe(
 int goog_touch_interface_remove(struct goog_touch_interface *gti);
 
 int goog_pm_wake_lock_nosync(struct goog_touch_interface *gti,
- enum gti_pm_wakelock_type type, bool skip_pm_resume);
+		enum gti_pm_wakelock_type type, bool skip_pm_resume);
 int goog_pm_wake_lock(struct goog_touch_interface *gti,
- enum gti_pm_wakelock_type type, bool skip_pm_resume);
+		enum gti_pm_wakelock_type type, bool skip_pm_resume);
 int goog_pm_wake_unlock_nosync(struct goog_touch_interface *gti,
- enum gti_pm_wakelock_type type);
+		enum gti_pm_wakelock_type type);
 int goog_pm_wake_unlock(struct goog_touch_interface *gti,
- enum gti_pm_wakelock_type type);
+		enum gti_pm_wakelock_type type);
 bool goog_pm_wake_check_locked(struct goog_touch_interface *gti,
- enum gti_pm_wakelock_type type);
+		enum gti_pm_wakelock_type type);
 u32 goog_pm_wake_get_locks(struct goog_touch_interface *gti);
 int goog_pm_register_notification(struct goog_touch_interface *gti,
 		const struct dev_pm_ops* ops);
@@ -774,6 +774,7 @@ void gti_debug_input_dump(struct goog_touch_interface *gti);
 
 int goog_get_lptw_triggered(struct goog_touch_interface *gti);
 
+int goog_get_max_touch_report_rate(struct goog_touch_interface *gti);
 int goog_get_panel_id(struct device_node *node);
 int goog_get_firmware_name(struct device_node *node, int id, char *name, size_t size);
 int goog_get_config_name(struct device_node *node, int id, char *name, size_t size);
