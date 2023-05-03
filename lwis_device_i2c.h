@@ -43,8 +43,7 @@ int lwis_i2c_device_deinit(void);
  * two APIs in stmvl53l1 driver to well handle the enabling and disabling.
  */
 extern bool is_shared_i2c_with_stmvl53l1(struct pinctrl *pinctrl);
-extern int shared_i2c_set_state(struct device *dev, struct pinctrl *pinctrl,
-				const char *state_str);
+extern int shared_i2c_set_state(struct device *dev, struct pinctrl *pinctrl, const char *state_str);
 #endif
 
 #endif /* LWIS_DEVICE_I2C_H_ */

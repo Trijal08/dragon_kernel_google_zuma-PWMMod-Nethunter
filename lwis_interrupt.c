@@ -416,6 +416,16 @@ error:
 	return IRQ_HANDLED;
 }
 
+int lwis_fake_event_inject(void *data)
+{
+	struct lwis_interrupt *irq = (struct lwis_interrupt *)data;
+	uint64_t source_value = 0x00000020ll, overflow_value = 0;
+
+	lwis_interrupt_emit_events(irq, source_value, overflow_value);
+
+	return irq->irq;
+}
+
 static int lwis_interrupt_handle_aggregation(struct lwis_interrupt *irq, uint64_t source_value)
 {
 	struct lwis_interrupt_leaf_node *leaf;

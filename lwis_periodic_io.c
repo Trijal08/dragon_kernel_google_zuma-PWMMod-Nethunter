@@ -44,7 +44,7 @@ static enum hrtimer_restart periodic_io_timer_func(struct hrtimer *timer)
 		periodic_io = list_entry(it_period, struct lwis_periodic_io, timer_list_node);
 		if (periodic_io->active) {
 			periodic_io_proxy = lwis_allocator_allocate(
-				client->lwis_dev, sizeof(struct lwis_periodic_io_proxy));
+				client->lwis_dev, sizeof(*periodic_io_proxy), GFP_ATOMIC);
 			if (!periodic_io_proxy) {
 				/* Non-fatal, skip this period */
 				pr_warn("Cannot allocate new periodic io proxy.\n");
@@ -188,8 +188,7 @@ static int process_io_entries(struct lwis_client *client,
 		/* Abort if periodic io is deactivated during processing.
 		 * Abort can only apply to <= 1 write entries to prevent partial writes,
 		 * or we just started the process. */
-		if (!periodic_io->active &&
-			(i == 0 || !periodic_io->contains_multiple_writes)) {
+		if (!periodic_io->active && (i == 0 || !periodic_io->contains_multiple_writes)) {
 			resp->error_code = -ECANCELED;
 			goto event_push;
 		}
@@ -317,7 +316,7 @@ void lwis_process_periodic_io_in_queue(struct lwis_client *client)
 		/* Error indicates the cancellation of the periodic io */
 		if (periodic_io->resp->error_code || !periodic_io->active) {
 			error_code = periodic_io->resp->error_code ? periodic_io->resp->error_code :
-									   -ECANCELED;
+								     -ECANCELED;
 			push_periodic_io_error_event_locked(periodic_io, error_code,
 							    &pending_events);
 		} else {
@@ -558,7 +557,8 @@ static int mark_periodic_io_resp_error_locked(struct lwis_periodic_io *periodic_
 }
 
 /* Calling this function requires holding the client's periodic_io_lock */
-static struct lwis_periodic_io * periodic_io_find_locked(struct lwis_client *client, int64_t id) {
+static struct lwis_periodic_io *periodic_io_find_locked(struct lwis_client *client, int64_t id)
+{
 	int i;
 	struct hlist_node *tmp;
 	struct list_head *it_period, *it_period_tmp;

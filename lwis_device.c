@@ -260,15 +260,13 @@ static int lwis_release(struct inode *node, struct file *fp)
 	}
 
 	if (lwis_dev->enabled == 0) {
-#ifdef LWIS_BTS_BLOCK_NAME_ENABLED
 		for (i = 0; i < lwis_dev->bts_block_num; i++) {
-			lwis_platform_update_bts(lwis_dev, i, /*bw_peak=*/0,
-						 /*bw_read=*/0, /*bw_write=*/0, /*bw_rt=*/0);
+			if (lwis_dev->bts_indexes[i] != BTS_UNSUPPORTED) {
+				lwis_platform_update_bts(lwis_dev, i, /*bw_peak=*/0,
+							 /*bw_read=*/0, /*bw_write=*/0,
+							 /*bw_rt=*/0);
+			}
 		}
-#else
-		lwis_platform_update_bts(lwis_dev, 0, /*bw_peak=*/0,
-					 /*bw_read=*/0, /*bw_write=*/0, /*bw_rt=*/0);
-#endif
 		/* remove voted qos */
 		lwis_platform_remove_qos(lwis_dev);
 		/* Release device event states if no more client is using */
@@ -619,7 +617,7 @@ int lwis_dev_process_power_sequence(struct lwis_device *lwis_dev,
 
 			gpios_info = lwis_gpios_get_info_by_name(lwis_dev->gpios_list,
 								 list->seq_info[i].name);
-			if (IS_ERR(gpios_info)) {
+			if (IS_ERR_OR_NULL(gpios_info)) {
 				dev_err(lwis_dev->dev, "Get %s gpios info failed\n",
 					list->seq_info[i].name);
 				ret = PTR_ERR(gpios_info);
@@ -695,7 +693,7 @@ int lwis_dev_process_power_sequence(struct lwis_device *lwis_dev,
 						gpios_info_it = lwis_gpios_get_info_by_name(
 							lwis_dev_it->gpios_list,
 							list->seq_info[i].name);
-						if (IS_ERR(gpios_info_it)) {
+						if (IS_ERR_OR_NULL(gpios_info_it)) {
 							continue;
 						}
 						if (gpios_info_it->id == gpios_info->id &&
@@ -754,7 +752,7 @@ int lwis_dev_process_power_sequence(struct lwis_device *lwis_dev,
 
 			if (set_active) {
 				lwis_dev->mclk_ctrl = devm_pinctrl_get(&lwis_dev->plat_dev->dev);
-				if (IS_ERR(lwis_dev->mclk_ctrl)) {
+				if (IS_ERR_OR_NULL(lwis_dev->mclk_ctrl)) {
 					dev_err(lwis_dev->dev, "Failed to get mclk\n");
 					ret = PTR_ERR(lwis_dev->mclk_ctrl);
 					lwis_dev->mclk_ctrl = NULL;
@@ -925,7 +923,7 @@ static int lwis_dev_power_up_by_default(struct lwis_device *lwis_dev)
 		bool activate_mclk = true;
 
 		lwis_dev->mclk_ctrl = devm_pinctrl_get(&lwis_dev->plat_dev->dev);
-		if (IS_ERR(lwis_dev->mclk_ctrl)) {
+		if (IS_ERR_OR_NULL(lwis_dev->mclk_ctrl)) {
 			dev_err(lwis_dev->dev, "Failed to get mclk\n");
 			ret = PTR_ERR(lwis_dev->mclk_ctrl);
 			lwis_dev->mclk_ctrl = NULL;
@@ -1472,7 +1470,7 @@ int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_d
 	if (ret >= 0) {
 		lwis_dev->id = ret;
 	} else {
-		pr_err("Unable to allocate minor ID (%d)\n", ret);
+		dev_err(&plat_dev->dev, "Unable to allocate minor ID (%d)\n", ret);
 		return ret;
 	}
 
@@ -1518,7 +1516,7 @@ int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_d
 	/* Upon success initialization, create device for this instance */
 	lwis_dev->dev = device_create(core.dev_class, NULL, MKDEV(core.device_major, lwis_dev->id),
 				      lwis_dev, LWIS_DEVICE_NAME "-%s", lwis_dev->name);
-	if (IS_ERR(lwis_dev->dev)) {
+	if (IS_ERR_OR_NULL(lwis_dev->dev)) {
 		pr_err("Failed to create device\n");
 		ret = PTR_ERR(lwis_dev->dev);
 		goto error_init;
@@ -1530,7 +1528,6 @@ int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_d
 	lwis_platform_probe(lwis_dev);
 
 	lwis_device_debugfs_setup(lwis_dev, core.dbg_root);
-	memset(&lwis_dev->debug_info, 0, sizeof(lwis_dev->debug_info));
 
 	timer_setup(&lwis_dev->heartbeat_timer, event_heartbeat_timer, 0);
 
@@ -1605,7 +1602,7 @@ void lwis_base_unprobe(struct lwis_device *unprobe_lwis_dev)
 				lwis_dev->irq_gpios_info.gpios = NULL;
 			}
 			/* Destroy device */
-			if (!IS_ERR(lwis_dev->dev)) {
+			if (!IS_ERR_OR_NULL(lwis_dev->dev)) {
 				device_destroy(core.dev_class,
 					       MKDEV(core.device_major, lwis_dev->id));
 			}
@@ -1651,7 +1648,7 @@ static int __init lwis_register_base_device(void)
 
 	/* Create a device class*/
 	core.dev_class = class_create(THIS_MODULE, LWIS_CLASS_NAME);
-	if (IS_ERR(core.dev_class)) {
+	if (IS_ERR_OR_NULL(core.dev_class)) {
 		pr_err("Failed to create device class\n");
 		ret = PTR_ERR(core.dev_class);
 		goto error_class_create;

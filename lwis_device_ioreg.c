@@ -138,12 +138,11 @@ static int lwis_ioreg_device_probe(struct platform_device *plat_dev)
 
 	if (ioreg_dev->base_dev.transaction_thread_priority != 0) {
 		ret = lwis_set_kthread_priority(&ioreg_dev->base_dev,
-			ioreg_dev->base_dev.transaction_worker_thread,
-			ioreg_dev->base_dev.transaction_thread_priority);
+						ioreg_dev->base_dev.transaction_worker_thread,
+						ioreg_dev->base_dev.transaction_thread_priority);
 		if (ret) {
 			dev_err(ioreg_dev->base_dev.dev,
-				"Failed to set LWIS IOREG transaction kthread priority (%d)",
-				ret);
+				"Failed to set LWIS IOREG transaction kthread priority (%d)", ret);
 			lwis_base_unprobe(&ioreg_dev->base_dev);
 			goto error_probe;
 		}

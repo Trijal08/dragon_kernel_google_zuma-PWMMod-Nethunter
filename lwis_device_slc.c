@@ -93,7 +93,7 @@ static int lwis_slc_enable(struct lwis_device *lwis_dev)
 
 	/* Initialize SLC partitions and get a handle */
 	slc_dev->partition_handle = pt_client_register(node, NULL, NULL);
-	if (IS_ERR(slc_dev->partition_handle)) {
+	if (IS_ERR_OR_NULL(slc_dev->partition_handle)) {
 		ret = PTR_ERR(slc_dev->partition_handle);
 		dev_err(lwis_dev->dev, "Failed to register PT client (%d)\n", ret);
 		slc_dev->partition_handle = NULL;

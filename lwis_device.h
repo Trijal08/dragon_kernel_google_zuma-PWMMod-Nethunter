@@ -254,17 +254,12 @@ struct lwis_device {
 
 	/* clock family this device belongs to */
 	int clock_family;
-#ifdef LWIS_BTS_BLOCK_NAME_ENABLED
 	/* number of BTS blocks */
 	int bts_block_num;
 	/* BTS block names*/
 	const char *bts_block_names[MAX_BTS_BLOCK_NUM];
 	/* indexes to bandwidth traffic shaper */
 	int bts_indexes[MAX_BTS_BLOCK_NUM];
-#else
-	/* index to bandwidth traffic shaper */
-	int bts_index;
-#endif
 	/* BTS scenario name */
 	const char *bts_scenario_name;
 	/* BTS scenario index */
@@ -431,7 +426,7 @@ void lwis_device_crash_info_dump(struct lwis_device *lwis_dev);
  * for better debugability.
  */
 void lwis_save_register_io_info(struct lwis_device *lwis_dev, struct lwis_io_entry *io_entry,
-                                size_t access_size);
+				size_t access_size);
 
 /*
  * lwis_process_worker_queue:

@@ -19,9 +19,8 @@
 #include "lwis_commands.h"
 #include "lwis_device.h"
 
-#define LWIS_DEVICE_NAME_ENTRY \
-	__array(char, lwis_name, LWIS_MAX_NAME_STRING_LEN)
-#define LWIS_DEVICE_NAME_ASSIGN \
+#define LWIS_DEVICE_NAME_ENTRY __array(char, lwis_name, LWIS_MAX_NAME_STRING_LEN)
+#define LWIS_DEVICE_NAME_ASSIGN                                                                    \
 	strscpy(__entry->lwis_name, lwis_dev->name, LWIS_MAX_NAME_STRING_LEN)
 #define LWIS_TRACE_DEVICE_NAME __entry->lwis_name
 
@@ -36,17 +35,17 @@ TRACE_EVENT(tracing_mark_write,
 	    TP_printk("%c|%d|lwis-%s:%s|%lld", __entry->type, __entry->pid, LWIS_TRACE_DEVICE_NAME,
 		      __get_str(func_name), __entry->value));
 
-#define LWIS_ATRACE_BEGIN(lwis_dev, func_name) \
+#define LWIS_ATRACE_BEGIN(lwis_dev, func_name)                                                     \
 	trace_tracing_mark_write(lwis_dev, 'B', current->tgid, func_name, 0)
 #define LWIS_ATRACE_FUNC_BEGIN(lwis_dev, func_name) LWIS_ATRACE_BEGIN(lwis_dev, func_name)
 
-#define LWIS_ATRACE_END(lwis_dev, func_name) \
+#define LWIS_ATRACE_END(lwis_dev, func_name)                                                       \
 	trace_tracing_mark_write(lwis_dev, 'E', current->tgid, func_name, 0)
 #define LWIS_ATRACE_FUNC_END(lwis_dev, func_name) LWIS_ATRACE_END(lwis_dev, func_name)
 
-#define LWIS_ATRACE_INT_PID(lwis_dev, func_name, value, pid) \
+#define LWIS_ATRACE_INT_PID(lwis_dev, func_name, value, pid)                                       \
 	trace_tracing_mark_write(lwis_dev, 'C', pid, func_name, value)
-#define LWIS_ATRACE_INT(lwis_dev, func_name, value) \
+#define LWIS_ATRACE_INT(lwis_dev, func_name, value)                                                \
 	LWIS_ATRACE_INT_PID(lwis_dev, func_name, value, current->tgid)
 
 #endif /* _TRACE_LWIS_H_ */

@@ -218,13 +218,14 @@ static int lwis_top_event_subscribe(struct lwis_device *lwis_dev, int64_t trigge
 		return -EINVAL;
 	}
 
+	spin_lock_irqsave(&lwis_top_dev->base_dev.lock, flags);
 	event_subscriber_list = event_subscriber_list_find_or_create(lwis_dev, trigger_event_id);
 	if (!event_subscriber_list) {
+		spin_unlock_irqrestore(&lwis_top_dev->base_dev.lock, flags);
 		dev_err(lwis_dev->dev, "Can't find/create event subscriber list\n");
 		return -EINVAL;
 	}
 
-	spin_lock_irqsave(&lwis_top_dev->base_dev.lock, flags);
 	list_for_each (it_event_subscriber, &event_subscriber_list->list) {
 		old_subscription = list_entry(it_event_subscriber, struct lwis_event_subscribe_info,
 					      list_node);
@@ -511,20 +512,18 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 	lwis_top_event_subscribe_init(top_dev);
 
 	kthread_init_worker(&top_dev->subscribe_worker);
-	top_dev->subscribe_worker_thread = kthread_run(kthread_worker_fn,
-			&top_dev->subscribe_worker, LWIS_SUBSCRIBER_THREAD_NAME);
-	if (IS_ERR(top_dev->subscribe_worker_thread)) {
+	top_dev->subscribe_worker_thread = kthread_run(
+		kthread_worker_fn, &top_dev->subscribe_worker, LWIS_SUBSCRIBER_THREAD_NAME);
+	if (IS_ERR_OR_NULL(top_dev->subscribe_worker_thread)) {
 		dev_err(top_dev->base_dev.dev, "subscribe kthread_run failed\n");
 		goto error_probe;
 	}
 
-	ret = lwis_set_kthread_priority(&top_dev->base_dev,
-		top_dev->subscribe_worker_thread,
-		SUBSCRIBE_THREAD_PRIORITY);
+	ret = lwis_set_kthread_priority(&top_dev->base_dev, top_dev->subscribe_worker_thread,
+					SUBSCRIBE_THREAD_PRIORITY);
 	if (ret) {
 		dev_err(top_dev->base_dev.dev,
-		"Failed to set LWIS top subscription kthread priority (%d)",
-			ret);
+			"Failed to set LWIS top subscription kthread priority (%d)", ret);
 		lwis_base_unprobe(&top_dev->base_dev);
 		goto error_probe;
 	}

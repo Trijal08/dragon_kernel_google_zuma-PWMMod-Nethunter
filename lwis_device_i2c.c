@@ -76,8 +76,7 @@ static int lwis_i2c_device_enable(struct lwis_device *lwis_dev)
 	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, "lwis_i2c_device_enable");
 #if IS_ENABLED(CONFIG_INPUT_STMVL53L1)
 	if (is_shared_i2c_with_stmvl53l1(i2c_dev->state_pinctrl))
-		ret = shared_i2c_set_state(&i2c_dev->client->dev,
-					   i2c_dev->state_pinctrl,
+		ret = shared_i2c_set_state(&i2c_dev->client->dev, i2c_dev->state_pinctrl,
 					   I2C_ON_STRING);
 	else
 		ret = lwis_i2c_set_state(i2c_dev, I2C_ON_STRING);
@@ -111,13 +110,11 @@ static int lwis_i2c_device_disable(struct lwis_device *lwis_dev)
 	if (is_shared_i2c_with_stmvl53l1(i2c_dev->state_pinctrl)) {
 		/* Disable the shared i2c bus */
 		mutex_lock(i2c_dev->group_i2c_lock);
-		ret = shared_i2c_set_state(&i2c_dev->client->dev,
-					   i2c_dev->state_pinctrl,
+		ret = shared_i2c_set_state(&i2c_dev->client->dev, i2c_dev->state_pinctrl,
 					   I2C_OFF_STRING);
 		mutex_unlock(i2c_dev->group_i2c_lock);
 		if (ret) {
-			dev_err(lwis_dev->dev, "Error disabling i2c bus (%d)\n",
-				ret);
+			dev_err(lwis_dev->dev, "Error disabling i2c bus (%d)\n", ret);
 		}
 		return ret;
 	}
@@ -216,7 +213,7 @@ static int lwis_i2c_device_setup(struct lwis_i2c_device *i2c_dev)
 	   pinctrl's are defined */
 	/* TODO: Need to figure out why this is parent's parent */
 	pinctrl = devm_pinctrl_get(dev->parent->parent);
-	if (IS_ERR(pinctrl)) {
+	if (IS_ERR_OR_NULL(pinctrl)) {
 		dev_err(i2c_dev->base_dev.dev, "Cannot instantiate pinctrl instance (%lu)\n",
 			PTR_ERR(pinctrl));
 		i2c_dev->state_pinctrl = NULL;
@@ -225,11 +222,11 @@ static int lwis_i2c_device_setup(struct lwis_i2c_device *i2c_dev)
 
 	/* Verify that on_i2c or off_i2c strings are present */
 	i2c_dev->pinctrl_default_state_only = false;
-	if (IS_ERR(pinctrl_lookup_state(pinctrl, I2C_OFF_STRING)) ||
-	    IS_ERR(pinctrl_lookup_state(pinctrl, I2C_ON_STRING))) {
+	if (IS_ERR_OR_NULL(pinctrl_lookup_state(pinctrl, I2C_OFF_STRING)) ||
+	    IS_ERR_OR_NULL(pinctrl_lookup_state(pinctrl, I2C_ON_STRING))) {
 		state = pinctrl_lookup_state(pinctrl, I2C_DEFAULT_STATE_STRING);
 		/* Default option also missing, return error */
-		if (IS_ERR(state)) {
+		if (IS_ERR_OR_NULL(state)) {
 			dev_err(i2c_dev->base_dev.dev,
 				"Pinctrl states {%s, %s, %s} not found (%lu)\n", I2C_OFF_STRING,
 				I2C_ON_STRING, I2C_DEFAULT_STATE_STRING, PTR_ERR(state));
@@ -280,19 +277,18 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 	/* Create associated kworker threads */
 	ret = lwis_create_kthread_workers(&i2c_dev->base_dev);
 	if (ret) {
-		dev_err(i2c_dev->base_dev.dev,"Failed to create lwis_i2c_kthread");
+		dev_err(i2c_dev->base_dev.dev, "Failed to create lwis_i2c_kthread");
 		lwis_base_unprobe(&i2c_dev->base_dev);
 		goto error_probe;
 	}
 
 	if (i2c_dev->base_dev.transaction_thread_priority != 0) {
 		ret = lwis_set_kthread_priority(&i2c_dev->base_dev,
-			i2c_dev->base_dev.transaction_worker_thread,
-			i2c_dev->base_dev.transaction_thread_priority);
+						i2c_dev->base_dev.transaction_worker_thread,
+						i2c_dev->base_dev.transaction_thread_priority);
 		if (ret) {
 			dev_err(i2c_dev->base_dev.dev,
-				"Failed to set LWIS I2C transaction kthread priority (%d)",
-				ret);
+				"Failed to set LWIS I2C transaction kthread priority (%d)", ret);
 			lwis_base_unprobe(&i2c_dev->base_dev);
 			goto error_probe;
 		}
@@ -313,7 +309,7 @@ static int lwis_i2c_device_suspend(struct device *dev)
 	struct lwis_device *lwis_dev = dev_get_drvdata(dev);
 
 	if (lwis_dev->pm_hibernation == 0) {
-		/* TODO(b/265688764): Cleaning up system deep sleep for flash driver. */
+		/* Allow the device to enter PM hibernation, e.g., flash driver. */
 		return 0;
 	}
 

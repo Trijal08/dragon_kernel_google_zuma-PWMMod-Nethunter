@@ -24,13 +24,13 @@
 /* Exposes the device id embedded in the event id */
 #define EVENT_OWNER_DEVICE_ID(x) ((x >> LWIS_EVENT_ID_EVENT_CODE_LEN) & 0xFFFF)
 
-#define lwis_dev_err_ratelimited(dev, fmt, ...)					\
-	{									\
-		static int64_t timestamp = 0;					\
-		if (ktime_to_ns(lwis_get_time()) - timestamp > 200000000LL) {	\
-			dev_err(dev, fmt, ##__VA_ARGS__);			\
-			timestamp = ktime_to_ns(lwis_get_time());		\
-		}								\
+#define lwis_dev_err_ratelimited(dev, fmt, ...)                                                    \
+	{                                                                                          \
+		static int64_t timestamp = 0;                                                      \
+		if (ktime_to_ns(lwis_get_time()) - timestamp > 200000000LL) {                      \
+			dev_err(dev, fmt, ##__VA_ARGS__);                                          \
+			timestamp = ktime_to_ns(lwis_get_time());                                  \
+		}                                                                                  \
 	}
 
 /*
@@ -989,15 +989,15 @@ int lwis_pending_events_emit(struct lwis_device *lwis_dev, struct list_head *pen
 
 	while (!list_empty(pending_events)) {
 		event = list_first_entry(pending_events, struct lwis_event_entry, node);
-		emit_result = lwis_device_event_emit_impl(lwis_dev, event->event_info.event_id,
-							  event->event_info.payload_buffer,
-							  event->event_info.payload_size,
-							  pending_events);
+		emit_result =
+			lwis_device_event_emit_impl(lwis_dev, event->event_info.event_id,
+						    event->event_info.payload_buffer,
+						    event->event_info.payload_size, pending_events);
 		if (emit_result) {
 			return_val = emit_result;
 			dev_warn_ratelimited(lwis_dev->dev,
-				 "lwis_device_pending_event_emit error on ID 0x%llx\n",
-				 event->event_info.event_id);
+					     "lwis_device_pending_event_emit error on ID 0x%llx\n",
+					     event->event_info.event_id);
 		}
 		list_del(&event->node);
 		kfree(event);

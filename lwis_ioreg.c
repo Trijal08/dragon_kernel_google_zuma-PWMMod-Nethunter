@@ -271,28 +271,28 @@ static int ioreg_write_batch_internal(void __iomem *base, uint64_t offset, int v
 	case 8:
 		for (i = 0; i < size_in_bytes; ++i) {
 			writeb_relaxed(*(buf + i), is_offset_fixed ? (void __iomem *)(addr) :
-									   (void __iomem *)(addr + i));
+								     (void __iomem *)(addr + i));
 		}
 		break;
 	case 16:
 		for (i = 0; i < size_in_bytes; i += 2) {
 			writew_relaxed(*(uint16_t *)(buf + i), is_offset_fixed ?
 								       (void __iomem *)(addr) :
-									     (void __iomem *)(addr + i));
+								       (void __iomem *)(addr + i));
 		}
 		break;
 	case 32:
 		for (i = 0; i < size_in_bytes; i += 4) {
 			writel_relaxed(*(uint32_t *)(buf + i), is_offset_fixed ?
 								       (void __iomem *)(addr) :
-									     (void __iomem *)(addr + i));
+								       (void __iomem *)(addr + i));
 		}
 		break;
 	case 64:
 		for (i = 0; i < size_in_bytes; i += 8) {
 			writeq_relaxed(*(uint64_t *)(buf + i), is_offset_fixed ?
 								       (void __iomem *)(addr) :
-									     (void __iomem *)(addr + i));
+								       (void __iomem *)(addr + i));
 		}
 		break;
 	default:

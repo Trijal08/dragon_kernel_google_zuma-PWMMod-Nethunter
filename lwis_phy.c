@@ -83,7 +83,7 @@ int lwis_phy_get(struct lwis_phy_list *list, char *name, struct device *dev)
 
 	/* Make sure PHY exists */
 	phy = devm_phy_get(dev, name);
-	if (IS_ERR(phy)) {
+	if (IS_ERR_OR_NULL(phy)) {
 		pr_err("PHY %s not found\n", name);
 		return PTR_ERR(phy);
 	}

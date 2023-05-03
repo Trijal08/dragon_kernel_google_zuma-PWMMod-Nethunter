@@ -23,6 +23,7 @@ lwis-objs += lwis_debug.o
 lwis-objs += lwis_io_entry.o
 lwis-objs += lwis_allocator.o
 lwis-objs += lwis_version.o
+lwis-objs += lwis_fence.o
 
 # Anchorage specific files
 ifeq ($(CONFIG_SOC_GS101), y)
@@ -34,11 +35,6 @@ endif
 ifeq ($(CONFIG_SOC_GS201), y)
 lwis-objs += platform/busan/lwis_platform_busan.o
 lwis-objs += platform/busan/lwis_platform_busan_dma.o
-# ccflags-y += -DLWIS_FENCE_ENABLED -DLWIS_BTS_BLOCK_NAME_ENABLED
-endif
-
-ifneq ($(filter -DLWIS_FENCE_ENABLED, $(ccflags-y)),)
-lwis-objs += lwis_fence.o
 endif
 
 # Device tree specific file
