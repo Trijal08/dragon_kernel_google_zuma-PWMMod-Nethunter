@@ -4,6 +4,7 @@
 # Direct Rendering Infrastructure (DRI) in XFree86 4.1.0 and higher.
 
 ccflags-y       += -I$(srctree)/include/
+ccflags-y       += -I$(KERNEL_SRC)/../private/google-modules/trusty/include
 
 exynos-hdcp2-y += auth-control.o
 exynos-hdcp2-y += auth13.o
