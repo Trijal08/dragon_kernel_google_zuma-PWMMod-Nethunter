@@ -2050,8 +2050,15 @@ void goog_offload_populate_frame(struct goog_touch_interface *gti,
 
 void goog_update_fw_settings(struct goog_touch_interface *gti)
 {
+	int error;
 	int ret = 0;
 	bool enabled = false;
+
+	error = goog_pm_wake_lock_nosync(gti, GTI_PM_WAKELOCK_TYPE_FW_SETTINGS, true);
+	if (error < 0) {
+		GOOG_DBG(gti, "Error while obtaining FW_SETTINGS wakelock: %d!\n", error);
+		return;
+	}
 
 	if(!gti->ignore_grip_update) {
 		if (gti->offload.offload_running && gti->offload.config.filter_grip)
@@ -2108,6 +2115,10 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 		if (ret != 0)
 			GOOG_ERR(gti, "Failed to set report rate!\n");
 	}
+
+	error = goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_FW_SETTINGS);
+	if (error < 0)
+		GOOG_DBG(gti, "Error while releasing FW_SETTING wakelock: %d!\n", error);
 }
 
 static void goog_offload_set_running(struct goog_touch_interface *gti, bool running)
@@ -2218,7 +2229,7 @@ int gti_charger_state_change(struct notifier_block *nb, unsigned long action,
 		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
 						&present_val);
 		if (ret < 0)
-			GOOG_ERR(gti,
+			GOOG_DBG(gti,
 				 "Error while getting power supply property: %d!\n",
 				 ret);
 		else if ((u8)present_val.intval != gti->charger_state) {
