@@ -110,7 +110,7 @@ void hdcp_dplink_connect_state(enum dp_state dp_hdcp_state) {
 		return;
 	}
 
-	schedule_delayed_work(&hdcp_work, msecs_to_jiffies(500));
+	schedule_delayed_work(&hdcp_work, msecs_to_jiffies(2000));
 	return;
 }
 EXPORT_SYMBOL_GPL(hdcp_dplink_connect_state);
