@@ -1952,7 +1952,8 @@ void goog_update_motion_filter(struct goog_touch_interface *gti, unsigned long s
 			GOOG_WARN(gti, "unexpected return(%d)!", ret);
 	}
 
-	gti->mf_state = next_state;
+	if (ret == 0)
+		gti->mf_state = next_state;
 }
 
 bool goog_v4l2_read_frame_cb(struct v4l2_heatmap *v4l2)
@@ -2303,6 +2304,15 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_COORD_FILTER_ENABLED);
 		if (ret)
 			GOOG_WARN(gti, "unexpected return(%d)!", ret);
+	}
+
+	if (gti->offload.caps.continuous_reporting) {
+		if (gti->offload.offload_running && gti->offload.config.continuous_reporting)
+			gti->mf_mode = GTI_MF_MODE_UNFILTER;
+		else
+			gti->mf_mode = GTI_MF_MODE_DEFAULT;
+		if (!gti->offload.config.coord_filter && gti->mf_mode == GTI_MF_MODE_UNFILTER)
+			GOOG_INFO(gti, "Enable GTI_MF_MODE_UNFILTER during coord_filter disabled!");
 	}
 
 	gti->cmd.screen_protector_mode_cmd.setting = gti->screen_protector_mode_setting;
@@ -3409,6 +3419,11 @@ static void goog_pm_resume(struct gti_pm *pm)
 	if (pm->resume)
 		pm->resume(gti->vendor_dev);
 
+	/*
+	 * Reinitialize the mf_state to the default, then goog_update_motion_filter()
+	 * could base on up-to-date mf_mode to change accordingly.
+	 */
+	gti->mf_state = GTI_MF_STATE_FILTERED;
 	pm->state = GTI_PM_RESUME;
 }
 
@@ -3461,6 +3476,11 @@ void goog_notify_fw_status_changed(struct goog_touch_interface *gti,
 	switch (status) {
 	case GTI_FW_STATUS_RESET:
 		GOOG_INFO(gti, "Firmware has been reset\n");
+		/*
+		 * Reinitialize the mf_state to the default, then goog_update_motion_filter()
+		 * could base on up-to-date mf_mode to change accordingly.
+		 */
+		gti->mf_state = GTI_MF_STATE_FILTERED;
 		goog_input_release_all_fingers(gti);
 		goog_update_fw_settings(gti);
 		break;
