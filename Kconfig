@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT
+
+menu "GS Display Configuration"
+  depends on DRM
+
+config GS_DRM_PANEL_UNIFIED
+  bool "Support for GS Unified panel driver"
+  depends on OF && DRM
+  help
+    Choose this option to support the unified panel driver framework.
+    This option is designed to be decoupled from DPU code
+    to reduce interdependency. This feature is currently in development
+    and is not meant for use on in-market devices.
+
+endmenu
