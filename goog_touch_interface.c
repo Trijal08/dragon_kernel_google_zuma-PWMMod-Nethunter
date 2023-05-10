@@ -2399,7 +2399,9 @@ void goog_offload_input_report(void *handle,
 			input_report_abs(gti->vendor_input_dev, ABS_MT_TOUCH_MINOR,
 				report->coords[i].minor);
 			input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE,
-				report->coords[i].pressure);
+				max_t(int, 1, report->coords[i].pressure));
+			if (report->coords[i].pressure == 0)
+				GOOG_WARN(gti, "Unexpected ZERO pressure reporting(slot#%d)!", i);
 			if (gti->offload.caps.rotation_reporting)
 				input_report_abs(gti->vendor_input_dev, ABS_MT_ORIENTATION,
 					report->coords[i].rotation);
