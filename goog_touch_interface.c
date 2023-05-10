@@ -3735,10 +3735,20 @@ static irqreturn_t gti_irq_handler(int irq, void *data)
 
 static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 {
+	int error;
 	irqreturn_t ret = IRQ_NONE;
 	struct goog_touch_interface *gti = (struct goog_touch_interface *)data;
 
 	ATRACE_BEGIN(__func__);
+
+	error = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_IRQ, true);
+	if (error < 0) {
+		GOOG_WARN(gti, "Skipping stray interrupt, power_status: %d, new power_status: %d\n",
+				gti->pm.state, gti->pm.new_state);
+		ATRACE_END();
+		return IRQ_HANDLED;
+	}
+
 	cpu_latency_qos_update_request(&gti->pm_qos_req, 100 /* usec */);
 
 	/*
@@ -3748,12 +3758,6 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 	 */
 	mutex_lock(&gti->input_process_lock);
 
-	if (gti->pm.state == GTI_PM_SUSPEND) {
-		GOOG_WARN(gti, "Skipping stray interrupt, power_status: %d, wake locks: 0x%08x\n",
-				gti->pm.state, goog_pm_wake_get_locks(gti));
-		goto exit;
-	}
-
 	if (gti->vendor_irq_thread_fn)
 		ret = gti->vendor_irq_thread_fn(irq, gti->vendor_irq_cookie);
 	else
@@ -3761,11 +3765,11 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 
 	goog_input_process(gti, false);
 
-exit:
 	mutex_unlock(&gti->input_process_lock);
 
 	gti_debug_hc_update(gti, false);
 	cpu_latency_qos_update_request(&gti->pm_qos_req, PM_QOS_DEFAULT_VALUE);
+	goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_IRQ);
 	ATRACE_END();
 
 	return ret;
