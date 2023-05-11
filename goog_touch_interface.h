@@ -30,10 +30,9 @@
 #define GOOG_ERR(gti, fmt, args...)    pr_err("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
 					__func__, ##args)
 #define MAX_SLOTS 10
-
 #define GTI_DEBUG_KFIFO_LEN 4 /* must be power of 2. */
-
 #define GTI_SENSOR_2D_OUT_FORMAT_WIDTH(size) ((size > (PAGE_SIZE * sizeof(s16) / 6)) ? 1 : 5)
+
 /*-----------------------------------------------------------------------------
  * enums.
  */
@@ -622,6 +621,7 @@ struct gti_pm {
  * @vendor_irq_cookie: irq cookie that register by vendor driver.
  * @vendor_default_handler: touch vendor driver default operation.
  * @released_index: finger up count.
+ * @debug_warning_limit: limit number of warning logs.
  * @debug_input: struct that used to debug input.
  * @debug_fifo_input: kfifo struct to track recent coordinate report for input debug.
  * @debug_hc: struct that used for the health check.
@@ -718,6 +718,7 @@ struct goog_touch_interface {
 
 	/* Debug used. */
 	u64 released_index;
+	int debug_warning_limit;
 	struct gti_debug_input debug_input[MAX_SLOTS];
 	DECLARE_KFIFO(debug_fifo_input, struct gti_debug_input, GTI_DEBUG_KFIFO_LEN);
 	struct gti_debug_health_check debug_hc;
@@ -728,7 +729,7 @@ struct goog_touch_interface {
  * Forward declarations.
  */
 inline bool goog_check_spi_dma_enabled(struct spi_device *spi_dev);
-inline bool goog_input_legacy_report(struct goog_touch_interface *gti);
+inline ktime_t *goog_input_get_timestamp(struct goog_touch_interface *gti);
 inline void goog_input_lock(struct goog_touch_interface *gti);
 inline void goog_input_unlock(struct goog_touch_interface *gti);
 inline void goog_input_set_timestamp(
