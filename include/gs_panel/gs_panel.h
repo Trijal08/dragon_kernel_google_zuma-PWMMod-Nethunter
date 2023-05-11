@@ -543,7 +543,32 @@ static inline int gs_dcs_set_brightness(struct gs_panel *ctx, u16 br)
 
 void gs_panel_reset_helper(struct gs_panel *ctx);
 int gs_panel_set_power_helper(struct gs_panel *ctx, bool on);
-int gs_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx);
+/**
+ * gs_dsi_panel_common_init - Probe-level initialization for gs_panel
+ * @dsi: dsi device pointer for panel
+ * @ctx: Preallocated memory for gs_panel object
+ *
+ * This function performs a wide range of initialization functions at probe time
+ * for gs_panel objects, including creating mutexes, parsing the device tree,
+ * registering the device data, creating sysfs files, etc.
+ *
+ * Return: Probe results; 0 for success, negative value for error
+ */
+int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx);
+/**
+ * gs_dsi_panel_common_probe() - Wrapper for gs_dsi_panel_common_init with malloc
+ * @dsi: dsi device pointer for panel
+ *
+ * For drivers that don't need additional working state data for their panels,
+ * this function calls the `kzalloc` function to allocate a `gs_panel` before
+ * sending that to the `gs_dsi_panel_common_init` function.
+ *
+ * It is designed to plug directly into the `probe` function of the
+ * `struct mipi_dsi_driver` data structure.
+ *
+ * Return: Probe results; 0 for success, negative value for error
+ */
+int gs_dsi_panel_common_probe(struct mipi_dsi_device *dsi);
 
 /**
  * gs_panel_msleep - sleeps for a given number of ms

@@ -664,7 +664,7 @@ static int gs_panel_init_backlight(struct gs_panel *ctx)
 	return 0;
 }
 
-int gs_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
+int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 {
 	struct device *dev = &dsi->dev;
 	int ret = 0;
@@ -777,7 +777,19 @@ err_panel:
 
 	return ret;
 }
-EXPORT_SYMBOL(gs_panel_common_init);
+EXPORT_SYMBOL(gs_dsi_panel_common_init);
+
+int gs_dsi_panel_common_probe(struct mipi_dsi_device *dsi)
+{
+	struct gs_panel *ctx;
+
+	ctx = devm_kzalloc(&dsi->dev, sizeof(*ctx), GFP_KERNEL);
+	if (!ctx)
+		return -ENOMEM;
+
+	return gs_dsi_panel_common_init(dsi, ctx);
+}
+EXPORT_SYMBOL(gs_dsi_panel_common_probe);
 
 /* DRM panel funcs */
 
