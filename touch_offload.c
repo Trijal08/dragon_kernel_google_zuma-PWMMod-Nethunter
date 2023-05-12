@@ -474,7 +474,7 @@ static long touch_offload_ioctl(struct file *file, unsigned int ioctl_num,
 	case TOUCH_OFFLOAD_IOC_WR_CONFIGURE:
 	{
 		struct TouchOffloadIocConfigure configure;
-		int NUM_BUFFERS = 4;
+		int NUM_BUFFERS = 6;
 		int num_channels;
 
 		err = copy_from_user(&configure, (void *)ioctl_param,
