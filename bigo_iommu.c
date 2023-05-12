@@ -83,6 +83,9 @@ static int add_to_mapped_list(struct bigo_core *core, struct bigo_inst *inst,
 		goto fail_attach;
 	}
 
+	if (mapping->skip_cmo)
+		binfo->attachment->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
+
 	binfo->sgt = dma_buf_map_attachment(binfo->attachment, DMA_BIDIRECTIONAL);
 	if (IS_ERR(binfo->sgt)) {
 		rc = PTR_ERR(binfo->sgt);
