@@ -506,15 +506,10 @@ static inline bool gs_is_local_hbm_disabled(struct gs_panel *ctx)
 const struct gs_panel_mode *gs_panel_get_mode(struct gs_panel *ctx,
 					      const struct drm_display_mode *mode);
 
-static inline bool gs_ctx_has_set_backlight_func(const struct gs_panel *ctx)
-{
-	if (!ctx || !ctx->desc || !ctx->desc->gs_panel_func)
-		return false;
-	if (!ctx->desc->gs_panel_func->set_brightness)
-		return false;
-	else
-		return true;
-}
+#define gs_panel_has_func(ctx, func) \
+		((ctx) && ((ctx)->desc) && ((ctx)->desc->gs_panel_func)\
+		 && ((ctx)->desc->gs_panel_func->func))
+
 
 u16 gs_panel_get_brightness(struct gs_panel *panel);
 
