@@ -3743,12 +3743,14 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 
 	ATRACE_BEGIN(__func__);
 
-	error = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_IRQ, true);
-	if (error < 0) {
-		GOOG_WARN(gti, "Skipping stray interrupt, power_status: %d, new power_status: %d\n",
-				gti->pm.state, gti->pm.new_state);
-		ATRACE_END();
-		return IRQ_HANDLED;
+	if (gti->tbn_enabled) {
+		error = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_IRQ, true);
+		if (error < 0) {
+			GOOG_WARN(gti, "Skipping stray interrupt, pm state: (%d, %d)\n",
+					gti->pm.state, gti->pm.new_state);
+			ATRACE_END();
+			return IRQ_HANDLED;
+		}
 	}
 
 	cpu_latency_qos_update_request(&gti->pm_qos_req, 100 /* usec */);
@@ -3771,7 +3773,8 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 
 	gti_debug_hc_update(gti, false);
 	cpu_latency_qos_update_request(&gti->pm_qos_req, PM_QOS_DEFAULT_VALUE);
-	goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_IRQ);
+	if (gti->tbn_enabled)
+		goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_IRQ);
 	ATRACE_END();
 
 	return ret;
