@@ -10,7 +10,7 @@
  */
 #include "selftest.h"
 
-#include <drm/drm_dp_helper.h>
+#include <drm/display/drm_dp_helper.h>
 #include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/types.h>

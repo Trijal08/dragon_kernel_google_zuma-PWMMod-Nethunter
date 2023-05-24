@@ -12,7 +12,7 @@
 #include <linux/kernel.h>
 #include <linux/errno.h>
 
-#include <drm/drm_dp_helper.h>
+#include <drm/display/drm_dp_helper.h>
 
 #include "exynos-hdcp-interface.h"
 

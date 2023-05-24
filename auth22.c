@@ -16,7 +16,7 @@
 #include <linux/soc/samsung/exynos-smc.h>
 #include <linux/types.h>
 #include <linux/delay.h>
-#include <drm/drm_dp_helper.h>
+#include <drm/display/drm_dp_helper.h>
 
 #include "exynos-hdcp-interface.h"
 
