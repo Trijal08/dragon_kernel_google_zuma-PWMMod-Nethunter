@@ -13,9 +13,8 @@
 #include <drm/drm_bridge.h>
 #include <drm/drm_modeset_helper_vtables.h>
 
-#include "gs_drm/gs_drm_connector.h"
-
 struct gs_panel;
+struct gs_drm_connector;
 
 /* gs_panel_connector_funcs.c */
 const struct drm_connector_helper_funcs *get_panel_drm_connector_helper_funcs(void);

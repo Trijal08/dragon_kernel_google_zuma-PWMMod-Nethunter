@@ -17,8 +17,6 @@
 #include <linux/gpio/consumer.h>
 #include <linux/backlight.h>
 #include <drm/drm_bridge.h>
-#include <drm/drm_connector.h>
-#include <drm/drm_crtc.h>
 #include <drm/drm_modes.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_property.h>
