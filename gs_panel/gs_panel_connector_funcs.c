@@ -82,15 +82,10 @@ static int gs_panel_connector_atomic_check(struct drm_connector *connector,
 	return 0;
 }
 
-static const struct drm_connector_helper_funcs gs_connector_helper_funcs = {
+static const struct drm_connector_helper_funcs drm_connector_helper_funcs = {
 	.atomic_check = gs_panel_connector_atomic_check,
 	.get_modes = gs_panel_connector_modes,
 };
-
-const struct drm_connector_helper_funcs *get_panel_drm_connector_helper_funcs(void)
-{
-	return &gs_connector_helper_funcs;
-}
 
 /* gs_drm_connector_funcs */
 
@@ -282,16 +277,11 @@ static int gs_panel_connector_set_property(struct gs_drm_connector *gs_connector
 	return 0;
 }
 
-static const struct gs_drm_connector_funcs gs_panel_connector_funcs = {
+static const struct gs_drm_connector_funcs gs_drm_connector_funcs = {
 	.atomic_print_state = gs_panel_connector_print_state,
 	.atomic_get_property = gs_panel_connector_get_property,
 	.atomic_set_property = gs_panel_connector_set_property,
 };
-
-const struct gs_drm_connector_funcs *get_panel_gs_drm_connector_funcs(void)
-{
-	return &gs_panel_connector_funcs;
-}
 
 /* gs_drm_connector_helper_funcs */
 
@@ -369,12 +359,112 @@ static void gs_panel_connector_atomic_commit(struct gs_drm_connector *gs_connect
 	return;
 }
 
-static const struct gs_drm_connector_helper_funcs gs_panel_connector_helper_funcs = {
+static const struct gs_drm_connector_helper_funcs gs_drm_connector_helper_funcs = {
 	.atomic_pre_commit = gs_panel_connector_atomic_pre_commit,
 	.atomic_commit = gs_panel_connector_atomic_commit,
 };
 
-const struct gs_drm_connector_helper_funcs *get_panel_gs_drm_connector_helper_funcs(void)
+/* Initialization */
+
+static int gs_panel_attach_brightness_capability(struct gs_drm_connector *gs_conn,
+						 const struct brightness_capability *brt_capability)
 {
-	return &gs_panel_connector_helper_funcs;
+	struct gs_drm_connector_properties *p = gs_drm_connector_get_properties(gs_conn);
+	struct drm_property_blob *blob;
+
+	blob = drm_property_create_blob(gs_conn->base.dev, sizeof(struct brightness_capability),
+					brt_capability);
+	if (IS_ERR(blob))
+		return PTR_ERR(blob);
+	drm_object_attach_property(&gs_conn->base.base, p->brightness_capability, blob->base.id);
+
+	return 0;
 }
+
+static int gs_panel_connector_attach_properties(struct gs_panel *ctx)
+{
+	struct gs_drm_connector_properties *p = gs_drm_connector_get_properties(ctx->gs_connector);
+	struct drm_mode_object *obj = &ctx->gs_connector->base.base;
+	const struct gs_panel_desc *desc = ctx->desc;
+	int ret = 0;
+
+	if (!p || !desc)
+		return -ENOENT;
+
+	dev_dbg(ctx->dev, "%s+\n", __func__);
+
+	drm_object_attach_property(obj, p->min_luminance, desc->brightness_desc->min_luminance);
+	drm_object_attach_property(obj, p->max_luminance, desc->brightness_desc->max_luminance);
+	drm_object_attach_property(obj, p->max_avg_luminance,
+				   desc->brightness_desc->max_avg_luminance);
+	drm_object_attach_property(obj, p->hdr_formats, desc->hdr_formats);
+	drm_object_attach_property(obj, p->brightness_level, 0);
+	drm_object_attach_property(obj, p->global_hbm_mode, 0);
+	drm_object_attach_property(obj, p->local_hbm_on, 0);
+	drm_object_attach_property(obj, p->dimming_on, 0);
+	drm_object_attach_property(obj, p->mipi_sync, 0);
+	drm_object_attach_property(obj, p->is_partial, desc->is_partial);
+	drm_object_attach_property(obj, p->panel_idle_support, desc->is_idle_supported);
+	drm_object_attach_property(obj, p->panel_orientation, ctx->orientation);
+	drm_object_attach_property(obj, p->vrr_switch_duration, desc->vrr_switch_duration);
+
+	if (desc->brightness_desc->brt_capability) {
+		ret = gs_panel_attach_brightness_capability(ctx->gs_connector,
+							    desc->brightness_desc->brt_capability);
+		if (ret)
+			dev_err(ctx->dev, "Failed to attach brightness capability (%d)\n", ret);
+	}
+
+	if (desc->lp_modes && desc->lp_modes->num_modes > 0)
+		drm_object_attach_property(obj, p->lp_mode, 0);
+
+	dev_dbg(ctx->dev, "%s-\n", __func__);
+
+	return ret;
+}
+
+int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *drm_dev,
+				     struct gs_drm_connector *gs_connector)
+{
+	struct device *dev = ctx->dev;
+	struct drm_connector *connector = &gs_connector->base;
+	int ret = 0;
+
+	/* Initialize drm_connector */
+	if (!gs_connector->base.funcs) {
+		gs_connector_bind(gs_connector->base.kdev, NULL, drm_dev);
+	}
+	ret = drm_connector_init(drm_dev, connector, gs_connector->base.funcs,
+				 DRM_MODE_CONNECTOR_DSI);
+	if (ret) {
+		dev_err(dev, "Error initializing drm_connector (%d)\n", ret);
+		return ret;
+	}
+
+	/* Attach functions */
+	gs_connector->funcs = &gs_drm_connector_funcs;
+	gs_connector->helper_private = &gs_drm_connector_helper_funcs;
+	drm_connector_helper_add(connector, &drm_connector_helper_funcs);
+
+	/* Attach properties */
+	ret = gs_panel_connector_attach_properties(ctx);
+	if (ret) {
+		dev_err(dev, "Error attaching connector properties (%d)\n", ret);
+		return ret;
+	}
+
+	/* Register */
+	ret = drm_connector_register(connector);
+	if (ret) {
+		dev_err(dev, "Error registering drm_connector (%d)\n", ret);
+		return ret;
+	}
+
+	/* Reset, mark as connected */
+	connector->funcs->reset(connector);
+	connector->status = connector_status_connected;
+	connector->state->self_refresh_aware = true;
+
+	return 0;
+}
+

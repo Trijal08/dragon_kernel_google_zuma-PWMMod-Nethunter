@@ -107,9 +107,6 @@ static int gs_panel_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_att
 	if (ret) {
 		dev_warn(dev, "%s attaching encoder returned nonzero code (%d)\n", __func__, ret);
 	}
-	connector->funcs->reset(connector);
-	connector->status = connector_status_connected;
-	connector->state->self_refresh_aware = true;
 	/*TODO(tknelms): "if we have a commit_done function:
 	 *   mark needs_commit = true;"
 	 */

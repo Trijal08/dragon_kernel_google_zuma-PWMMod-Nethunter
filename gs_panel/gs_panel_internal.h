@@ -17,9 +17,8 @@ struct gs_panel;
 struct gs_drm_connector;
 
 /* gs_panel_connector_funcs.c */
-const struct drm_connector_helper_funcs *get_panel_drm_connector_helper_funcs(void);
-const struct gs_drm_connector_funcs *get_panel_gs_drm_connector_funcs(void);
-const struct gs_drm_connector_helper_funcs *get_panel_gs_drm_connector_helper_funcs(void);
+int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *drm_dev,
+				     struct gs_drm_connector *gs_connector);
 
 /* drm_bridge_funcs.c */
 const struct drm_bridge_funcs *get_panel_drm_bridge_funcs(void);
@@ -28,8 +27,6 @@ const struct drm_bridge_funcs *get_panel_drm_bridge_funcs(void);
 int gs_panel_sysfs_create_files(struct device *dev);
 
 /* gs_panel.c */
-int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *drm_dev,
-				     struct gs_drm_connector *gs_connector);
 int gs_panel_first_enable(struct gs_panel *ctx);
 
 /**
