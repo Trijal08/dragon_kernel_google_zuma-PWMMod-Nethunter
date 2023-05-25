@@ -120,10 +120,10 @@ enum gti_irq_mode : u32 {
  */
 enum gti_mf_mode : u32 {
 	GTI_MF_MODE_UNFILTER = 0,
-	GTI_MF_MODE_DEFAULT,
+	GTI_MF_MODE_DEFAULT = 1,
 	GTI_MF_MODE_DYNAMIC = GTI_MF_MODE_DEFAULT,
-	GTI_MF_MODE_FILTER,
-	GTI_MF_MODE_AUTO_REPORT,
+	GTI_MF_MODE_FILTER = 2,
+	GTI_MF_MODE_AUTO_REPORT = 3,
 };
 
 /**
@@ -168,6 +168,7 @@ enum gti_pm_wakelock_type : u32 {
 	GTI_PM_WAKELOCK_TYPE_BUGREPORT = (1 << 5),
 	GTI_PM_WAKELOCK_TYPE_OFFLOAD_REPORT = (1 << 6),
 	GTI_PM_WAKELOCK_TYPE_SENSOR_DATA = (1 << 7),
+	GTI_PM_WAKELOCK_TYPE_FW_SETTINGS = (1 << 8),
 };
 
 enum gti_proc_type : u32 {
@@ -684,6 +685,9 @@ struct goog_touch_interface {
 	unsigned long slot_bit_active;
 	dev_t dev_id;
 	int panel_id;
+	char fw_name[64];
+	char config_name[64];
+	char test_limits_name[64];
 
 	u8 charger_state;
 	struct notifier_block charger_notifier;
@@ -749,15 +753,15 @@ struct goog_touch_interface *goog_touch_interface_probe(
 int goog_touch_interface_remove(struct goog_touch_interface *gti);
 
 int goog_pm_wake_lock_nosync(struct goog_touch_interface *gti,
- enum gti_pm_wakelock_type type, bool skip_pm_resume);
+		enum gti_pm_wakelock_type type, bool skip_pm_resume);
 int goog_pm_wake_lock(struct goog_touch_interface *gti,
- enum gti_pm_wakelock_type type, bool skip_pm_resume);
+		enum gti_pm_wakelock_type type, bool skip_pm_resume);
 int goog_pm_wake_unlock_nosync(struct goog_touch_interface *gti,
- enum gti_pm_wakelock_type type);
+		enum gti_pm_wakelock_type type);
 int goog_pm_wake_unlock(struct goog_touch_interface *gti,
- enum gti_pm_wakelock_type type);
+		enum gti_pm_wakelock_type type);
 bool goog_pm_wake_check_locked(struct goog_touch_interface *gti,
- enum gti_pm_wakelock_type type);
+		enum gti_pm_wakelock_type type);
 u32 goog_pm_wake_get_locks(struct goog_touch_interface *gti);
 int goog_pm_register_notification(struct goog_touch_interface *gti,
 		const struct dev_pm_ops* ops);
@@ -770,6 +774,7 @@ void gti_debug_input_dump(struct goog_touch_interface *gti);
 
 int goog_get_lptw_triggered(struct goog_touch_interface *gti);
 
+int goog_get_max_touch_report_rate(struct goog_touch_interface *gti);
 int goog_get_panel_id(struct device_node *node);
 int goog_get_firmware_name(struct device_node *node, int id, char *name, size_t size);
 int goog_get_config_name(struct device_node *node, int id, char *name, size_t size);

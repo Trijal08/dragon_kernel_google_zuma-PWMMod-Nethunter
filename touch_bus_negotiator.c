@@ -29,6 +29,8 @@
 static void handle_tbn_event_response(struct tbn_context *tbn,
 	struct TbnEventResponse *response);
 #endif
+static int tbn_handshaking(struct tbn_context *tbn, enum TbnOperation operation);
+static int tbn_remove(struct platform_device *pdev);
 
 static struct tbn_context *tbn_context;
 
@@ -104,7 +106,12 @@ static int aoc_channel_kthread(void *data)
 		}
 
 		if (len == sizeof(resp)) {
-			handle_tbn_event_response(tbn, &resp);
+			if (resp.operation == TBN_OPERATION_AOC_RESET) {
+				if (tbn->event_wq)
+					queue_work(tbn->event_wq, &tbn->aoc_reset_work);
+			} else {
+				handle_tbn_event_response(tbn, &resp);
+			}
 		}
 	}
 
@@ -177,7 +184,7 @@ static void send_tbn_event(struct tbn_context *tbn, enum TbnOperation operation)
 }
 #endif
 
-int tbn_handshaking(struct tbn_context *tbn, enum TbnOperation operation)
+static int tbn_handshaking(struct tbn_context *tbn, enum TbnOperation operation)
 {
 	struct completion *wait_for_completion;
 	enum tbn_bus_owner bus_owner;
@@ -374,6 +381,18 @@ int register_tbn(u32 *output)
 }
 EXPORT_SYMBOL_GPL(register_tbn);
 
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_TBN_AOC_CHANNEL_MODE)
+void tbn_aoc_reset_work(struct work_struct *work) {
+	struct tbn_context *tbn = container_of(work, struct tbn_context, aoc_reset_work);
+
+	pr_warn("%s: AOC has been reset", __func__);
+	if (tbn->requested_dev_mask == 0)
+		tbn_handshaking(tbn, TBN_OPERATION_AP_RELEASE_BUS);
+	else
+		tbn_handshaking(tbn, TBN_OPERATION_AP_REQUEST_BUS);
+}
+#endif
+
 void unregister_tbn(u32 *output)
 {
 	if (!tbn_context)
@@ -400,8 +419,10 @@ static int tbn_probe(struct platform_device *pdev)
 
 
 	tbn = devm_kzalloc(dev, sizeof(struct tbn_context), GFP_KERNEL);
-	if (!tbn)
+	if (!tbn) {
+		err = -ENOMEM;
 		goto failed;
+	}
 
 	tbn->dev = dev;
 	tbn->event_resp.lptw_triggered = false;
@@ -479,6 +500,16 @@ static int tbn_probe(struct platform_device *pdev)
 		if (err != 0) {
 			goto failed;
 		}
+
+		tbn->event_wq = alloc_workqueue(
+			"tbn_wq", WQ_UNBOUND | WQ_HIGHPRI | WQ_CPU_INTENSIVE, 1);
+		if (!tbn->event_wq) {
+			err = -ENOMEM;
+			dev_err(tbn->dev, "Failed to create work thread for tbn!\n");
+			goto failed;
+		}
+
+		INIT_WORK(&tbn->aoc_reset_work, tbn_aoc_reset_work);
 #endif
 	} else if (tbn->mode == TBN_MODE_MOCK) {
 		err = 0;
@@ -498,10 +529,8 @@ static int tbn_probe(struct platform_device *pdev)
 	dev_info(tbn->dev, "bus negotiator initialized: %pK, mode: %d\n", tbn, tbn->mode);
 
 failed:
-	if (err) {
-		devm_kfree(dev, tbn);
-		tbn_context = NULL;
-	}
+	if (err)
+		tbn_remove(pdev);
 
 	return err;
 }
@@ -511,17 +540,26 @@ static int tbn_remove(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct tbn_context *tbn = dev_get_drvdata(dev);
 
+	if (tbn == NULL)
+		return 0;
+
 	if (tbn->mode == TBN_MODE_GPIO) {
 		free_irq(tbn->aoc2ap_irq, tbn);
-		if (gpio_is_valid(tbn->aoc2ap_gpio))
-			gpio_free(tbn->aoc2ap_gpio);
+		if (gpio_is_valid(tbn->ap2aoc_gpio))
+			gpio_free(tbn->ap2aoc_gpio);
 		if (gpio_is_valid(tbn->aoc2ap_gpio))
 			gpio_free(tbn->aoc2ap_gpio);
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_TBN_AOC_CHANNEL_MODE)
 	} else if (tbn->mode == TBN_MODE_AOC_CHANNEL) {
-		kthread_stop(tbn->aoc_channel_task);
+		if (!IS_ERR(tbn->aoc_channel_task))
+			kthread_stop(tbn->aoc_channel_task);
+		if (tbn->event_wq)
+			destroy_workqueue(tbn->event_wq);
 #endif
 	}
+
+	devm_kfree(dev, tbn);
+	tbn_context = NULL;
 	return 0;
 }
 
