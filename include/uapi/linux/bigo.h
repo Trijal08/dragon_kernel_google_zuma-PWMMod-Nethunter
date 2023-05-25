@@ -9,12 +9,8 @@
 #define _UAPI_BIGO_H_
 
 #include <linux/ioctl.h>
-#ifdef __KERNEL__
 #include <linux/compiler.h>
-#else
-#define __user
 #include <linux/types.h>
-#endif
 
 /*
  * Structures as parameters for BigOcean commands. It should be passed

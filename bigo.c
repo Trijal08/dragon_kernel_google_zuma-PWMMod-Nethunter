@@ -251,7 +251,13 @@ static int bigo_run_job(struct bigo_core *core, struct bigo_job *job)
 	ret = wait_for_completion_timeout(&core->frame_done,
 			msecs_to_jiffies(core->debugfs.timeout));
 	if (!ret) {
-		pr_err("timed out waiting for HW\n");
+		pr_err("last rd addr: 0x%x, last_wr_addr: 0x%x\n",
+			bigo_core_readl(core, BIGO_REG_LAST_RD_AXI_ADDR),
+			bigo_core_readl(core, BIGO_REG_LAST_WR_AXI_ADDR));
+		pr_err("timed out waiting for HW for %u ms\n", core->debugfs.timeout);
+		pr_err("last rd addr: 0x%x, last_wr_addr: 0x%x\n",
+			bigo_core_readl(core, BIGO_REG_LAST_RD_AXI_ADDR),
+			bigo_core_readl(core, BIGO_REG_LAST_WR_AXI_ADDR));
 
 		spin_lock_irqsave(&core->status_lock, flags);
 		core->stat_with_irq = bigo_core_readl(core, BIGO_REG_STAT);
