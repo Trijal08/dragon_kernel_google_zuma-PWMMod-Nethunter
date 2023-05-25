@@ -156,7 +156,7 @@ int lwis_ioreg_get(struct lwis_ioreg_device *ioreg_dev, int index, char *name)
 	block->name = name;
 	block->start = res->start;
 	block->size = resource_size(res);
-	block->base = devm_ioremap(&plat_dev->dev, res->start, resource_size(res));
+	block->base = devm_ioremap(ioreg_dev->base_dev.k_dev, res->start, resource_size(res));
 	if (!block->base) {
 		dev_err(ioreg_dev->base_dev.dev, "Cannot map I/O register space\n");
 		return -EINVAL;
@@ -175,7 +175,7 @@ int lwis_ioreg_put_by_idx(struct lwis_ioreg_device *ioreg_dev, int index)
 		return -ENODEV;
 	};
 
-	dev = &ioreg_dev->base_dev.plat_dev->dev;
+	dev = ioreg_dev->base_dev.k_dev;
 	list = &ioreg_dev->reg_list;
 	if (index < 0 || index >= list->count) {
 		return -EINVAL;
@@ -201,7 +201,7 @@ int lwis_ioreg_put_by_name(struct lwis_ioreg_device *ioreg_dev, char *name)
 		return -ENODEV;
 	};
 
-	dev = &ioreg_dev->base_dev.plat_dev->dev;
+	dev = ioreg_dev->base_dev.k_dev;
 	list = &ioreg_dev->reg_list;
 	bidx = find_block_idx_by_name(list, name);
 	if (bidx < 0) {

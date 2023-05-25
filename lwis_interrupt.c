@@ -265,13 +265,16 @@ static int lwis_interrupt_read_and_clear_src_reg(struct lwis_interrupt *irq, uin
 		return ret;
 	}
 
-	/* Write back to the reset register */
-	ret = lwis_device_single_register_write(irq->lwis_dev, irq->irq_reg_bid, irq->irq_reset_reg,
-						*source_value, irq->irq_reg_access_size);
-	if (ret) {
-		dev_err(irq->lwis_dev->dev, "%s: Failed to write IRQ reset register: %d\n",
-			irq->name, ret);
-		return ret;
+	if (irq->irq_reset_reg) {
+		/* Write back to the reset register */
+		ret = lwis_device_single_register_write(irq->lwis_dev, irq->irq_reg_bid,
+							irq->irq_reset_reg, *source_value,
+							irq->irq_reg_access_size);
+		if (ret) {
+			dev_err(irq->lwis_dev->dev, "%s: Failed to write IRQ reset register: %d\n",
+				irq->name, ret);
+			return ret;
+		}
 	}
 
 	if (irq->irq_overflow_reg) {

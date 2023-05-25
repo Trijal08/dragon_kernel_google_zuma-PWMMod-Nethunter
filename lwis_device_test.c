@@ -167,13 +167,16 @@ static int lwis_test_device_probe(struct platform_device *plat_dev)
 	test_dev->base_dev.type = DEVICE_TYPE_TEST;
 	test_dev->base_dev.vops = test_vops;
 	test_dev->base_dev.subscribe_ops = test_subscribe_ops;
+	test_dev->base_dev.plat_dev = plat_dev;
+	test_dev->base_dev.k_dev = &plat_dev->dev;
 
 	/* Call the base device probe function */
-	ret = lwis_base_probe(&test_dev->base_dev, plat_dev);
+	ret = lwis_base_probe(&test_dev->base_dev);
 	if (ret) {
 		dev_err(dev, "TEST device: Error in lwis base probe: %d\n", ret);
 		goto error_probe;
 	}
+	platform_set_drvdata(plat_dev, &test_dev->base_dev);
 
 	/* Call TEST device specific setup function */
 	ret = lwis_test_device_setup(test_dev);

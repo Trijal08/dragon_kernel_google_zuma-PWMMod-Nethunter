@@ -3,11 +3,13 @@ lwis-objs += lwis_device_dpm.o
 lwis-objs += lwis_device_i2c.o
 lwis-objs += lwis_device_ioreg.o
 lwis-objs += lwis_device_slc.o
+lwis-objs += lwis_device_spi.o
 lwis-objs += lwis_device_test.o
 lwis-objs += lwis_device_top.o
 lwis-objs += lwis_clock.o
 lwis-objs += lwis_gpio.o
 lwis-objs += lwis_i2c.o
+lwis-objs += lwis_spi.o
 lwis-objs += lwis_interrupt.o
 lwis-objs += lwis_ioctl.o
 lwis-objs += lwis_ioreg.o
@@ -24,6 +26,8 @@ lwis-objs += lwis_io_entry.o
 lwis-objs += lwis_allocator.o
 lwis-objs += lwis_version.o
 lwis-objs += lwis_fence.o
+lwis-objs += lwis_i2c_bus_manager.o
+lwis-objs += lwis_i2c_sched.o
 
 # Anchorage specific files
 ifeq ($(CONFIG_SOC_GS101), y)
@@ -41,7 +45,6 @@ endif
 ifeq ($(CONFIG_SOC_ZUMA), y)
 lwis-objs += platform/casablanca/lwis_platform_casablanca.o
 lwis-objs += platform/casablanca/lwis_platform_casablanca_dma.o
-ccflags-y += -DLWIS_FENCE_ENABLED -DLWIS_BTS_BLOCK_NAME_ENABLED
 endif
 
 # Device tree specific file
