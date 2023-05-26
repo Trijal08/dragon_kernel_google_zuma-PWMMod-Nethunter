@@ -315,6 +315,37 @@ static const struct backlight_ops gs_backlight_ops = {
 	.update_status = gs_update_status,
 };
 
+int gs_panel_update_brightness_desc(struct gs_panel_brightness_desc *desc,
+				    const struct gs_brightness_configuration *configs,
+				    u32 num_configs, u32 panel_rev)
+{
+	int i;
+	const struct gs_brightness_configuration *matched_config;
+
+	if (!desc || !configs)
+		return -EINVAL;
+
+	matched_config = configs;
+
+	if (panel_rev) {
+		for (i = 0; i < num_configs; i++, configs++) {
+			if (configs->panel_rev & panel_rev) {
+				matched_config = configs;
+				break;
+			}
+		}
+	}
+
+	desc->max_brightness = matched_config->brt_capability.hbm.level.max;
+	desc->min_brightness = matched_config->brt_capability.normal.level.min;
+	desc->default_brightness = matched_config->default_brightness,
+	desc->brt_capability = &(matched_config->brt_capability);
+
+	return 0;
+
+}
+EXPORT_SYMBOL(gs_panel_update_brightness_desc);
+
 /* Regulators */
 
 static int _gs_panel_reg_ctrl(struct gs_panel *ctx, const struct panel_reg_ctrl *reg_ctrl,

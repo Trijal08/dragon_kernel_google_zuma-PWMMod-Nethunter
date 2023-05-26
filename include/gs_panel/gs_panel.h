@@ -230,6 +230,31 @@ struct gs_panel_brightness_desc {
 	const struct brightness_capability *brt_capability;
 };
 
+struct gs_brightness_configuration {
+	const u32 panel_rev;
+	const u32 default_brightness;
+	const struct brightness_capability brt_capability;
+};
+
+/**
+ * gs_panel_update_brightness_desc - Update brightness_desc based on panel rev
+ * @desc: Desc object to update
+ * @configs: Array of possible brightness configurations
+ * @num_configs: How many configs are in the array
+ * @panel_rev: This panel's revision
+ *
+ * Some of our panels have different target brightness configuration based on
+ * their panel revision. This ends up stored in a
+ * `struct gs_brightness_configuration` array. This function finds the matching
+ * configuration based on the given panel revision and updates the
+ * `struct gs_panel_brightness_desc` to reflect the correct brightness settings.
+ *
+ * Returns: 0 on success, negative value on error
+ */
+int gs_panel_update_brightness_desc(struct gs_panel_brightness_desc *desc,
+				    const struct gs_brightness_configuration *configs,
+				    u32 num_configs, u32 panel_rev);
+
 /**
  * struct gs_panel_lhbm_desc
  * TODO: document
