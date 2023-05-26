@@ -26,6 +26,7 @@
 #include "lwis_device_i2c.h"
 #include "lwis_device_ioreg.h"
 #include "lwis_device_test.h"
+#include "lwis_device_top.h"
 #include "lwis_event.h"
 #include "lwis_fence.h"
 #include "lwis_i2c.h"
@@ -430,7 +431,21 @@ static int cmd_get_device_info(struct lwis_device *lwis_dev, struct lwis_cmd_pkt
 		}
 	}
 
-	if (lwis_dev->transaction_worker_thread) {
+	/* Send kworker thread pid to userspace so that they can be added to the camera vendor
+	 * group for correct performance settings. */
+	if (lwis_dev->type == DEVICE_TYPE_I2C) {
+		/* For I2C devices, transactions are being run in the i2c manager thread */
+		struct lwis_i2c_device *i2c_dev;
+		i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
+		k_info.info.transaction_worker_thread_pid =
+			i2c_dev->i2c_bus_manager->i2c_bus_worker_thread->pid;
+	} else if (lwis_dev->type == DEVICE_TYPE_TOP) {
+		/* For top device, the event subscription thread is the main worker thread */
+		struct lwis_top_device *top_dev;
+		top_dev = container_of(lwis_dev, struct lwis_top_device, base_dev);
+		k_info.info.transaction_worker_thread_pid = top_dev->subscribe_worker_thread->pid;
+	} else if (lwis_dev->transaction_worker_thread) {
+		/* For all other device types, transaction threads are the main worker threads */
 		k_info.info.transaction_worker_thread_pid =
 			lwis_dev->transaction_worker_thread->pid;
 	}
