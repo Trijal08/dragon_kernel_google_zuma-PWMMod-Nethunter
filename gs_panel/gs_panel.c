@@ -596,6 +596,16 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 		return ret;
 	}
 
+	/* One-time configuration */
+	if (gs_panel_has_func(ctx, panel_config)) {
+		ret = ctx->desc->gs_panel_func->panel_config(ctx);
+		if (ret) {
+			dev_err(dev, "failed to configure panel settings\n");
+			return ret;
+		}
+	}
+
+	/* Backlight */
 	ret = gs_panel_init_backlight(ctx);
 	if (ret)
 		return ret;

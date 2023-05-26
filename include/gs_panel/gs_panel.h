@@ -179,6 +179,16 @@ struct gs_panel_funcs {
 	void (*set_hbm_mode)(struct gs_panel *gs_panel, enum gs_hbm_mode mode);
 
 	/**
+	 * @set_local_hbm_mode:
+	 *
+	 * This callback is used to implement panel specific logic for local high
+	 * brightness mode enablement. If this is not defined, it means that panel
+	 * does not support local HBM
+	 */
+	void (*set_local_hbm_mode)(struct gs_panel *gs_panel,
+				   bool local_hbm_en);
+
+	/**
 	 * @mode_set:
 	 *
 	 * This callback is used to perform driver specific logic for mode_set.
@@ -186,6 +196,14 @@ struct gs_panel_funcs {
 	 * state to perform appropriate mode set configuration depending on this state.
 	 */
 	void (*mode_set)(struct gs_panel *gs_panel, const struct gs_panel_mode *mode);
+
+	/**
+	 * @panel_config:
+	 *
+	 * This callback is used to do one time panel configuration before the
+	 * common driver initialization.
+	 */
+	int (*panel_config)(struct gs_panel *gs_panel);
 
 	/**
 	 * @panel_init:
@@ -597,5 +615,6 @@ static inline void te2_state_changed(struct backlight_device *bl)
 #define GS_HBM_FLAG_DIMMING_UPDATE BIT(3)
 
 #define GS_IS_HBM_ON(mode) ((mode) >= GS_HBM_ON_IRC_ON && (mode) < GS_HBM_STATE_MAX)
+#define GS_IS_HBM_ON_IRC_OFF(mode) (((mode) == GS_HBM_ON_IRC_OFF))
 
 #endif // DISPLAY_COMMON_PANEL_PANEL_GS_H_
