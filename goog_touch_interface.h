@@ -480,8 +480,13 @@ struct gti_fw_status_data {
  * @set_scan_mode: vendor driver operation to set scan mode.
  * @set_screen_protector_mode: vendor driver operation to set screen protector mode.
  * @set_sensing_mode: vendor driver operation to set sensing mode.
+ * @post_irq_thread_fn: post irq thread function that register by vendor driver.
  */
 struct gti_optional_configuration {
+	/*
+	 * Vendor command with GTI default NOP handler.
+	 * No need to check before use.
+	 */
 	int (*get_context_driver)(void *private_data, struct gti_context_driver_cmd *cmd);
 	int (*get_context_stylus)(void *private_data, struct gti_context_stylus_cmd *cmd);
 	int (*get_coord_filter_enabled)(void *private_data, struct gti_coord_filter_cmd *cmd);
@@ -511,6 +516,12 @@ struct gti_optional_configuration {
 	int (*set_screen_protector_mode)(void *private_data,
 			struct gti_screen_protector_mode_cmd *cmd);
 	int (*set_sensing_mode)(void *private_data, struct gti_sensing_cmd *cmd);
+
+	/*
+	 * Vendor command without GTI default NOP handler.
+	 * Need to check before use.
+	 */
+	irq_handler_t post_irq_thread_fn;
 };
 
 /**
