@@ -24,7 +24,7 @@ static struct delayed_work hdcp_work;
 
 static enum auth_state state;
 
-static unsigned long max_ver = 0;    /* Disable HDCP by default */
+static unsigned long max_ver = 2;
 module_param(max_ver, ulong, 0664);
 MODULE_PARM_DESC(max_ver,
 	"support up to specific hdcp version by setting max_ver=x");
