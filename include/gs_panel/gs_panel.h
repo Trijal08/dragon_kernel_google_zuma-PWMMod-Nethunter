@@ -273,7 +273,6 @@ struct gs_panel_reg_ctrl_desc {
 };
 
 struct gs_panel_desc {
-	const struct drm_dsc_config *pps_config;
 	u8 panel_id_reg;
 	u32 data_lane_cnt;
 	u32 hdr_formats;
