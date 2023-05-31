@@ -656,6 +656,10 @@ struct goog_touch_interface {
 	struct delayed_work set_report_rate_work;
 	u32 increase_report_rate_delay;
 	u32 decrease_report_rate_delay;
+	int abs_x_min;
+	int abs_x_max;
+	int abs_y_min;
+	int abs_y_max;
 
 	int display_vrefresh;
 	enum gti_display_state_setting display_state;
