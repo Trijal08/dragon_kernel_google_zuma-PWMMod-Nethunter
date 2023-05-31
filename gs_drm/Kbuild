@@ -2,4 +2,6 @@
 
 ccflags-y += -I$(srctree)/$(src)/../include
 
-obj-$(CONFIG_GS_DRM_PANEL_UNIFIED) += gs_drm_connector.o
+gs-drm-connector-y := gs_drm_connector.o
+
+obj-$(CONFIG_GS_DRM_PANEL_UNIFIED) += gs-drm-connector.o

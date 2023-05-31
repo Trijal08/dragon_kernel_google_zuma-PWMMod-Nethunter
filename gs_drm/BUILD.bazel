@@ -12,7 +12,7 @@ kernel_module(
         "//private/google-modules/soc/gs:gs_soc_headers",
     ],
     outs = [
-        "gs_drm_connector.ko",
+        "gs-drm-connector.ko",
     ],
     kernel_build = "//private/google-modules/soc/gs:gs_kernel_build",
     visibility = [
