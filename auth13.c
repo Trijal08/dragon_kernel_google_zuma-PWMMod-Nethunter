@@ -72,7 +72,7 @@ static int compare_rprime(void)
 		ri_retry_cnt++;
 		usleep_range(RI_DELAY * 1000, RI_DELAY * 1000 + 1);
 	}
-	while (ri_retry_cnt < RI_READ_RETRY_CNT);
+	while (ri_retry_cnt < RI_READ_RETRY_CNT && !is_aborted);
 
 	return -EFAULT;
 }
@@ -168,7 +168,7 @@ static int proceed_repeater(void)
 			hdcp_err("Vprime read failed (%d)\n", ret);
 
 		v_read_retry_cnt++;
-	} while(v_read_retry_cnt < V_READ_RETRY_CNT);
+	} while(v_read_retry_cnt < V_READ_RETRY_CNT && !is_aborted);
 
 	hdcp_err("2nd Auth fail!!!\n");
 	return -EIO;
