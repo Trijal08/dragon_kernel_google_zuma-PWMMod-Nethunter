@@ -14,7 +14,8 @@
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_panel.h>
 
-#include "gs_panel.h"
+#include "gs_panel/drm_panel_funcs_defaults.h"
+#include "gs_panel/gs_panel.h"
 
 /* Initialization */
 
@@ -25,7 +26,7 @@ static int panel_gs_simple_enable(struct drm_panel *panel)
 
 	dev_dbg(dev, "%s+\n", __func__);
 
-	gs_panel_reset(ctx);
+	gs_panel_reset_helper(ctx);
 	/* this is where we'd send init cmdset */
 
 	dev_dbg(dev, "%s-\n", __func__);
