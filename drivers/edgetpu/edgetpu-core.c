@@ -656,29 +656,72 @@ int edgetpu_alloc_coherent(struct edgetpu_dev *etdev, size_t size,
 			   enum edgetpu_context_id context_id)
 {
 	const u32 flags = EDGETPU_MMU_CC_ACCESS | EDGETPU_MMU_HOST | EDGETPU_MMU_COHERENT;
+	int ret;
 
 	mem->vaddr = dma_alloc_coherent(etdev->dev, size, &mem->dma_addr,
 					GFP_KERNEL);
 	if (!mem->vaddr)
 		return -ENOMEM;
+
 	edgetpu_x86_coherent_mem_init(mem);
-	mem->tpu_addr =
-		edgetpu_mmu_tpu_map(etdev, mem->dma_addr, size,
-				    DMA_BIDIRECTIONAL, context_id, flags);
-	if (!mem->tpu_addr) {
-		dma_free_coherent(etdev->dev, size, mem->vaddr, mem->dma_addr);
-		mem->vaddr = NULL;
-		return -EINVAL;
+
+	/* If this context's mappings reside in the default domain, we're done */
+	if (edgetpu_mmu_is_context_using_default_domain(etdev, context_id)) {
+		mem->tpu_addr = mem->dma_addr;
+		mem->size = size;
+		return 0;
 	}
+
+	/*
+	 * dma_get_sgtable may not always be available, and coherent buffers are always physically
+	 * contiguous, so create a 1-entry sgt by hand.
+	 */
+	mem->client_sgt = kzalloc(sizeof(*mem->client_sgt), GFP_KERNEL);
+	if (!mem->client_sgt) {
+		ret = -ENOMEM;
+		goto err_free_coherent;
+	}
+	mem->client_sgt->sgl = kzalloc(sizeof(*mem->client_sgt->sgl), GFP_KERNEL);
+	if (!mem->client_sgt->sgl) {
+		ret = -ENOMEM;
+		goto err_free_sgt;
+	}
+	mem->client_sgt->nents = 1;
+	mem->client_sgt->orig_nents = 1;
+	sg_set_page(mem->client_sgt->sgl, virt_to_page(mem->vaddr), PAGE_ALIGN(size), 0);
+
+	ret = edgetpu_mmu_map_sgt(etdev, mem->client_sgt, context_id, DMA_BIDIRECTIONAL, 0, flags);
+	if (!ret) {
+		etdev_err(etdev, "Failed to map coherent buffer to context %#X\n", context_id);
+		ret = -EIO;
+		goto err_free_sgl;
+	}
+
+	mem->tpu_addr = sg_dma_address(mem->client_sgt->sgl);
 	mem->size = size;
 	return 0;
+
+err_free_sgl:
+	kfree(mem->client_sgt->sgl);
+err_free_sgt:
+	kfree(mem->client_sgt);
+	mem->client_sgt = NULL;
+err_free_coherent:
+	dma_free_coherent(etdev->dev, size, mem->vaddr, mem->dma_addr);
+	mem->vaddr = NULL;
+	return ret;
 }
 
 void edgetpu_free_coherent(struct edgetpu_dev *etdev,
 			   struct edgetpu_coherent_mem *mem,
 			   enum edgetpu_context_id context_id)
 {
-	edgetpu_mmu_tpu_unmap(etdev, mem->tpu_addr, mem->size, context_id);
+	if (!edgetpu_mmu_is_context_using_default_domain(etdev, context_id)) {
+		edgetpu_mmu_unmap_sgt(etdev, mem->client_sgt, context_id, DMA_BIDIRECTIONAL,
+				      /*dma_attrs=*/0, /*mmu_flags=*/0);
+		kfree(mem->client_sgt->sgl);
+		kfree(mem->client_sgt);
+	}
 	edgetpu_x86_coherent_mem_set_wb(mem);
 	dma_free_coherent(etdev->dev, mem->size, mem->vaddr, mem->dma_addr);
 	mem->vaddr = NULL;
