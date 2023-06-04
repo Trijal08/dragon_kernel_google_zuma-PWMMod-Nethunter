@@ -183,6 +183,11 @@ int lwis_slc_buffer_alloc(struct lwis_device *lwis_dev, struct lwis_alloc_buffer
 				slc_dev->pt[i].partition_id = partition_id;
 				alloc_info->dma_fd = fd_or_err;
 				alloc_info->partition_id = slc_dev->pt[i].partition_id;
+
+				if (slc_dev->pt[i].size_kb > SIZE_TO_KB(alloc_info->size)) {
+					dev_warn(lwis_dev->dev,
+						"Size of SLC Partition is more than what was requested\n");
+				}
 				return 0;
 			} else {
 				dev_err(lwis_dev->dev, "Failed to enable partition id %d\n",

@@ -24,10 +24,10 @@
 #include "lwis_device.h"
 #include "lwis_event.h"
 #include "lwis_fence.h"
+#include "lwis_i2c_bus_manager.h"
 #include "lwis_io_entry.h"
 #include "lwis_ioreg.h"
 #include "lwis_util.h"
-#include "lwis_i2c_bus_manager.h"
 
 #define CREATE_TRACE_POINTS
 #include "lwis_trace.h"
@@ -149,6 +149,9 @@ void lwis_transaction_free(struct lwis_device *lwis_dev, struct lwis_transaction
 		}
 	}
 	lwis_allocator_free(lwis_dev, transaction->info.io_entries);
+
+	transaction->starting_read_buf = NULL;
+
 	if (transaction->resp) {
 		kfree(transaction->resp);
 	}
@@ -211,7 +214,16 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 
 	resp_size = sizeof(struct lwis_transaction_response_header) + resp->results_size_bytes;
 	read_buf = (uint8_t *)resp + sizeof(struct lwis_transaction_response_header);
+
 	resp->completion_index = -1;
+
+	/*
+	 * If the starting read buffer pointer is not null then use this cached location to correctly
+	 * set the read buffer for the current transaction processing run.
+	 */
+	if (transaction->starting_read_buf) {
+		read_buf = transaction->starting_read_buf;
+	}
 
 	/* Use write memory barrier at the beginning of I/O entries if the access protocol
 	 * allows it */
@@ -367,6 +379,7 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 		 * in the transaction.
 		 */
 		spin_lock_irqsave(&client->transaction_lock, flags);
+		transaction->starting_read_buf = read_buf;
 		transaction->remaining_entries_to_process = remaining_entries_to_be_processed;
 		spin_unlock_irqrestore(&client->transaction_lock, flags);
 		return ret;
@@ -471,6 +484,8 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 	struct list_head pending_events;
 	struct list_head pending_fences;
 	struct lwis_transaction *transaction;
+	struct lwis_device *lwis_dev = client->lwis_dev;
+	struct lwis_i2c_bus_manager *i2c_bus_manager = lwis_i2c_bus_manager_get_manager(lwis_dev);
 
 	INIT_LIST_HEAD(&pending_events);
 	INIT_LIST_HEAD(&pending_fences);
@@ -504,6 +519,18 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 					client->lwis_dev->dev,
 					"Transaction processing limit reached, remaining entries to process %d\n",
 					transaction->remaining_entries_to_process);
+
+				/*
+				 * Queue the remaining transaction again on the transaction worker/bus maanger worker
+				 * to be processed again later
+				 */
+				if (i2c_bus_manager) {
+					kthread_queue_work(&i2c_bus_manager->i2c_bus_worker,
+							   &client->i2c_work);
+				} else {
+					kthread_queue_work(&client->lwis_dev->transaction_worker,
+							   &client->transaction_work);
+				}
 				break;
 			}
 		}
@@ -919,6 +946,7 @@ new_repeating_transaction_iteration(struct lwis_client *client,
 
 	new_instance->is_weak_transaction = transaction->is_weak_transaction;
 	new_instance->remaining_entries_to_process = transaction->info.num_io_entries;
+	new_instance->starting_read_buf = NULL;
 
 	INIT_LIST_HEAD(&new_instance->event_list_node);
 	INIT_LIST_HEAD(&new_instance->process_queue_node);

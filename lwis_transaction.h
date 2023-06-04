@@ -53,6 +53,11 @@ struct lwis_transaction {
 	   remaining to be processed after a given transaction process cycle
 	*/
 	int remaining_entries_to_process;
+	/* Starting read buffer pointer is set to the last read location when the transaction
+	   process limit has reached. During the next run for the transaction, this pointer
+	   will be referred to correctly point to the read buffer for the run.
+	*/
+	uint8_t *starting_read_buf;
 };
 
 /* For debugging purposes, keeps track of the transaction information, as
