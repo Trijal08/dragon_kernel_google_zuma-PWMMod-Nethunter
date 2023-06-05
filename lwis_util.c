@@ -92,6 +92,8 @@ const char *lwis_device_type_to_string(int32_t type)
 		return "SLC";
 	case DEVICE_TYPE_TEST:
 		return "TEST";
+	case DEVICE_TYPE_SPI:
+		return "SPI";
 	case DEVICE_TYPE_UNKNOWN:
 	default:
 		return "UNKNOWN";
@@ -161,4 +163,9 @@ int lwis_set_kthread_priority(struct lwis_device *lwis_dev, struct task_struct *
 	}
 
 	return 0;
+}
+
+bool lwis_check_device_type(struct lwis_device *lwis_dev, int32_t type)
+{
+	return ((lwis_dev) && (lwis_dev->type == type));
 }

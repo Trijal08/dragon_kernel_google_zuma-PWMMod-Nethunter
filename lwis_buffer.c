@@ -10,11 +10,13 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME "-buffer: " fmt
 
+#include <linux/dma-buf.h>
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <soc/google/pt.h>
 
 #include "lwis_buffer.h"
+#include "lwis_commands.h"
 #include "lwis_device.h"
 #include "lwis_device_slc.h"
 #include "lwis_platform_dma.h"
@@ -173,6 +175,7 @@ int lwis_buffer_enroll(struct lwis_client *lwis_client, struct lwis_enrolled_buf
 	struct lwis_buffer_enrollment_list *enrollment_list;
 	struct list_head *it_enrollment;
 	struct lwis_enrolled_buffer *old_buffer;
+	char buffer_name[LWIS_MAX_NAME_STRING_LEN];
 
 	if (!lwis_client) {
 		pr_err("Enroll: LWIS client is NULL\n");
@@ -205,9 +208,10 @@ int lwis_buffer_enroll(struct lwis_client *lwis_client, struct lwis_enrolled_buf
 			PTR_ERR(buffer->dma_buf));
 		return PTR_ERR(buffer->dma_buf);
 	}
+	scnprintf(buffer_name, sizeof(buffer_name), "lwis:%s", lwis_client->lwis_dev->name);
+	dma_buf_set_name(buffer->dma_buf, buffer_name);
 
-	buffer->dma_buf_attachment =
-		dma_buf_attach(buffer->dma_buf, &lwis_client->lwis_dev->plat_dev->dev);
+	buffer->dma_buf_attachment = dma_buf_attach(buffer->dma_buf, lwis_client->lwis_dev->k_dev);
 	if (IS_ERR_OR_NULL(buffer->dma_buf_attachment)) {
 		dev_err(lwis_client->lwis_dev->dev,
 			"Could not attach dma buffer for fd: %d (errno: %ld)", buffer->info.fd,

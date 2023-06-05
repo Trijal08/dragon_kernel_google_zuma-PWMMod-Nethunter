@@ -237,7 +237,7 @@ void lwis_allocator_release(struct lwis_device *lwis_dev)
 	mutex_unlock(&lwis_dev->client_lock);
 }
 
-void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size)
+void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size, gfp_t gfp_flags)
 {
 	struct lwis_allocator_block_mgr *block_mgr;
 	struct lwis_allocator_block_pool *block_pool;
@@ -301,7 +301,7 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size)
 	 * memory on hand.
 	 */
 	if (idx > 19) {
-		block = kmalloc(sizeof(struct lwis_allocator_block), GFP_KERNEL);
+		block = kmalloc(sizeof(struct lwis_allocator_block), gfp_flags);
 		if (block == NULL) {
 			dev_err(lwis_dev->dev, "Allocate failed\n");
 			return NULL;
@@ -309,7 +309,7 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size)
 		block->type = idx;
 		block->next = NULL;
 		block->prev = NULL;
-		block->ptr = kvmalloc(size, GFP_KERNEL);
+		block->ptr = kvmalloc(size, gfp_flags);
 		if (block->ptr == NULL) {
 			dev_err(lwis_dev->dev, "Allocate failed\n");
 			kfree(block);
@@ -336,7 +336,7 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size)
 	}
 
 	/* Allocate new block */
-	block = kmalloc(sizeof(struct lwis_allocator_block), GFP_KERNEL);
+	block = kmalloc(sizeof(struct lwis_allocator_block), gfp_flags);
 	if (block == NULL) {
 		dev_err(lwis_dev->dev, "Allocate failed\n");
 		return NULL;
@@ -345,7 +345,7 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size)
 	block->next = NULL;
 	block->prev = NULL;
 	block_size = 1 << idx;
-	block->ptr = kvmalloc(block_size, GFP_KERNEL);
+	block->ptr = kvmalloc(block_size, gfp_flags);
 	if (block->ptr == NULL) {
 		dev_err(lwis_dev->dev, "Allocate failed\n");
 		kfree(block);

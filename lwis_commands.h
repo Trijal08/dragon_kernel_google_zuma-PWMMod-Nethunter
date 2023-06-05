@@ -51,6 +51,7 @@ extern "C" {
  * slc  : for configuring system level cache partitions
  * dpm  : for dynamic power manager requests update.
  * test : for test-specific devices.
+ * spi  : for controlling spi devices
  */
 enum lwis_device_types {
 	DEVICE_TYPE_UNKNOWN = -1,
@@ -60,6 +61,7 @@ enum lwis_device_types {
 	DEVICE_TYPE_SLC,
 	DEVICE_TYPE_DPM,
 	DEVICE_TYPE_TEST,
+	DEVICE_TYPE_SPI,
 	NUM_DEVICE_TYPES
 };
 
@@ -159,7 +161,9 @@ enum lwis_io_entry_types {
 	LWIS_IO_ENTRY_WRITE_BATCH,
 	LWIS_IO_ENTRY_MODIFY,
 	LWIS_IO_ENTRY_POLL,
-	LWIS_IO_ENTRY_READ_ASSERT
+	LWIS_IO_ENTRY_READ_ASSERT,
+	LWIS_IO_ENTRY_POLL_SHORT,
+	LWIS_IO_ENTRY_WAIT
 };
 
 // For io_entry read and write types.
@@ -201,6 +205,7 @@ struct lwis_io_entry {
 		struct lwis_io_entry_rw_batch rw_batch;
 		struct lwis_io_entry_modify mod;
 		struct lwis_io_entry_read_assert read_assert;
+		uint64_t wait_us;
 	};
 };
 
@@ -304,6 +309,7 @@ struct lwis_transaction_trigger_node {
 };
 
 enum lwis_transaction_trigger_node_operator {
+	LWIS_TRIGGER_NODE_OPERATOR_INVALID = -1,
 	LWIS_TRIGGER_NODE_OPERATOR_NONE,
 	LWIS_TRIGGER_NODE_OPERATOR_AND,
 	LWIS_TRIGGER_NODE_OPERATOR_OR,
@@ -324,14 +330,11 @@ struct lwis_transaction_trigger_condition {
 #define LWIS_ID_INVALID (-1LL)
 #define LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE (-1LL)
 #define LWIS_EVENT_COUNTER_EVERY_TIME (-2LL)
+
 struct lwis_transaction_info {
 	// Input
 	int64_t trigger_event_id;
 	int64_t trigger_event_counter;
-#ifdef LWIS_FENCE_ENABLED
-	struct lwis_transaction_trigger_condition trigger_condition;
-	int32_t completion_fence_fd;
-#endif
 	size_t num_io_entries;
 	struct lwis_io_entry *io_entries;
 	bool run_in_event_context;
@@ -433,10 +436,6 @@ struct lwis_qos_setting {
 	int64_t peak_bw;
 	// RT BW (total peak)
 	int64_t rt_bw;
-#ifdef LWIS_BTS_BLOCK_NAME_ENABLED
-	// Bts client name
-	char bts_block_name[LWIS_MAX_NAME_STRING_LEN];
-#endif
 };
 
 struct lwis_qos_setting_v2 {

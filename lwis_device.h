@@ -39,6 +39,7 @@
 #define LWIS_SLC_DEVICE_COMPAT "google,lwis-slc-device"
 #define LWIS_DPM_DEVICE_COMPAT "google,lwis-dpm-device"
 #define LWIS_TEST_DEVICE_COMPAT "google,lwis-test-device"
+#define LWIS_SPI_DEVICE_COMPAT "google,lwis-spi-device"
 
 #define EVENT_HASH_BITS 8
 #define BUFFER_HASH_BITS 8
@@ -201,6 +202,7 @@ struct lwis_device {
 	int32_t type;
 	char name[LWIS_MAX_NAME_STRING_LEN];
 	struct device *dev;
+	struct device *k_dev;
 	struct platform_device *plat_dev;
 	bool reset_gpios_present;
 	struct gpio_descs *reset_gpios;
@@ -294,6 +296,8 @@ struct lwis_device {
 	/* Worker thread */
 	struct kthread_worker transaction_worker;
 	struct task_struct *transaction_worker_thread;
+	/* Limit on number of transactions to be processed at a time */
+	int transaction_process_limit;
 };
 
 /*
@@ -345,13 +349,15 @@ struct lwis_client {
 	struct list_head node;
 	/* Mark if the client called device enable */
 	bool is_enabled;
+	/* Work item to schedule I2C transfers */
+	struct kthread_work i2c_work;
 };
 
 /*
  *  lwis_base_probe: Common probe function that will be used for all types
  *  of devices.
  */
-int lwis_base_probe(struct lwis_device *lwis_dev, struct platform_device *plat_dev);
+int lwis_base_probe(struct lwis_device *lwis_dev);
 
 /*
  *  lwis_base_unprobe: Cleanup a device instance
@@ -413,13 +419,6 @@ void lwis_dev_power_seq_list_print(struct lwis_device_power_sequence_list *list)
  * Use the customized function handle to print information from each device registered in LWIS.
  */
 void lwis_device_info_dump(const char *name, void (*func)(struct lwis_device *));
-
-/*
- * lwis_device_crash_info_dump:
- * Use the customized function handle to print information from each device registered in LWIS
- * when usersapce crash.
- */
-void lwis_device_crash_info_dump(struct lwis_device *lwis_dev);
 
 /*
  * lwis_save_register_io_info: Saves the register io info in a history buffer

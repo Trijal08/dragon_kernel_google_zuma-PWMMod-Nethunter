@@ -57,8 +57,6 @@ int ioctl_lwis_fence_create(struct lwis_device *lwis_dev, int32_t __user *msg);
  */
 struct lwis_device *lwis_fence_get(int fd);
 
-#ifdef LWIS_FENCE_ENABLED
-
 /* Creates all fences that do not currently exist */
 int lwis_initialize_transaction_fences(struct lwis_client *client,
 				       struct lwis_transaction *transaction);
@@ -103,67 +101,5 @@ void lwis_fences_pending_signal_emit(struct lwis_device *lwis_device,
 void lwis_pending_fences_move_all(struct lwis_device *lwis_device,
 				  struct lwis_transaction *transaction,
 				  struct list_head *pending_fences, int error_code);
-#else
-
-static inline int lwis_initialize_transaction_fences(struct lwis_client *client,
-						     struct lwis_transaction *transaction)
-{
-	return 0;
-}
-
-static inline bool lwis_triggered_by_condition(struct lwis_transaction *transaction)
-{
-	return false;
-}
-
-static inline bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
-							struct lwis_transaction *weak_transaction,
-							int64_t event_id, int64_t event_counter)
-{
-	return false;
-}
-
-static inline bool lwis_fence_triggered_condition_ready(struct lwis_transaction *transaction,
-							int fence_status)
-{
-	return false;
-}
-
-static inline int lwis_parse_trigger_condition(struct lwis_client *client,
-					       struct lwis_transaction *transaction)
-{
-	return 0;
-}
-
-static inline int lwis_fence_signal(struct lwis_fence *lwis_fence, int status)
-{
-	return 0;
-}
-
-static inline int lwis_add_completion_fence(struct lwis_client *client,
-					    struct lwis_transaction *transaction)
-{
-	return 0;
-}
-
-static inline struct lwis_fence_pending_signal *
-lwis_fence_pending_signal_create(struct lwis_fence *fence)
-{
-	return NULL;
-}
-
-static inline void lwis_fences_pending_signal_emit(struct lwis_device *lwis_device,
-						   struct list_head *pending_fences)
-{
-	return;
-}
-
-static inline void lwis_pending_fences_move_all(struct lwis_device *lwis_device,
-						struct lwis_transaction *transaction,
-						struct list_head *pending_fences, int error_code)
-{
-	return;
-}
-#endif
 
 #endif /* LWIS_IOCTL_H_ */

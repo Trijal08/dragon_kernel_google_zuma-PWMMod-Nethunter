@@ -57,7 +57,7 @@ static struct lwis_event_subscribe_operations slc_subscribe_ops = {
 static int lwis_slc_enable(struct lwis_device *lwis_dev)
 {
 #ifdef CONFIG_OF
-	struct device_node *node = lwis_dev->plat_dev->dev.of_node;
+	struct device_node *node = lwis_dev->k_dev->of_node;
 	int num_pt_id = 0, num_pt_size = 0, i = 0, ret = 0;
 	struct lwis_slc_device *slc_dev = (struct lwis_slc_device *)lwis_dev;
 	size_t pt_size_kb[MAX_NUM_PT] = {};
@@ -183,6 +183,11 @@ int lwis_slc_buffer_alloc(struct lwis_device *lwis_dev, struct lwis_alloc_buffer
 				slc_dev->pt[i].partition_id = partition_id;
 				alloc_info->dma_fd = fd_or_err;
 				alloc_info->partition_id = slc_dev->pt[i].partition_id;
+
+				if (slc_dev->pt[i].size_kb > SIZE_TO_KB(alloc_info->size)) {
+					dev_warn(lwis_dev->dev,
+						"Size of SLC Partition is more than what was requested\n");
+				}
 				return 0;
 			} else {
 				dev_err(lwis_dev->dev, "Failed to enable partition id %d\n",
@@ -246,24 +251,28 @@ static int lwis_slc_device_probe(struct platform_device *plat_dev)
 {
 	int ret = 0;
 	struct lwis_slc_device *slc_dev;
+	struct device *dev = &plat_dev->dev;
 
 	/* Allocate SLC device specific data construct */
-	slc_dev = kzalloc(sizeof(struct lwis_slc_device), GFP_KERNEL);
+	slc_dev = devm_kzalloc(dev, sizeof(struct lwis_slc_device), GFP_KERNEL);
 	if (!slc_dev) {
-		pr_err("Failed to allocate slc device structure\n");
+		dev_err(dev, "Failed to allocate slc device structure\n");
 		return -ENOMEM;
 	}
 
 	slc_dev->base_dev.type = DEVICE_TYPE_SLC;
 	slc_dev->base_dev.vops = slc_vops;
 	slc_dev->base_dev.subscribe_ops = slc_subscribe_ops;
+	slc_dev->base_dev.plat_dev = plat_dev;
+	slc_dev->base_dev.k_dev = &plat_dev->dev;
 
 	/* Call the base device probe function */
-	ret = lwis_base_probe((struct lwis_device *)slc_dev, plat_dev);
+	ret = lwis_base_probe(&slc_dev->base_dev);
 	if (ret) {
-		pr_err("Error in lwis base probe\n");
+		dev_err(dev, "Error in lwis base probe\n");
 		goto error_probe;
 	}
+	platform_set_drvdata(plat_dev, &slc_dev->base_dev);
 
 	dev_info(slc_dev->base_dev.dev, "SLC Device Probe: Success\n");
 

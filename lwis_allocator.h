@@ -62,7 +62,7 @@ void lwis_allocator_release(struct lwis_device *lwis_dev);
 /*
  *  lwis_allocator_allocate: Allocate a block from the recycling memory allocator
  */
-void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size);
+void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size, gfp_t gfp_flags);
 
 /*
  *  lwis_allocator_free: Free a block to the recycling memory allocator
