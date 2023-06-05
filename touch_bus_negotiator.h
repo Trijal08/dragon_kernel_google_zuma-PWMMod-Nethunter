@@ -31,6 +31,7 @@ enum TbnOperation : __u32 {
 	TBN_OPERATION_IDLE = 0,
 	TBN_OPERATION_AP_RELEASE_BUS,
 	TBN_OPERATION_AP_REQUEST_BUS,
+	TBN_OPERATION_AOC_RESET,
 };
 
 struct TbnEvent {
@@ -64,6 +65,8 @@ struct tbn_context {
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_TBN_AOC_CHANNEL_MODE)
 	struct TbnEvent event;
 	struct mutex event_lock;
+	struct work_struct aoc_reset_work;
+	struct workqueue_struct *event_wq;
 #endif
 };
 
