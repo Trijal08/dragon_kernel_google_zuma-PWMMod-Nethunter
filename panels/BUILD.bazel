@@ -11,7 +11,7 @@ kernel_module(
         "//private/google-modules/soc/gs:gs_soc_headers",
     ],
     outs = [
-        "panel_gs_simple.ko",
+        "panel-gs-simple.ko",
     ],
     kernel_build = "//private/google-modules/soc/gs:gs_kernel_build",
     visibility = [
