@@ -20,10 +20,10 @@ kernel_module(
         "**/*.h",
         "Kbuild",
     ]) + [
-        "//private/google-modules/touch/common:headers",
-        "//private/google-modules/display:headers",
-        "//private/google-modules/display/include:headers",
+        "//private/google-modules/display/samsung:headers",
+        "//private/google-modules/display/samsung/include:headers",
         "//private/google-modules/soc/gs:gs_soc_headers",
+        "//private/google-modules/touch/common:headers",
     ],
     outs = [
         "ftm5.ko",
