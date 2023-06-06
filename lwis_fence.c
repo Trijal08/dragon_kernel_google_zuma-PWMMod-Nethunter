@@ -103,7 +103,6 @@ static ssize_t lwis_fence_get_status(struct file *fp, char __user *user_buffer, 
 	int max_len, read_len;
 
 	if (!lwis_fence) {
-		dev_err(lwis_fence->lwis_top_dev->dev, "Cannot find lwis_fence instance\n");
 		return -EFAULT;
 	}
 
@@ -129,7 +128,6 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 	struct lwis_fence *lwis_fence = fp->private_data;
 
 	if (!lwis_fence) {
-		dev_err(lwis_fence->lwis_top_dev->dev, "Cannot find lwis_fence instance\n");
 		return -EFAULT;
 	}
 
@@ -156,6 +154,10 @@ int lwis_fence_signal(struct lwis_fence *lwis_fence, int status)
 	/* Temporary vars for hash table traversal */
 	struct hlist_node *n;
 	int i;
+
+	if (!lwis_fence) {
+		return -EFAULT;
+	}
 
 	spin_lock_irqsave(&lwis_fence->lock, flags);
 
@@ -194,7 +196,6 @@ static unsigned int lwis_fence_poll(struct file *fp, poll_table *wait)
 	int status = 0;
 	struct lwis_fence *lwis_fence = fp->private_data;
 	if (!lwis_fence) {
-		dev_err(lwis_fence->lwis_top_dev->dev, "Cannot find lwis_fence instance\n");
 		return POLLERR;
 	}
 
@@ -480,7 +481,6 @@ int lwis_parse_trigger_condition(struct lwis_client *client, struct lwis_transac
 	int i, ret;
 
 	if (!transaction || !client) {
-		dev_err(client->lwis_dev->dev, "Invalid lwis transaction\n");
 		return -EINVAL;
 	}
 
@@ -539,7 +539,6 @@ int lwis_initialize_transaction_fences(struct lwis_client *client,
 	int fd_or_err;
 
 	if (!transaction || !client) {
-		dev_err(client->lwis_dev->dev, "Invalid lwis transaction\n");
 		return -EINVAL;
 	}
 
