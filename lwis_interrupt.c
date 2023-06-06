@@ -411,7 +411,7 @@ static irqreturn_t lwis_interrupt_regular_isr(int irq_number, void *data)
 {
 	int ret;
 	struct lwis_interrupt *irq = (struct lwis_interrupt *)data;
-	uint64_t source_value, overflow_value;
+	uint64_t source_value = 0, overflow_value = 0;
 
 	ret = lwis_interrupt_read_and_clear_src_reg(irq, &source_value, &overflow_value);
 	if (ret) {
@@ -490,7 +490,7 @@ static irqreturn_t lwis_interrupt_aggregate_isr(int irq_number, void *data)
 {
 	int ret;
 	struct lwis_interrupt *irq = (struct lwis_interrupt *)data;
-	uint64_t source_value, overflow_value;
+	uint64_t source_value = 0, overflow_value = 0;
 
 	ret = lwis_interrupt_read_and_clear_src_reg(irq, &source_value, &overflow_value);
 	if (ret) {
