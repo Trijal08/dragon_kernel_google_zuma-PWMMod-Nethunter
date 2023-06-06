@@ -732,7 +732,7 @@ int gs_dsi_panel_common_probe(struct mipi_dsi_device *dsi)
 }
 EXPORT_SYMBOL(gs_dsi_panel_common_probe);
 
-int gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi)
+static void _gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi)
 {
 	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
 
@@ -741,9 +741,20 @@ int gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi)
 	drm_bridge_remove(&ctx->bridge);
 
 	devm_backlight_device_unregister(ctx->dev, ctx->bl);
+}
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+void gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi)
+{
+	_gs_dsi_panel_common_remove(dsi);
+}
+#else
+int gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi)
+{
+	_gs_dsi_panel_common_remove(dsi);
 	return 0;
 }
+#endif
 EXPORT_SYMBOL(gs_dsi_panel_common_remove);
 
 /* DRM panel funcs */

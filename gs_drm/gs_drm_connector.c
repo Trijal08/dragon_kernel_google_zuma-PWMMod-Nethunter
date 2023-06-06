@@ -9,6 +9,7 @@
 
 #include "gs_drm/gs_drm_connector.h"
 
+#include <linux/of.h>
 #include <linux/of_graph.h>
 #include <linux/platform_device.h>
 #include <drm/drm_atomic_state_helper.h>

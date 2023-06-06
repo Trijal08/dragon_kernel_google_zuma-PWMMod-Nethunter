@@ -16,6 +16,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/gpio/consumer.h>
 #include <linux/backlight.h>
+#include <linux/version.h>
 #include <drm/drm_bridge.h>
 #include <drm/drm_modes.h>
 #include <drm/drm_panel.h>
@@ -611,7 +612,11 @@ int gs_dsi_panel_common_probe(struct mipi_dsi_device *dsi);
  *
  * Return: 0 on success, negative value for error
  */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+void gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi);
+#else
 int gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi);
+#endif
 
 /**
  * gs_panel_msleep - sleeps for a given number of ms
