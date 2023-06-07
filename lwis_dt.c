@@ -441,7 +441,7 @@ static int parse_irq_reg_bits(struct device_node *info, int *bits_num_result, u3
 	if (*bits_num_result != int_reg_bits_num) {
 		pr_err("Error getting int-reg-bits: %d\n", int_reg_bits_num);
 		kfree(int_reg_bits);
-		return int_reg_bits_num;
+		return -EINVAL;
 	}
 	*reg_bits_result = int_reg_bits;
 
