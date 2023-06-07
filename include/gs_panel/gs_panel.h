@@ -618,6 +618,24 @@ void gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi);
 int gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi);
 #endif
 
+#define GS_VREFRESH_TO_PERIOD_USEC(rate) DIV_ROUND_UP(USEC_PER_SEC, (rate) ? (rate) : 60)
+
+/**
+ * gs_panel_wait_for_vblank - wait for next vblank provided by attached drm_crtc
+ * @ctx: handle for gs_panel that is waiting
+ *
+ * Return: 0 on success, negative value for error
+ */
+int gs_panel_wait_for_vblank(struct gs_panel *ctx);
+
+/**
+ * gs_panel_wait_for_vsync_done - wait for the vsync signal to be done
+ * @ctx: handle for gs_panel that is waiting
+ * @te_us: length of te period, in us
+ * @period_us: length of a clock period (TODO: verify)
+ */
+void gs_panel_wait_for_vsync_done(struct gs_panel *ctx, u32 te_us, u32 period_us);
+
 /**
  * gs_panel_msleep - sleeps for a given number of ms
  * @delay_ms: Length of time to sleep

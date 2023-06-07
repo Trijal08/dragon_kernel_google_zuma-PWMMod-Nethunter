@@ -19,6 +19,7 @@
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_print.h>
+#include <drm/drm_vblank.h>
 #include <video/mipi_display.h>
 
 #include "gs_drm/gs_drm_connector.h"
@@ -793,6 +794,52 @@ void gs_panel_reset_helper(struct gs_panel *ctx)
 	gs_panel_post_power_on(ctx);
 }
 EXPORT_SYMBOL(gs_panel_reset_helper);
+
+/* Timing */
+
+/* Get the VSYNC start time within a TE period */
+static u64 gs_panel_vsync_start_time_us(u32 te_us, u32 te_period_us)
+{
+	/* Approximate the VSYNC start time with TE falling edge. */
+	if (te_us > 0 && te_us < te_period_us)
+		return te_us * 105 / 100; /* add 5% for variation */
+
+	/* Approximate the TE falling edge with 55% TE width */
+	return te_period_us * 55 / 100;
+}
+
+int gs_panel_wait_for_vblank(struct gs_panel *ctx)
+{
+	struct drm_crtc *crtc = NULL;
+
+	if (ctx->gs_connector->base.state)
+		crtc = ctx->gs_connector->base.state->crtc;
+
+	if (crtc && !drm_crtc_vblank_get(crtc)) {
+		drm_crtc_wait_one_vblank(crtc);
+		drm_crtc_vblank_put(crtc);
+		return 0;
+	}
+
+	WARN_ON(1);
+	return -ENODEV;
+}
+EXPORT_SYMBOL(gs_panel_wait_for_vblank);
+
+void gs_panel_wait_for_vsync_done(struct gs_panel *ctx, u32 te_us, u32 period_us)
+{
+	u32 delay_us;
+
+	if (unlikely(gs_panel_wait_for_vblank(ctx))) {
+		delay_us = period_us + 1000;
+		usleep_range(delay_us, delay_us + 10);
+		return;
+	}
+
+	delay_us = gs_panel_vsync_start_time_us(te_us, period_us);
+	usleep_range(delay_us, delay_us + 10);
+}
+EXPORT_SYMBOL(gs_panel_wait_for_vsync_done);
 
 /* Tracing */
 
