@@ -167,6 +167,8 @@ struct gs_panel_funcs {
 	 *
 	 * This callback is used to handle command sequences to exit from low power
 	 * modes.
+	 *
+	 * TODO(b/279521692): implementation
 	 */
 	void (*set_nolp_mode)(struct gs_panel *gs_panel, const struct gs_panel_mode *mode);
 
@@ -176,6 +178,8 @@ struct gs_panel_funcs {
 	 * This callback is used to implement panel specific logic for high brightness
 	 * mode enablement. If this is not defined, it means that panel does not
 	 * support HBM
+	 *
+	 * TODO(b/279521612): implementation
 	 */
 	void (*set_hbm_mode)(struct gs_panel *gs_panel, enum gs_hbm_mode mode);
 
@@ -185,6 +189,8 @@ struct gs_panel_funcs {
 	 * This callback is used to implement panel specific logic for local high
 	 * brightness mode enablement. If this is not defined, it means that panel
 	 * does not support local HBM
+	 *
+	 * TODO(b/279521693): implementation
 	 */
 	void (*set_local_hbm_mode)(struct gs_panel *gs_panel,
 				   bool local_hbm_en);
@@ -195,8 +201,57 @@ struct gs_panel_funcs {
 	 * This callback is used to perform driver specific logic for mode_set.
 	 * This could be called while display is on or off, should check internal
 	 * state to perform appropriate mode set configuration depending on this state.
+	 *
+	 * TODO(b/279520499): implementation
 	 */
 	void (*mode_set)(struct gs_panel *gs_panel, const struct gs_panel_mode *mode);
+
+	/**
+	 * @atomic_check
+	 *
+	 * This optional callback happens in atomic check phase, it gives a chance to panel driver
+	 * to check and/or adjust atomic state ahead of atomic commit.
+	 *
+	 * Should return 0 on success (no problems with atomic commit) otherwise negative errno
+	 *
+	 * TODO(b/279520499): implementation
+	 */
+	int (*atomic_check)(struct gs_panel *gs_panel, struct drm_atomic_state *state);
+
+	/**
+	 * @is_mode_seamless:
+	 *
+	 * This callback is used to check if a switch to a particular mode can be done
+	 * seamlessly without full mode set given the current hardware configuration
+	 *
+	 * TODO(b/279520499): implementation
+	 */
+	bool (*is_mode_seamless)(const struct gs_panel *gs_panel,
+				 const struct gs_panel_mode *pmode);
+
+	/**
+	 * @set_self_refresh
+	 *
+	 * Called when display self refresh state has changed. While in self refresh state, the
+	 * panel can optimize for power assuming that there are no pending updates.
+	 *
+	 * Returns true if underlying mode was updated to reflect new self refresh state,
+	 * otherwise returns false if no action was taken.
+	 *
+	 * TODO(b/279519827): implementation
+	 */
+	bool (*set_self_refresh)(struct gs_panel *gs_panel, bool enable);
+
+	/**
+	 * @set_op_hz
+	 *
+	 * set display panel working on specified operation rate.
+	 *
+	 * Returns 0 if successfully setting operation rate.
+	 *
+	 * TODO(b/279521713): implementation
+	 */
+	int (*set_op_hz)(struct gs_panel *gs_panel, unsigned int hz);
 
 	/**
 	 * @panel_config:
