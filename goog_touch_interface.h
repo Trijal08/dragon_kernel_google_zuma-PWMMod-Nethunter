@@ -610,6 +610,8 @@ struct gti_pm {
  * @slot_bit_in_use: bitmap of slot in use for this input process cycle.
  * @slot_bit_changed: bitmap of slot state changed for this input process cycle.
  * @slot_bit_active: bitmap of active slot during GTI lifecycle.
+ * @slot_bit_last_active: bitmap of last active slot when reporting offload inputs.
+ * @slot_bit_offload_active: bitmap of active slot from offload.
  * @dev_id: dev_t used for google interface driver.
  * @panel_id: id of the display panel.
  * @charger_state: indicates a USB charger is connected.
@@ -698,6 +700,8 @@ struct goog_touch_interface {
 	unsigned long slot_bit_in_use;
 	unsigned long slot_bit_changed;
 	unsigned long slot_bit_active;
+	unsigned long slot_bit_last_active;
+	unsigned long slot_bit_offload_active;
 	dev_t dev_id;
 	int panel_id;
 	char fw_name[64];

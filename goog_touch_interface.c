@@ -2347,6 +2347,7 @@ static void goog_offload_set_running(struct goog_touch_interface *gti, bool runn
 			running, gti->irq_index, gti->input_index);
 
 		gti->offload.offload_running = running;
+
 		goog_update_fw_settings(gti);
 	}
 }
@@ -2428,6 +2429,17 @@ void goog_offload_input_report(void *handle,
 	}
 	input_report_key(gti->vendor_input_dev, BTN_TOUCH, touch_down);
 	input_sync(gti->vendor_input_dev);
+
+	if ((slot_bit_active ^ gti->slot_bit_active) != 0) {
+		if (gti->slot_bit_last_active != gti->slot_bit_active ||
+				gti->slot_bit_offload_active != slot_bit_active)
+			GOOG_WARN(gti, "Unexpected fingers FW: %lu offload: %lu",
+					hweight_long(gti->slot_bit_active),
+					hweight_long(slot_bit_active));
+	}
+	gti->slot_bit_last_active = gti->slot_bit_active;
+	gti->slot_bit_offload_active = slot_bit_active;
+
 	goog_input_unlock(gti);
 
 	if (touch_down)
