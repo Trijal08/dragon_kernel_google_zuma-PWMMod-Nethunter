@@ -50,6 +50,14 @@ void gs_connector_set_panel_name(const char *new_name, size_t len)
 }
 EXPORT_SYMBOL(gs_connector_set_panel_name);
 
+static void gs_drm_connector_destroy(struct drm_connector *connector)
+{
+	sysfs_remove_link(&connector->kdev->kobj, "panel");
+
+	drm_connector_unregister(connector);
+	drm_connector_cleanup(connector);
+}
+
 static void gs_drm_connector_destroy_state(struct drm_connector *connector,
 					   struct drm_connector_state *connector_state)
 {
@@ -144,6 +152,7 @@ static void gs_drm_connector_print_state(struct drm_printer *p,
 static const struct drm_connector_funcs base_drm_connector_funcs = {
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.reset = gs_drm_connector_reset,
+	.destroy = gs_drm_connector_destroy,
 	.atomic_duplicate_state = gs_drm_connector_duplicate_state,
 	.atomic_destroy_state = gs_drm_connector_destroy_state,
 	.atomic_get_property = gs_drm_connector_get_property,
