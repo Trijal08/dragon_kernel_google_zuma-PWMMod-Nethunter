@@ -117,10 +117,11 @@ static int gs_panel_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_att
 
 	/* TODO(tknelms): debugfs entries */
 
+	if (connector->dev->mode_config.poll_enabled)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
-	drm_kms_helper_connector_hotplug_event(connector);
+		drm_kms_helper_connector_hotplug_event(connector);
 #else
-	drm_kms_helper_hotplug_event(connector->dev);
+		drm_kms_helper_hotplug_event(connector->dev);
 #endif
 
 	ret = sysfs_create_link(&bridge->dev->dev->kobj, &ctx->dev->kobj, sysfs_name);
