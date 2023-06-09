@@ -394,6 +394,9 @@ static void gs_panel_pre_power_off(struct gs_panel *ctx)
 {
 	int ret;
 
+	if (!ctx->desc->reg_ctrl_desc)
+		return;
+
 	if (!IS_VALID_PANEL_REG_ID(ctx->desc->reg_ctrl_desc->reg_ctrl_pre_disable[0].id))
 		return;
 
@@ -530,6 +533,9 @@ int gs_panel_first_enable(struct gs_panel *ctx)
 static void gs_panel_post_power_on(struct gs_panel *ctx)
 {
 	int ret;
+
+	if (!ctx->desc->reg_ctrl_desc)
+		return;
 
 	if (!IS_VALID_PANEL_REG_ID(ctx->desc->reg_ctrl_desc->reg_ctrl_post_enable[0].id))
 		return;
