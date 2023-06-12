@@ -33,7 +33,6 @@
 #include "lwis_dt.h"
 #include "lwis_event.h"
 #include "lwis_gpio.h"
-#include "lwis_init.h"
 #include "lwis_ioctl.h"
 #include "lwis_periodic_io.h"
 #include "lwis_pinctrl.h"
@@ -123,6 +122,7 @@ static int lwis_open(struct inode *node, struct file *fp)
 	mutex_init(&lwis_client->lock);
 	spin_lock_init(&lwis_client->periodic_io_lock);
 	spin_lock_init(&lwis_client->event_lock);
+	spin_lock_init(&lwis_client->flush_lock);
 
 	/* Empty hash table for client event states */
 	hash_init(lwis_client->event_states);
@@ -160,6 +160,10 @@ static int lwis_open(struct inode *node, struct file *fp)
 
 	/* Storing the client handle in fp private_data for easy access */
 	fp->private_data = lwis_client;
+
+	spin_lock_irqsave(&lwis_client->flush_lock, flags);
+	lwis_client->flush_state = NOT_FLUSHING;
+	spin_unlock_irqrestore(&lwis_client->flush_lock, flags);
 
 	if (lwis_i2c_bus_manager_connect_client(lwis_client)) {
 		dev_err(lwis_dev->dev, "Failed to connect lwis client to I2C bus manager\n");
@@ -225,6 +229,7 @@ static int lwis_release_client(struct lwis_client *lwis_client)
 	struct lwis_device *lwis_dev = lwis_client->lwis_dev;
 	int rc = 0;
 	unsigned long flags;
+
 	rc = lwis_cleanup_client(lwis_client);
 	if (rc) {
 		return rc;
@@ -1097,8 +1102,6 @@ int lwis_dev_power_up_locked(struct lwis_device *lwis_dev)
 		}
 	}
 
-	/* Sleeping to make sure all pins are ready to go */
-	usleep_range(2000, 2000);
 	return 0;
 
 	/* Error handling */

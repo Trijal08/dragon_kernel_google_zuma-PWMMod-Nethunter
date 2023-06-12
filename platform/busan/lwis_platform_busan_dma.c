@@ -10,7 +10,6 @@
 #include <linux/dma-buf.h>
 #include <linux/dma-heap.h>
 #include "lwis_commands.h"
-#include "lwis_init.h"
 #include "lwis_platform.h"
 #include "lwis_platform_dma.h"
 struct dma_buf *lwis_platform_dma_buffer_alloc(size_t len, unsigned int flags)

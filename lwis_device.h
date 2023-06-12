@@ -48,6 +48,19 @@
 #define BTS_UNSUPPORTED -1
 #define MAX_UNIFIED_POWER_DEVICE 8
 
+/* enum lwis_client_flush_state
+ * Client flush states indicate if the client has been issued a
+ * flush on the transaction worker threads.
+ * Client will move to FLUSHING state only when a direct call to
+ * lwis_transaction_client_flush has been made.
+ * Once the flush is complete, the client will transition back
+ * to NOT_FLUSHING state.
+ */
+enum lwis_client_flush_state {
+	NOT_FLUSHING = 0,
+	FLUSHING
+};
+
 /* Forward declaration for lwis_device. This is needed for the declaration for
    lwis_device_subclass_operations data struct. */
 struct lwis_device;
@@ -351,6 +364,10 @@ struct lwis_client {
 	bool is_enabled;
 	/* Work item to schedule I2C transfers */
 	struct kthread_work i2c_work;
+	/* Indicates if the client has been issued a flush worker call */
+	enum lwis_client_flush_state flush_state;
+	/* Lock to guard client's flush state changes */
+	spinlock_t flush_lock;
 };
 
 /*

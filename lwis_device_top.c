@@ -22,7 +22,6 @@
 
 #include "lwis_device.h"
 #include "lwis_event.h"
-#include "lwis_init.h"
 #include "lwis_util.h"
 
 #ifdef CONFIG_OF

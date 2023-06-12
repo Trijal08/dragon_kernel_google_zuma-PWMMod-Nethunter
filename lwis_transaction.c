@@ -392,7 +392,7 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 					(void *)resp, resp_size);
 	} else {
 		/* No pending events indicates it's cleanup io_entries. */
-		if (resp->error_code) {
+		if (entry && resp->error_code) {
 			dev_err(lwis_dev->dev,
 				"Clean-up fails with error code %d, transaction %llu, io_entries[%d], entry_type %d",
 				resp->error_code, transaction->info.id, i, entry->type);
@@ -515,22 +515,40 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 				 * that would indicate the transaction processing limit has reached for this
 				 * device and we stop processing its queue further
 				 */
-				dev_info(
-					client->lwis_dev->dev,
-					"Transaction processing limit reached, remaining entries to process %d\n",
-					transaction->remaining_entries_to_process);
+				if (lwis_transaction_debug) {
+					dev_info(
+						client->lwis_dev->dev,
+						"Transaction processing limit reached, remaining entries to process %d\n",
+						transaction->remaining_entries_to_process);
+				}
 
 				/*
 				 * Queue the remaining transaction again on the transaction worker/bus maanger worker
-				 * to be processed again later
+				 * to be processed again later if the client is not flushing
 				 */
-				if (i2c_bus_manager) {
-					kthread_queue_work(&i2c_bus_manager->i2c_bus_worker,
+				spin_lock_irqsave(&client->flush_lock, flags);
+				if (client->flush_state == NOT_FLUSHING) {
+					if (lwis_transaction_debug) {
+						dev_info(
+								client->lwis_dev->dev,
+								"Client is not flushing, schedule the remaining work");
+					}
+
+					if (i2c_bus_manager) {
+						kthread_queue_work(&i2c_bus_manager->i2c_bus_worker,
 							   &client->i2c_work);
-				} else {
-					kthread_queue_work(&client->lwis_dev->transaction_worker,
+					} else {
+						kthread_queue_work(&client->lwis_dev->transaction_worker,
 							   &client->transaction_work);
+					}
+				} else {
+					if (lwis_transaction_debug) {
+						dev_info(
+								client->lwis_dev->dev,
+								"Client is flushing, aborting the remaining transaction");
+					}
 				}
+				spin_unlock_irqrestore(&client->flush_lock, flags);
 				break;
 			}
 		}
@@ -620,6 +638,10 @@ int lwis_transaction_client_flush(struct lwis_client *client)
 	}
 	spin_unlock_irqrestore(&client->transaction_lock, flags);
 
+	spin_lock_irqsave(&client->flush_lock, flags);
+	client->flush_state = FLUSHING;
+	spin_unlock_irqrestore(&client->flush_lock, flags);
+
 	if (i2c_bus_manager) {
 		lwis_i2c_bus_manager_flush_i2c_worker(lwis_dev);
 	} else {
@@ -627,6 +649,10 @@ int lwis_transaction_client_flush(struct lwis_client *client)
 			kthread_flush_worker(&client->lwis_dev->transaction_worker);
 		}
 	}
+
+	spin_lock_irqsave(&client->flush_lock, flags);
+	client->flush_state = NOT_FLUSHING;
+	spin_unlock_irqrestore(&client->flush_lock, flags);
 
 	spin_lock_irqsave(&client->transaction_lock, flags);
 	/* The transaction queue should be empty after canceling all transactions,
