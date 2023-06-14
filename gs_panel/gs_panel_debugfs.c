@@ -108,6 +108,9 @@ static ssize_t gs_dsi_payload_write(struct file *file, const char __user *user_b
 	ret = parse_byte_buf(payload, len, buf);
 	if (ret <= 0)
 		ret = -EINVAL;
+	else if (reg_data->type)
+		ret = gs_dsi_dcs_transfer(reg_data->dsi, reg_data->type, payload, ret,
+					  reg_data->flags);
 	else
 		ret = gs_dsi_dcs_write_buffer(reg_data->dsi, payload, ret, reg_data->flags);
 
