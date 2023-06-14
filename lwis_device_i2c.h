@@ -39,6 +39,7 @@ struct lwis_i2c_device {
 	int device_priority;
 };
 
+int lwis_i2c_device_init(void);
 int lwis_i2c_device_deinit(void);
 
 #if IS_ENABLED(CONFIG_INPUT_STMVL53L1)

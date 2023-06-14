@@ -20,7 +20,6 @@
 #include <linux/slab.h>
 #include <uapi/linux/sched/types.h>
 
-#include "lwis_init.h"
 #include "lwis_interrupt.h"
 #include "lwis_ioreg.h"
 #include "lwis_periodic_io.h"

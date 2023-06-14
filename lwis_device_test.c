@@ -18,7 +18,6 @@
 
 #include "lwis_commands.h"
 #include "lwis_device.h"
-#include "lwis_init.h"
 #include "lwis_platform.h"
 
 #ifdef CONFIG_OF

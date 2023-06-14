@@ -25,7 +25,6 @@
 
 #include "lwis_device.h"
 #include "lwis_i2c.h"
-#include "lwis_init.h"
 #include "lwis_periodic_io.h"
 #include "lwis_util.h"
 #include "lwis_trace.h"
