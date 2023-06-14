@@ -399,11 +399,19 @@ struct gs_panel_desc {
 /* PRIV DATA */
 
 /**
- * struct gs_panel_debugfs_entries
+ * struct gs_panel_debugfs_entries - references to debugfs folder entries
+ * @panel: parent folder for panel (ex. "DSI-1/panel")
+ * @reg: folder for direct dsi operations (ex. "DSI-1/panel/reg")
+ * @cmdset: folder for cmdset entries (ex. "DSI-1/panel/cmdsets")
+ *
+ * This stores references to the main "folder"-level debugfs entries for the
+ * panel. This allows some degree of extension by specific drivers, for example
+ * to add an additional cmdset to the "cmdset" debugfs folder.
  */
 struct gs_panel_debugfs_entries {
-	struct dentry *debugfs_entry;
-	struct dentry *debugfs_cmdset_entry;
+	struct dentry *panel;
+	struct dentry *reg;
+	struct dentry *cmdset;
 };
 
 /**
@@ -672,6 +680,19 @@ void gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi);
 #else
 int gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi);
 #endif
+
+/**
+ * gs_panel_debugfs_create_cmdset - Creates a cmdset debugfs entry
+ * @parent: dentry for debugfs parent folder. This will often be
+ *          `gs_panel->debugfs_entries.cmdset`
+ * @cmdset: cmdset to be read out from resulting debugfs entry
+ * @name: name for resulting debugfs entry
+ *
+ * Creates a debugfs entry for the given cmdset, which will allow its contents
+ * to be read for debugging purposes.
+ */
+void gs_panel_debugfs_create_cmdset(struct dentry *parent, const struct gs_dsi_cmd_set *cmdset,
+				    const char *name);
 
 #define GS_VREFRESH_TO_PERIOD_USEC(rate) DIV_ROUND_UP(USEC_PER_SEC, (rate) ? (rate) : 60)
 

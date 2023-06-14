@@ -15,6 +15,8 @@
 
 struct gs_panel;
 struct gs_drm_connector;
+struct dentry;
+struct mipi_dsi_device;
 
 /* gs_panel_connector_funcs.c */
 int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *drm_dev,
@@ -25,6 +27,27 @@ const struct drm_bridge_funcs *get_panel_drm_bridge_funcs(void);
 
 /* gs_panel_sysfs.c */
 int gs_panel_sysfs_create_files(struct device *dev);
+
+/* gs_panel_debugfs.c */
+/**
+ * gs_panel_create_debugfs_entries - Creates debugfs entries for panel
+ * @ctx: Pointer to gs_panel
+ * @parent: debugfs_entry for drm_connector panel is connected to
+ *
+ * This both creates the panel's debugfs folder and populates it with the
+ * various debugfs files for controlling the panel. It is meant to be called as
+ * part of attaching the gs_panel to the gs_drm_connector
+ *
+ * Return: 0 on success, negative value on error
+ */
+#ifdef CONFIG_DEBUG_FS
+int gs_panel_create_debugfs_entries(struct gs_panel *ctx, struct dentry *parent);
+#else
+static int gs_panel_create_debugfs_entries(struct gs_panel *ctx, struct dentry *parent)
+{
+	return -EOPNOTSUPP;
+}
+#endif
 
 /* gs_panel.c */
 int gs_panel_first_enable(struct gs_panel *ctx);
