@@ -48,17 +48,15 @@
 #define KCI_TIMEOUT	(1000)
 #endif
 
-/* A macro for KCIs to leave early when the device state is known to be bad. */
-#define RETURN_ERRNO_IF_ETDEV_NOT_GOOD(etkci, opstring)                                            \
-	do {                                                                                       \
-		struct edgetpu_mailbox *mailbox = etkci->mailbox;                                  \
-		int ret = edgetpu_get_state_errno_locked(mailbox->etdev);                          \
-		if (ret) {                                                                         \
-			etdev_err(mailbox->etdev, "%s failed: device state %u (%d)",               \
-				  opstring, mailbox->etdev->state, ret);                           \
-			return ret;                                                                \
-		}                                                                                  \
-	} while (0)
+static inline int check_etdev_state(struct edgetpu_kci *etkci, char *opstring)
+{
+	int ret = edgetpu_get_state_errno_locked(etkci->mailbox->etdev);
+
+	if (ret)
+		etdev_err(etkci->mailbox->etdev, "%s failed: device state %u (%d)",
+			  opstring, etkci->mailbox->etdev->state, ret);
+	return ret;
+}
 
 static int edgetpu_kci_alloc_queue(struct edgetpu_dev *etdev, struct edgetpu_mailbox *mailbox,
 				   enum gcip_mailbox_queue_type type,
@@ -597,8 +595,11 @@ int edgetpu_kci_open_device(struct edgetpu_kci *etkci, u32 mailbox_map, u32 clie
 			.flags = mailbox_map,
 		},
 	};
+	int ret;
 
-	RETURN_ERRNO_IF_ETDEV_NOT_GOOD(etkci, "open device");
+	ret = check_etdev_state(etkci, "open device");
+	if (ret)
+		return ret;
 	if (vcid < 0)
 		return gcip_kci_send_cmd(etkci->kci, &cmd);
 
@@ -613,9 +614,11 @@ int edgetpu_kci_close_device(struct edgetpu_kci *etkci, u32 mailbox_map)
 			.flags = mailbox_map,
 		},
 	};
+	int ret;
 
-	RETURN_ERRNO_IF_ETDEV_NOT_GOOD(etkci, "close device");
-
+	ret = check_etdev_state(etkci, "close device");
+	if (ret)
+		return ret;
 	return gcip_kci_send_cmd(etkci->kci, &cmd);
 }
 

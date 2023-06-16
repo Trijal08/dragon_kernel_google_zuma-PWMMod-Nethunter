@@ -58,18 +58,19 @@ static struct dentry *edgetpu_debugfs_dir;
 #define LOCK(client) mutex_lock(&client->group_lock)
 #define UNLOCK(client) mutex_unlock(&client->group_lock)
 /*
- * Locks @client->group_lock and assigns @client->group to @grp.
- * Returns -EINVAL if @client is not in a group.
+ * Locks @client->group_lock and checks whether @client is in a group.
+ * If @client is not in a group, unlocks group_lock and returns false.
+ * If @client is in a group, returns true with group_lock held.
  */
-#define LOCK_RETURN_IF_NO_GROUP(client, grp)                                   \
-	do {                                                                   \
-		LOCK(client);                                                  \
-		grp = client->group;                                           \
-		if (!grp) {                                                    \
-			UNLOCK(client);                                        \
-			return -EINVAL;                                        \
-		}                                                              \
-	} while (0)
+static inline bool lock_check_group_member(struct edgetpu_client *client)
+{
+	LOCK(client);
+	if (!client->group) {
+		UNLOCK(client);
+		return false;
+	}
+	return true;
+}
 
 int edgetpu_open(struct edgetpu_dev_iface *etiface, struct file *file)
 {
@@ -130,16 +131,14 @@ static int edgetpu_fs_release(struct inode *inode, struct file *file)
 static int edgetpu_ioctl_set_eventfd(struct edgetpu_client *client,
 				     struct edgetpu_event_register __user *argp)
 {
-	struct edgetpu_device_group *group;
 	int ret;
 	struct edgetpu_event_register eventreg;
 
 	if (copy_from_user(&eventreg, argp, sizeof(eventreg)))
 		return -EFAULT;
-
-	LOCK_RETURN_IF_NO_GROUP(client, group);
-	ret = edgetpu_group_set_eventfd(group, eventreg.event_id,
-					eventreg.eventfd);
+	if (!lock_check_group_member(client))
+		return -EINVAL;
+	ret = edgetpu_group_set_eventfd(client->group, eventreg.event_id, eventreg.eventfd);
 	UNLOCK(client);
 	return ret;
 }
@@ -147,10 +146,9 @@ static int edgetpu_ioctl_set_eventfd(struct edgetpu_client *client,
 static int edgetpu_ioctl_unset_eventfd(struct edgetpu_client *client,
 				       uint event_id)
 {
-	struct edgetpu_device_group *group;
-
-	LOCK_RETURN_IF_NO_GROUP(client, group);
-	edgetpu_group_unset_eventfd(group, event_id);
+	if (!lock_check_group_member(client))
+		return -EINVAL;
+	edgetpu_group_unset_eventfd(client->group, event_id);
 	UNLOCK(client);
 	return 0;
 }
@@ -261,9 +259,10 @@ static int edgetpu_ioctl_map_buffer(struct edgetpu_client *client,
 
 	trace_edgetpu_map_buffer_start(&ibuf);
 
-	LOCK_RETURN_IF_NO_GROUP(client, group);
+	if (!lock_check_group_member(client))
+		return -EINVAL;
 	/* to prevent group being released when we perform map/unmap later */
-	group = edgetpu_device_group_get(group);
+	group = edgetpu_device_group_get(client->group);
 	/*
 	 * Don't hold @client->group_lock on purpose since
 	 * 1. We don't care whether @client still belongs to @group.
@@ -292,15 +291,13 @@ static int edgetpu_ioctl_unmap_buffer(struct edgetpu_client *client,
 				      struct edgetpu_map_ioctl __user *argp)
 {
 	struct edgetpu_map_ioctl ibuf;
-	struct edgetpu_device_group *group;
 	int ret;
 
 	if (copy_from_user(&ibuf, argp, sizeof(ibuf)))
 		return -EFAULT;
-
-	LOCK_RETURN_IF_NO_GROUP(client, group);
-	ret = edgetpu_device_group_unmap(group, ibuf.device_address,
-					 ibuf.flags);
+	if (!lock_check_group_member(client))
+		return -EINVAL;
+	ret = edgetpu_device_group_unmap(client->group, ibuf.device_address, ibuf.flags);
 	UNLOCK(client);
 	return ret;
 }
@@ -314,14 +311,14 @@ edgetpu_ioctl_allocate_device_buffer(struct edgetpu_client *client, u64 size)
 static int edgetpu_ioctl_sync_buffer(struct edgetpu_client *client,
 				     struct edgetpu_sync_ioctl __user *argp)
 {
-	struct edgetpu_device_group *group;
 	int ret;
 	struct edgetpu_sync_ioctl ibuf;
 
 	if (copy_from_user(&ibuf, argp, sizeof(ibuf)))
 		return -EFAULT;
-	LOCK_RETURN_IF_NO_GROUP(client, group);
-	ret = edgetpu_device_group_sync_buffer(group, &ibuf);
+	if (!lock_check_group_member(client))
+		return -EINVAL;
+	ret = edgetpu_device_group_sync_buffer(client->group, &ibuf);
 	UNLOCK(client);
 	return ret;
 }
@@ -339,9 +336,10 @@ edgetpu_ioctl_map_dmabuf(struct edgetpu_client *client,
 
 	trace_edgetpu_map_dmabuf_start(&ibuf);
 
-	LOCK_RETURN_IF_NO_GROUP(client, group);
+	if (!lock_check_group_member(client))
+		return -EINVAL;
 	/* to prevent group being released when we perform unmap on fault */
-	group = edgetpu_device_group_get(group);
+	group = edgetpu_device_group_get(client->group);
 	ret = edgetpu_map_dmabuf(group, &ibuf);
 	UNLOCK(client);
 	if (ret)
@@ -363,14 +361,14 @@ static int
 edgetpu_ioctl_unmap_dmabuf(struct edgetpu_client *client,
 			   struct edgetpu_map_dmabuf_ioctl __user *argp)
 {
-	struct edgetpu_device_group *group;
 	int ret;
 	struct edgetpu_map_dmabuf_ioctl ibuf;
 
 	if (copy_from_user(&ibuf, argp, sizeof(ibuf)))
 		return -EFAULT;
-	LOCK_RETURN_IF_NO_GROUP(client, group);
-	ret = edgetpu_unmap_dmabuf(group, ibuf.device_address);
+	if (!lock_check_group_member(client))
+		return -EINVAL;
+	ret = edgetpu_unmap_dmabuf(client->group, ibuf.device_address);
 	UNLOCK(client);
 	return ret;
 }
