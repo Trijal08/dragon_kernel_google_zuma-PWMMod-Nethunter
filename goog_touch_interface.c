@@ -2835,9 +2835,17 @@ void goog_input_report_abs(
 	switch (code) {
 	case ABS_MT_POSITION_X:
 		gti->offload.coords[gti->slot].x = value;
+		if ((value > gti->abs_x_max) || (value < gti->abs_x_min)) {
+			GOOG_WARN(gti, "Unexpected x-coord (slot#%d range#(%d, %d)), x: %d!",
+					gti->slot, gti->abs_x_min, gti->abs_x_max, value);
+		}
 		break;
 	case ABS_MT_POSITION_Y:
 		gti->offload.coords[gti->slot].y = value;
+		if ((value > gti->abs_y_max) || (value < gti->abs_y_min)) {
+			GOOG_WARN(gti, "Unexpected y-coord (slot#%d range#(%d, %d)), y: %d!",
+					gti->slot, gti->abs_y_min, gti->abs_y_max, value);
+		}
 		break;
 	case ABS_MT_TOUCH_MAJOR:
 		gti->offload.coords[gti->slot].major = value;
@@ -3083,6 +3091,11 @@ void goog_init_input(struct goog_touch_interface *gti)
 		gti->debug_input[i].slot = i;
 
 	if (gti->vendor_dev && gti->vendor_input_dev) {
+		gti->abs_x_max = input_abs_get_max(gti->vendor_input_dev, ABS_MT_POSITION_X);
+		gti->abs_x_min = input_abs_get_min(gti->vendor_input_dev, ABS_MT_POSITION_X);
+		gti->abs_y_max = input_abs_get_max(gti->vendor_input_dev, ABS_MT_POSITION_Y);
+		gti->abs_y_min = input_abs_get_min(gti->vendor_input_dev, ABS_MT_POSITION_Y);
+
 		/*
 		 * Initialize the ABS_MT_ORIENTATION to support orientation reporting.
 		 * Initialize the ABS_MT_TOUCH_MAJOR and ABS_MT_TOUCH_MINOR depending on
@@ -3090,11 +3103,11 @@ void goog_init_input(struct goog_touch_interface *gti)
 		 * shape algo reporting.
 		 */
 		if (gti->offload.caps.rotation_reporting) {
-			int abs_x_max = input_abs_get_max(gti->vendor_input_dev, ABS_MT_POSITION_X);
-			int abs_x_min = input_abs_get_min(gti->vendor_input_dev, ABS_MT_POSITION_X);
+			int abs_x_max = gti->abs_x_max;
+			int abs_x_min = gti->abs_x_min;
 			int abs_x_res = input_abs_get_res(gti->vendor_input_dev, ABS_MT_POSITION_X);
-			int abs_y_max = input_abs_get_max(gti->vendor_input_dev, ABS_MT_POSITION_Y);
-			int abs_y_min = input_abs_get_min(gti->vendor_input_dev, ABS_MT_POSITION_Y);
+			int abs_y_max = gti->abs_y_max;
+			int abs_y_min = gti->abs_y_min;
 			int abs_y_res = input_abs_get_res(gti->vendor_input_dev, ABS_MT_POSITION_Y);
 			int abs_major_max = abs_x_max;
 			int abs_major_min = abs_x_min;
@@ -3236,6 +3249,8 @@ void goog_init_options(struct goog_touch_interface *gti,
 			gti->options.set_screen_protector_mode = options->set_screen_protector_mode;
 		if (options->set_sensing_mode)
 			gti->options.set_sensing_mode = options->set_sensing_mode;
+
+		gti->options.post_irq_thread_fn = options->post_irq_thread_fn;
 	}
 }
 
@@ -3763,7 +3778,7 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 	 */
 	mutex_lock(&gti->input_process_lock);
 
-	if (gti->vendor_irq_thread_fn)
+	if (gti->vendor_irq_thread_fn != NULL)
 		ret = gti->vendor_irq_thread_fn(irq, gti->vendor_irq_cookie);
 	else
 		ret = IRQ_HANDLED;
@@ -3771,6 +3786,11 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 	goog_input_process(gti, false);
 
 	mutex_unlock(&gti->input_process_lock);
+
+	if (ret == IRQ_HANDLED && gti->vendor_irq_thread_fn != NULL &&
+			gti->options.post_irq_thread_fn != NULL) {
+		ret = gti->options.post_irq_thread_fn(irq, gti->vendor_irq_cookie);
+	}
 
 	gti_debug_hc_update(gti, false);
 	cpu_latency_qos_update_request(&gti->pm_qos_req, PM_QOS_DEFAULT_VALUE);
