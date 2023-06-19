@@ -16,10 +16,6 @@
 #include <gcip/gcip-pm.h>
 #include <gcip/gcip-iommu.h>
 
-#if HAS_IOVAD_BEST_FIT_ALGO
-#include <linux/dma-iommu.h>
-#endif
-
 #include "edgetpu-config.h"
 #include "edgetpu-dmabuf.h"
 #include "edgetpu-internal.h"
@@ -229,16 +225,15 @@ void edgetpu_chip_remove_mmu(struct edgetpu_dev *etdev)
 	edgetpu_mmu_detach(etdev);
 }
 
-static void edgetpu_platform_parse_pmu(struct edgetpu_mobile_platform_dev *etmdev)
+static void edgetpu_platform_parse_pmu(struct edgetpu_dev *etdev)
 {
-	struct edgetpu_dev *etdev = &etmdev->edgetpu_dev;
 	struct device *dev = etdev->dev;
 	u32 reg;
 
 	if (of_find_property(dev->of_node, "pmu-status-base", NULL) &&
 	    !of_property_read_u32_index(dev->of_node, "pmu-status-base", 0, &reg)) {
-		etmdev->pmu_status = devm_ioremap(dev, reg, 0x4);
-		if (!etmdev->pmu_status)
+		etdev->pmu_status = devm_ioremap(dev, reg, 0x4);
+		if (!etdev->pmu_status)
 			etdev_err(etdev, "Using ACPM for blk status query\n");
 	} else {
 		etdev_warn(etdev, "Failed to find PMU register base\n");
@@ -354,10 +349,6 @@ static int edgetpu_mobile_platform_probe(struct platform_device *pdev,
 		goto out_cleanup_fw;
 	}
 
-#if HAS_IOVAD_BEST_FIT_ALGO
-	iommu_dma_enable_best_fit_algo(dev);
-#endif
-
 	INIT_LIST_HEAD(&etmdev->fw_ctx_list);
 	mutex_init(&etmdev->fw_ctx_list_lock);
 
@@ -365,7 +356,7 @@ static int edgetpu_mobile_platform_probe(struct platform_device *pdev,
 	 * Parses PMU before edgetpu_device_add so edgetpu_chip_pm_create can know whether to set
 	 * the is_block_down op.
 	 */
-	edgetpu_platform_parse_pmu(etmdev);
+	edgetpu_platform_parse_pmu(etdev);
 
 	ret = edgetpu_device_add(etdev, &regs, iface_params, ARRAY_SIZE(iface_params));
 	if (ret) {

@@ -323,7 +323,7 @@ long edgetpu_soc_pm_get_rate(struct edgetpu_dev *etdev, int flags)
 
 	/*
 	 * Below values must match the CMU PLL (pll_con3_pll_tpu) values in the spec and firmware.
-	 * See https://drive.google.com/file/d/16S9yxmGwkOltdO2w4dC8tpAt99chn-aq/view and
+	 * See [REDACTED] and
 	 * power_manager.cc for more details.
 	 */
 	switch (TO_PLL_DIV_M(pll_con3)) {
