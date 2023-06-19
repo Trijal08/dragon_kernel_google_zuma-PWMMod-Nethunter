@@ -120,7 +120,6 @@ int lwis_platform_device_enable(struct lwis_device *lwis_dev)
 	int iommus_len = 0;
 	struct lwis_platform *platform;
 
-	const int core_clock_qos = 67000;
 	/* const int hpg_qos = 1; */
 
 	if (!lwis_dev) {
@@ -145,24 +144,6 @@ int lwis_platform_device_enable(struct lwis_device *lwis_dev)
 							  lwis_dev);
 		if (ret < 0) {
 			pr_err("Failed to register fault handler for the device: %d\n", ret);
-			return ret;
-		}
-	}
-
-	if (lwis_dev->clock_family != CLOCK_FAMILY_INVALID &&
-	    lwis_dev->clock_family < NUM_CLOCK_FAMILY) {
-		ret = lwis_platform_update_qos(lwis_dev, core_clock_qos, lwis_dev->clock_family);
-		if (ret < 0) {
-			dev_err(lwis_dev->dev, "Failed to enable core clock\n");
-			return ret;
-		}
-		/* TODO(b/173493818): We currently see some stability issue on specific device
-		 * and sensor due to INT clock vote to 100 MHz. Set the minimum INT requirement
-		 * to 200Mhz for now.
-		 */
-		ret = lwis_platform_update_qos(lwis_dev, 200000, CLOCK_FAMILY_INT);
-		if (ret < 0) {
-			dev_err(lwis_dev->dev, "Failed to initial INT clock\n");
 			return ret;
 		}
 	}

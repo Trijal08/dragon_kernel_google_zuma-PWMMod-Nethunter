@@ -35,7 +35,6 @@ static int insert_bus_manager_id_in_list(struct lwis_i2c_bus_manager *i2c_bus_ma
 	i2c_bus_manager_identifier_node =
 		kzalloc(sizeof(struct lwis_i2c_bus_manager_identifier), GFP_KERNEL);
 	if (!i2c_bus_manager_identifier_node) {
-		pr_err("Failed to allocate lwis i2c bus manager id list node\n");
 		return -ENOMEM;
 	}
 
@@ -251,7 +250,6 @@ static int connect_i2c_bus_manager(struct lwis_i2c_bus_manager *i2c_bus_manager,
 
 	connected_i2c_device = kzalloc(sizeof(struct lwis_i2c_connected_device), GFP_KERNEL);
 	if (!connected_i2c_device) {
-		dev_err(lwis_dev->dev, "Failed to connect device to I2C Bus Manager\n");
 		return -ENOMEM;
 	}
 	connected_i2c_device->connected_device = lwis_dev;
@@ -355,7 +353,6 @@ int lwis_i2c_bus_manager_create(struct lwis_i2c_device *i2c_dev)
 		/* Allocate memory for I2C Bus Manager */
 		i2c_bus_manager = kzalloc(sizeof(struct lwis_i2c_bus_manager), GFP_KERNEL);
 		if (!i2c_bus_manager) {
-			dev_err(i2c_base_device->dev, "Failed to allocate lwis i2c bus manager\n");
 			return -ENOMEM;
 		}
 
@@ -627,7 +624,6 @@ int lwis_i2c_bus_manager_connect_client(struct lwis_client *connecting_client)
 		i2c_connecting_client_node =
 			kzalloc(sizeof(struct lwis_i2c_process_request), GFP_ATOMIC);
 		if (!i2c_connecting_client_node) {
-			dev_err(lwis_dev->dev, "Failed to connect client to I2C Bus Manager\n");
 			return -ENOMEM;
 		}
 		i2c_connecting_client_node->requesting_client = connecting_client;

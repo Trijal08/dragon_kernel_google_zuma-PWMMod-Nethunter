@@ -12,6 +12,7 @@
 
 #include "lwis_i2c.h"
 #include "lwis_trace.h"
+#include "lwis_util.h"
 
 #include <linux/bits.h>
 #include <linux/kernel.h>
@@ -34,37 +35,6 @@ static inline bool check_bitwidth(const int bitwidth, const int min, const int m
 	return (bitwidth >= min) && (bitwidth <= max) && ((bitwidth % 8) == 0);
 }
 
-static void value_to_buf(uint64_t value, uint8_t *buf, int buf_size)
-{
-	if (buf_size == 1) {
-		buf[0] = value;
-	} else if (buf_size == 2) {
-		buf[0] = (value >> 8) & 0xFF;
-		buf[1] = value & 0xFF;
-	} else if (buf_size == 4) {
-		buf[0] = (value >> 24) & 0xFF;
-		buf[1] = (value >> 16) & 0xFF;
-		buf[2] = (value >> 8) & 0xFF;
-		buf[3] = value & 0xFF;
-	} else {
-		pr_err("Unsupported buffer size %d used for value_to_buf\n", buf_size);
-	}
-}
-
-static uint64_t buf_to_value(uint8_t *buf, int buf_size)
-{
-	if (buf_size == 1) {
-		return buf[0];
-	} else if (buf_size == 2) {
-		return (buf[0] << 8) | buf[1];
-	} else if (buf_size == 4) {
-		return (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
-	}
-
-	pr_err("Unsupported buffer size %d used for buf_to_value\n", buf_size);
-	return 0;
-}
-
 static int perform_read_transfer(struct i2c_client *client, struct i2c_msg *msg, uint64_t offset,
 				 int offset_size_bytes, struct lwis_device *lwis_dev)
 {
@@ -76,7 +46,7 @@ static int perform_read_transfer(struct i2c_client *client, struct i2c_msg *msg,
 	char trace_name[LWIS_MAX_NAME_STRING_LEN];
 	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "i2c_read_%s", lwis_dev->name);
 
-	value_to_buf(offset, wbuf, offset_size_bytes);
+	lwis_value_to_be_buf(offset, wbuf, offset_size_bytes);
 	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, trace_name);
 	ret = i2c_transfer(client->adapter, msg, num_msg);
 	LWIS_ATRACE_FUNC_END(lwis_dev, trace_name);
@@ -95,8 +65,8 @@ static int perform_write_transfer(struct i2c_client *client, struct i2c_msg *msg
 	char trace_name[LWIS_MAX_NAME_STRING_LEN];
 	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "i2c_write_%s", lwis_dev->name);
 
-	value_to_buf(offset, buf, offset_size_bytes);
-	value_to_buf(value, buf + offset_size_bytes, value_size_bytes);
+	lwis_value_to_be_buf(offset, buf, offset_size_bytes);
+	lwis_value_to_be_buf(value, buf + offset_size_bytes, value_size_bytes);
 	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, trace_name);
 	ret = i2c_transfer(client->adapter, msg, num_msg);
 	LWIS_ATRACE_FUNC_END(lwis_dev, trace_name);
@@ -116,7 +86,7 @@ static int perform_write_batch_transfer(struct i2c_client *client, struct i2c_ms
 	char trace_name[LWIS_MAX_NAME_STRING_LEN];
 	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "i2c_write_batch_%s", lwis_dev->name);
 
-	value_to_buf(offset, buf, offset_size_bytes);
+	lwis_value_to_be_buf(offset, buf, offset_size_bytes);
 	memcpy(buf + offset_size_bytes, value_buf, value_size_bytes);
 
 	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, trace_name);
@@ -187,13 +157,11 @@ static int i2c_read(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t *valu
 
 	wbuf = kmalloc(offset_bytes, GFP_KERNEL);
 	if (!wbuf) {
-		dev_err(i2c->base_dev.dev, "Failed to allocate memory for i2c write buffer\n");
 		return -ENOMEM;
 	}
 
 	rbuf = kmalloc(value_bytes, GFP_KERNEL);
 	if (!rbuf) {
-		dev_err(i2c->base_dev.dev, "Failed to allocate memory for i2c read buffer\n");
 		ret = -ENOMEM;
 		goto error_rbuf_alloc;
 	}
@@ -215,7 +183,7 @@ static int i2c_read(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t *valu
 		goto error_transfer;
 	}
 
-	*value = buf_to_value(rbuf, value_bytes);
+	*value = lwis_be_buf_to_value(rbuf, value_bytes);
 
 error_transfer:
 	kfree(rbuf);
@@ -265,7 +233,6 @@ static int i2c_write(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t valu
 	msg_bytes = offset_bytes + value_bytes;
 	buf = kmalloc(msg_bytes, GFP_KERNEL);
 	if (!buf) {
-		dev_err(i2c->base_dev.dev, "Failed to allocate memory for i2c buffer\n");
 		return -ENOMEM;
 	}
 
@@ -312,7 +279,6 @@ static int i2c_read_batch(struct lwis_i2c_device *i2c, uint64_t start_offset, ui
 
 	wbuf = kmalloc(offset_bytes, GFP_KERNEL);
 	if (!wbuf) {
-		dev_err(i2c->base_dev.dev, "Failed to allocate memory for i2c write buffer\n");
 		return -ENOMEM;
 	}
 
@@ -369,7 +335,6 @@ static int i2c_write_batch(struct lwis_i2c_device *i2c, uint64_t start_offset, u
 	msg_bytes = offset_bytes + write_buf_size;
 	buf = kmalloc(msg_bytes, GFP_KERNEL);
 	if (!buf) {
-		dev_err(i2c->base_dev.dev, "Failed to allocate memory for i2c buffer\n");
 		return -ENOMEM;
 	}
 

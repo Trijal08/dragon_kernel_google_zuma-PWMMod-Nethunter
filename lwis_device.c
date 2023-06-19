@@ -113,7 +113,6 @@ static int lwis_open(struct inode *node, struct file *fp)
 
 	lwis_client = kzalloc(sizeof(struct lwis_client), GFP_KERNEL);
 	if (!lwis_client) {
-		dev_err(lwis_dev->dev, "Failed to allocate lwis client\n");
 		return -ENOMEM;
 	}
 
@@ -366,7 +365,6 @@ static ssize_t lwis_read(struct file *fp, char __user *user_buf, size_t count, l
 	const size_t buffer_size = 8192;
 	char *buffer = kzalloc(buffer_size, GFP_KERNEL);
 	if (!buffer) {
-		pr_err("Failed to allocate read buffer\n");
 		return -ENOMEM;
 	}
 
@@ -1312,15 +1310,12 @@ struct lwis_device_power_sequence_list *lwis_dev_power_seq_list_alloc(int count)
 
 	list = kmalloc(sizeof(struct lwis_device_power_sequence_list), GFP_KERNEL);
 	if (!list) {
-		pr_err("Failed to allocate power sequence list\n");
 		return ERR_PTR(-ENOMEM);
 	}
 
 	list->seq_info =
 		kmalloc(count * sizeof(struct lwis_device_power_sequence_info), GFP_KERNEL);
 	if (!list->seq_info) {
-		pr_err("Failed to allocate lwis_device_power_sequence_info "
-		       "instances\n");
 		kfree(list);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -1635,7 +1630,6 @@ static int __init lwis_register_base_device(void)
 	/* Allocate ID management instance for device minor numbers */
 	core.idr = kzalloc(sizeof(struct idr), GFP_KERNEL);
 	if (!core.idr) {
-		pr_err("Cannot allocate idr instance\n");
 		return -ENOMEM;
 	}
 

@@ -116,7 +116,6 @@ static struct lwis_event_subscriber_list *event_subscriber_list_create(struct lw
 	struct lwis_event_subscriber_list *event_subscriber_list =
 		kmalloc(sizeof(struct lwis_event_subscriber_list), GFP_KERNEL);
 	if (!event_subscriber_list) {
-		dev_err(lwis_dev->dev, "Can't allocate event subscriber list\n");
 		return NULL;
 	}
 	event_subscriber_list->trigger_event_id = trigger_event_id;
@@ -182,7 +181,6 @@ static void lwis_top_event_notify(struct lwis_device *lwis_dev, int64_t trigger_
 	struct lwis_trigger_event_info *trigger_event =
 		kmalloc(sizeof(struct lwis_trigger_event_info), GFP_ATOMIC);
 	if (trigger_event == NULL) {
-		dev_err(lwis_top_dev->base_dev.dev, "Allocate trigger_event_info failed");
 		return;
 	}
 
@@ -243,8 +241,6 @@ static int lwis_top_event_subscribe(struct lwis_device *lwis_dev, int64_t trigge
 	/* If the subscription does not exist in hash table, create one */
 	new_subscription = kmalloc(sizeof(struct lwis_event_subscribe_info), GFP_KERNEL);
 	if (!new_subscription) {
-		dev_err(lwis_top_dev->base_dev.dev,
-			"Failed to allocate memory for new subscription\n");
 		return -ENOMEM;
 	}
 	INIT_LIST_HEAD(&new_subscription->list_node);
@@ -485,7 +481,6 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 	/* Allocate top device specific data construct */
 	top_dev = devm_kzalloc(dev, sizeof(struct lwis_top_device), GFP_KERNEL);
 	if (!top_dev) {
-		dev_err(dev, "Failed to allocate top device structure\n");
 		return -ENOMEM;
 	}
 

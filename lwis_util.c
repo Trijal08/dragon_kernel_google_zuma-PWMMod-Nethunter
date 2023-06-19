@@ -11,6 +11,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-util: " fmt
 
 #include <linux/slab.h>
+#include <linux/byteorder/generic.h>
 #include <uapi/linux/sched/types.h>
 #include "lwis_util.h"
 #include "lwis_device.h"
@@ -168,4 +169,37 @@ int lwis_set_kthread_priority(struct lwis_device *lwis_dev, struct task_struct *
 bool lwis_check_device_type(struct lwis_device *lwis_dev, int32_t type)
 {
 	return ((lwis_dev) && (lwis_dev->type == type));
+}
+
+void lwis_value_to_be_buf(uint64_t value, uint8_t *buf, int buf_size)
+{
+	if (buf_size == 1) {
+		buf[0] = value;
+	} else if (buf_size == 2) {
+		buf[0] = (value >> 8) & 0xFF;
+		buf[1] = value & 0xFF;
+	} else if (buf_size == 4) {
+		buf[0] = (value >> 24) & 0xFF;
+		buf[1] = (value >> 16) & 0xFF;
+		buf[2] = (value >> 8) & 0xFF;
+		buf[3] = value & 0xFF;
+	} else {
+		pr_err("Unsupported buffer size %d used for value_to_buf\n", buf_size);
+	}
+}
+
+uint64_t lwis_be_buf_to_value(uint8_t *buf, int buf_size)
+{
+	if (buf_size == 1) {
+		return buf[0];
+	}
+	if (buf_size == 2) {
+		return be16_to_cpup((const uint16_t *)buf);
+	}
+	if (buf_size == 4) {
+		return be32_to_cpup((const uint32_t *)buf);
+	}
+
+	pr_err("Unsupported buffer size %d used for buf_to_value\n", buf_size);
+	return 0;
 }
