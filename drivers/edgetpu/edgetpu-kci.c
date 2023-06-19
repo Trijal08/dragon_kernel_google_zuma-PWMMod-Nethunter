@@ -10,6 +10,7 @@
 #include <linux/circ_buf.h>
 #include <linux/device.h>
 #include <linux/errno.h>
+#include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
@@ -187,6 +188,13 @@ static inline void edgetpu_kci_trigger_doorbell(struct gcip_kci *kci,
 		EDGETPU_MAILBOX_CMD_QUEUE_WRITE(mailbox, doorbell_set, 1);
 }
 
+static inline bool edgetpu_kci_is_block_off(struct gcip_kci *kci)
+{
+	struct edgetpu_mailbox *mailbox = gcip_kci_get_data(kci);
+
+	return mailbox->etdev->pmu_status ? !readl(mailbox->etdev->pmu_status) : false;
+}
+
 static const struct gcip_kci_ops kci_ops = {
 	.get_cmd_queue_head = edgetpu_kci_get_cmd_queue_head,
 	.get_cmd_queue_tail = edgetpu_kci_get_cmd_queue_tail,
@@ -198,6 +206,7 @@ static const struct gcip_kci_ops kci_ops = {
 	.trigger_doorbell = edgetpu_kci_trigger_doorbell,
 	.reverse_kci_handle_response = edgetpu_reverse_kci_handle_response,
 	.update_usage = edgetpu_kci_update_usage_wrapper,
+	.is_block_off = edgetpu_kci_is_block_off,
 };
 
 int edgetpu_kci_init(struct edgetpu_mailbox_manager *mgr, struct edgetpu_kci *etkci)
@@ -537,9 +546,6 @@ void edgetpu_kci_mappings_show(struct edgetpu_dev *etdev, struct seq_file *s)
 	struct edgetpu_coherent_mem *cmd_queue_mem = &etkci->cmd_queue_mem;
 	struct edgetpu_coherent_mem *resp_queue_mem = &etkci->resp_queue_mem;
 
-	if (!etkci || !etkci->mailbox)
-		return;
-
 	seq_printf(s, "kci context mbox %u:\n", EDGETPU_CONTEXT_KCI);
 	seq_printf(s, "  %#llx %lu cmdq - %pad\n", cmd_queue_mem->tpu_addr,
 		   DIV_ROUND_UP(QUEUE_SIZE * gcip_kci_queue_element_size(GCIP_MAILBOX_CMD_QUEUE),
@@ -559,9 +565,6 @@ int edgetpu_kci_shutdown(struct edgetpu_kci *etkci)
 		.code = GCIP_KCI_CODE_SHUTDOWN,
 	};
 
-	if (!etkci || !etkci->kci)
-		return -ENODEV;
-
 	return gcip_kci_send_cmd(etkci->kci, &cmd);
 }
 
@@ -576,9 +579,6 @@ int edgetpu_kci_get_debug_dump(struct edgetpu_kci *etkci, tpu_addr_t tpu_addr, s
 			.flags = init_buffer,
 		},
 	};
-
-	if (!etkci || !etkci->kci)
-		return -ENODEV;
 
 	return gcip_kci_send_cmd(etkci->kci, &cmd);
 }
@@ -598,9 +598,6 @@ int edgetpu_kci_open_device(struct edgetpu_kci *etkci, u32 mailbox_map, u32 clie
 		},
 	};
 
-	if (!etkci || !etkci->kci)
-		return -ENODEV;
-
 	RETURN_ERRNO_IF_ETDEV_NOT_GOOD(etkci, "open device");
 	if (vcid < 0)
 		return gcip_kci_send_cmd(etkci->kci, &cmd);
@@ -617,9 +614,6 @@ int edgetpu_kci_close_device(struct edgetpu_kci *etkci, u32 mailbox_map)
 		},
 	};
 
-	if (!etkci || !etkci->kci)
-		return -ENODEV;
-
 	RETURN_ERRNO_IF_ETDEV_NOT_GOOD(etkci, "close device");
 
 	return gcip_kci_send_cmd(etkci->kci, &cmd);
@@ -634,9 +628,6 @@ int edgetpu_kci_notify_throttling(struct edgetpu_dev *etdev, u32 level)
 		},
 	};
 
-	if (!etdev->etkci)
-		return -ENODEV;
-
 	return gcip_kci_send_cmd(etdev->etkci->kci, &cmd);
 }
 
@@ -648,9 +639,6 @@ int edgetpu_kci_block_bus_speed_control(struct edgetpu_dev *etdev, bool block)
 			.flags = (u32) block,
 		},
 	};
-
-	if (!etdev->etkci)
-		return -ENODEV;
 
 	return gcip_kci_send_cmd(etdev->etkci->kci, &cmd);
 }
@@ -666,9 +654,6 @@ int edgetpu_kci_firmware_tracing_level(void *data, unsigned long level, unsigned
 	};
 	struct gcip_kci_response_element resp;
 	int ret;
-
-	if (!etdev->etkci)
-		return -ENODEV;
 
 	ret = gcip_kci_send_cmd_return_resp(etdev->etkci->kci, &cmd, &resp);
 	if (ret == GCIP_KCI_ERROR_OK)
@@ -696,9 +681,6 @@ int edgetpu_kci_set_device_properties(struct edgetpu_kci *etkci, struct edgetpu_
 	};
 	int ret = 0;
 
-	if (!etkci || !etkci->kci)
-		return -ENODEV;
-
 	mutex_lock(&dev_prop->lock);
 	if (!dev_prop->initialized)
 		goto out;
@@ -717,9 +699,6 @@ int edgetpu_kci_resp_rkci_ack(struct edgetpu_dev *etdev, struct gcip_kci_respons
 		.seq = rkci_cmd->seq,
 		.code = GCIP_KCI_CODE_RKCI_ACK,
 	};
-
-	if (!etdev->etkci)
-		return -ENODEV;
 
 	return gcip_kci_send_cmd(etdev->etkci->kci, &cmd);
 }

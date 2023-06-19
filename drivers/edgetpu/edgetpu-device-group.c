@@ -730,8 +730,10 @@ static struct page **edgetpu_pin_user_pages(struct edgetpu_device_group *group,
 		kvfree(pages);
 		return ERR_PTR(-ENOMEM);
 	}
+	mmap_read_lock(current->mm);
 	ret = pin_user_pages(host_addr & PAGE_MASK, num_pages, foll_flags,
 			     pages, vmas);
+	mmap_read_unlock(current->mm);
 	kvfree(vmas);
 	if (ret < 0) {
 		etdev_dbg(etdev, "pin_user_pages failed %u:%pK-%u: %d",
