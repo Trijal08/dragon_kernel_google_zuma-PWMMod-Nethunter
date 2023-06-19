@@ -16,7 +16,6 @@
 #include <linux/slab.h>
 
 #include "lwis_commands.h"
-#include "lwis_init.h"
 #include "lwis_platform.h"
 
 #define LWIS_DRIVER_NAME "lwis-dpm"

@@ -154,7 +154,6 @@ int lwis_allocator_init(struct lwis_device *lwis_dev)
 	struct lwis_allocator_block_mgr *block_mgr;
 
 	if (lwis_dev == NULL) {
-		dev_err(lwis_dev->dev, "lwis_dev is NULL\n");
 		return -EINVAL;
 	}
 
@@ -204,7 +203,6 @@ void lwis_allocator_release(struct lwis_device *lwis_dev)
 	struct lwis_allocator_block_mgr *block_mgr;
 
 	if (lwis_dev == NULL) {
-		dev_err(lwis_dev->dev, "lwis_dev is NULL\n");
 		return;
 	}
 
@@ -247,7 +245,6 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size, gfp_t g
 	unsigned long flags;
 
 	if (lwis_dev == NULL) {
-		dev_err(lwis_dev->dev, "lwis_dev is NULL\n");
 		return NULL;
 	}
 	block_mgr = lwis_dev->block_mgr;
@@ -374,7 +371,6 @@ void lwis_allocator_free(struct lwis_device *lwis_dev, void *ptr)
 	unsigned long flags;
 
 	if (lwis_dev == NULL || ptr == NULL) {
-		dev_err(lwis_dev->dev, "input is NULL\n");
 		return;
 	}
 	block_mgr = lwis_dev->block_mgr;

@@ -27,7 +27,6 @@
 
 #include "lwis_device.h"
 #include "lwis_spi.h"
-#include "lwis_init.h"
 #include "lwis_util.h"
 #include "lwis_trace.h"
 

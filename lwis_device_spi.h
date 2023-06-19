@@ -27,6 +27,7 @@ struct lwis_spi_device {
 	spinlock_t spi_lock;
 };
 
+int lwis_spi_device_init(void);
 int lwis_spi_device_deinit(void);
 
 #endif /* LWIS_DEVICE_SPI_H_ */

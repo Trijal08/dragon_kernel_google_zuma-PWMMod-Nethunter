@@ -40,6 +40,7 @@ int lwis_dpm_update_qos(struct lwis_device *lwis_dev, struct lwis_qos_setting_v2
  */
 uint32_t lwis_dpm_read_clock(struct lwis_device *lwis_dev);
 
+int lwis_dpm_device_init(void);
 int lwis_dpm_device_deinit(void);
 
 #endif /* LWIS_DPM_DEVICE_H_ */

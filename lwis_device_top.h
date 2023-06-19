@@ -37,5 +37,6 @@ struct lwis_top_device {
 	struct task_struct *subscribe_worker_thread;
 };
 
+int lwis_top_device_init(void);
 int lwis_top_device_deinit(void);
 #endif /* LWIS_DEVICE_TOP_H_ */

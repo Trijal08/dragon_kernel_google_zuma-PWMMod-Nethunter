@@ -9,7 +9,6 @@
  */
 
 #include "lwis_device_slc.h"
-#include "lwis_init.h"
 
 #include <linux/anon_inodes.h>
 #include <linux/delay.h>
