@@ -254,6 +254,16 @@ struct gs_panel_funcs {
 	int (*set_op_hz)(struct gs_panel *gs_panel, unsigned int hz);
 
 	/**
+	 * @get_panel_rev
+	 *
+	 * This callback is used to get panel HW revision from panel_extinfo.
+	 * It is expected to fill in the `panel_rev` member of the `gs_panel`
+	 *
+	 * @id: contents of `extinfo`, read as a binary value
+	 */
+	void (*get_panel_rev)(struct gs_panel *gs_panel, u32 id);
+
+	/**
 	 * @panel_config:
 	 *
 	 * This callback is used to do one time panel configuration before the
