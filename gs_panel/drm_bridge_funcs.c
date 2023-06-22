@@ -115,7 +115,8 @@ static int gs_panel_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_att
 	if (ret)
 		dev_warn(dev, "unable to link panel sysfs (%d)\n", ret);
 
-	/* TODO(tknelms): debugfs entries */
+	/* debugfs entries */
+	gs_panel_create_debugfs_entries(ctx, connector->debugfs_entry);
 
 	if (connector->dev->mode_config.poll_enabled)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
