@@ -148,7 +148,7 @@ static int lwis_i2c_register_io(struct lwis_device *lwis_dev, struct lwis_io_ent
 	}
 	lwis_save_register_io_info(lwis_dev, entry, access_size);
 
-	return lwis_i2c_io_entry_rw(i2c_dev, entry, lwis_dev);
+	return lwis_i2c_io_entry_rw(i2c_dev, entry);
 }
 
 static int lwis_i2c_addr_matcher(struct device *dev, void *data)

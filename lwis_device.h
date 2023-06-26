@@ -415,13 +415,6 @@ void lwis_dev_power_seq_list_print(struct lwis_device_power_sequence_list *list)
 void lwis_device_info_dump(const char *name, void (*func)(struct lwis_device *));
 
 /*
- * lwis_device_crash_info_dump:
- * Use the customized function handle to print information from each device registered in LWIS
- * when usersapce crash.
- */
-void lwis_device_crash_info_dump(struct lwis_device *lwis_dev);
-
-/*
  * lwis_save_register_io_info: Saves the register io info in a history buffer
  * for better debugability.
  */

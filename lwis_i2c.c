@@ -144,8 +144,7 @@ int lwis_i2c_set_state(struct lwis_i2c_device *i2c, const char *state_str)
 	return 0;
 }
 
-static int i2c_read(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t *value,
-		    struct lwis_device *lwis_dev)
+static int i2c_read(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t *value)
 {
 	int ret = 0;
 	u8 *wbuf;
@@ -200,7 +199,7 @@ static int i2c_read(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t *valu
 	msg[1].len = value_bytes;
 	msg[1].buf = rbuf;
 
-	ret = perform_read_transfer(client, msg, offset, offset_bytes, lwis_dev);
+	ret = perform_read_transfer(client, msg, offset, offset_bytes, &i2c->base_dev);
 
 	if (ret) {
 		dev_err(i2c->base_dev.dev, "I2C Read failed: Offset 0x%llx (%d)\n", offset, ret);
@@ -217,8 +216,7 @@ error_rbuf_alloc:
 	return ret;
 }
 
-static int i2c_write(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t value,
-		     struct lwis_device *lwis_dev)
+static int i2c_write(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t value)
 {
 	int ret;
 	u8 *buf;
@@ -268,7 +266,7 @@ static int i2c_write(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t valu
 	msg.len = msg_bytes;
 
 	ret = perform_write_transfer(client, &msg, offset, offset_bytes, value_bytes, value,
-				     lwis_dev);
+				     &i2c->base_dev);
 
 	if (ret) {
 		dev_err(i2c->base_dev.dev, "I2C Write failed: Offset 0x%llx Value 0x%llx (%d)\n",
@@ -281,7 +279,7 @@ static int i2c_write(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t valu
 }
 
 static int i2c_read_batch(struct lwis_i2c_device *i2c, uint64_t start_offset, uint8_t *read_buf,
-			  int read_buf_size, struct lwis_device *lwis_dev)
+			  int read_buf_size)
 {
 	int ret = 0;
 	uint8_t *wbuf;
@@ -319,7 +317,7 @@ static int i2c_read_batch(struct lwis_i2c_device *i2c, uint64_t start_offset, ui
 	msg[1].len = read_buf_size;
 	msg[1].buf = read_buf;
 
-	ret = perform_read_transfer(client, msg, start_offset, offset_bytes, lwis_dev);
+	ret = perform_read_transfer(client, msg, start_offset, offset_bytes, &i2c->base_dev);
 
 	if (ret) {
 		dev_err(i2c->base_dev.dev, "I2C Read Batch failed: Start Offset 0x%llx (%d)\n",
@@ -331,7 +329,7 @@ static int i2c_read_batch(struct lwis_i2c_device *i2c, uint64_t start_offset, ui
 }
 
 static int i2c_write_batch(struct lwis_i2c_device *i2c, uint64_t start_offset, uint8_t *write_buf,
-			   int write_buf_size, struct lwis_device *lwis_dev)
+			   int write_buf_size)
 {
 	int ret;
 	uint8_t *buf;
@@ -372,7 +370,7 @@ static int i2c_write_batch(struct lwis_i2c_device *i2c, uint64_t start_offset, u
 	msg.len = msg_bytes;
 
 	ret = perform_write_batch_transfer(client, &msg, start_offset, offset_bytes, write_buf_size,
-					   write_buf, lwis_dev);
+					   write_buf, &i2c->base_dev);
 
 	if (ret) {
 		dev_err(i2c->base_dev.dev, "I2C Write Batch failed: Start Offset 0x%llx (%d)\n",
@@ -384,8 +382,7 @@ static int i2c_write_batch(struct lwis_i2c_device *i2c, uint64_t start_offset, u
 	return ret;
 }
 
-int lwis_i2c_io_entry_rw(struct lwis_i2c_device *i2c, struct lwis_io_entry *entry,
-			 struct lwis_device *lwis_dev)
+int lwis_i2c_io_entry_rw(struct lwis_i2c_device *i2c, struct lwis_io_entry *entry)
 {
 	int ret;
 	uint64_t reg_value;
@@ -396,27 +393,27 @@ int lwis_i2c_io_entry_rw(struct lwis_i2c_device *i2c, struct lwis_io_entry *entr
 	}
 
 	if (entry->type == LWIS_IO_ENTRY_READ) {
-		return i2c_read(i2c, entry->rw.offset, &entry->rw.val, lwis_dev);
+		return i2c_read(i2c, entry->rw.offset, &entry->rw.val);
 	}
 	if (entry->type == LWIS_IO_ENTRY_WRITE) {
-		return i2c_write(i2c, entry->rw.offset, entry->rw.val, lwis_dev);
+		return i2c_write(i2c, entry->rw.offset, entry->rw.val);
 	}
 	if (entry->type == LWIS_IO_ENTRY_MODIFY) {
-		ret = i2c_read(i2c, entry->mod.offset, &reg_value, lwis_dev);
+		ret = i2c_read(i2c, entry->mod.offset, &reg_value);
 		if (ret) {
 			return ret;
 		}
 		reg_value &= ~entry->mod.val_mask;
 		reg_value |= entry->mod.val_mask & entry->mod.val;
-		return i2c_write(i2c, entry->mod.offset, reg_value, lwis_dev);
+		return i2c_write(i2c, entry->mod.offset, reg_value);
 	}
 	if (entry->type == LWIS_IO_ENTRY_READ_BATCH) {
 		return i2c_read_batch(i2c, entry->rw_batch.offset, entry->rw_batch.buf,
-				      entry->rw_batch.size_in_bytes, lwis_dev);
+				      entry->rw_batch.size_in_bytes);
 	}
 	if (entry->type == LWIS_IO_ENTRY_WRITE_BATCH) {
 		return i2c_write_batch(i2c, entry->rw_batch.offset, entry->rw_batch.buf,
-				       entry->rw_batch.size_in_bytes, lwis_dev);
+				       entry->rw_batch.size_in_bytes);
 	}
 	dev_err(i2c->base_dev.dev, "Invalid IO entry type: %d\n", entry->type);
 	return -EINVAL;

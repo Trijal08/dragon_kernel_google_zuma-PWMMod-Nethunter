@@ -250,9 +250,9 @@ static int lwis_release(struct inode *node, struct file *fp)
 	mutex_lock(&lwis_dev->client_lock);
 	/* Release power if client closed without power down called */
 	if (is_client_enabled && lwis_dev->enabled > 0) {
-		lwis_device_crash_info_dump(lwis_dev);
 		lwis_dev->enabled--;
 		if (lwis_dev->enabled == 0) {
+			lwis_debug_crash_info_dump(lwis_dev);
 			dev_info(lwis_dev->dev, "No more client, power down\n");
 			rc = lwis_dev_power_down_locked(lwis_dev);
 			lwis_dev->is_suspended = false;
@@ -1426,19 +1426,6 @@ void lwis_device_info_dump(const char *name, void (*func)(struct lwis_device *))
 		func(lwis_dev_it);
 	}
 	mutex_unlock(&core.lock);
-}
-
-void lwis_device_crash_info_dump(struct lwis_device *lwis_dev)
-{
-	int dump_cnt = 5;
-	int64_t timestamp;
-
-	pr_info("LWIS Device (%s) Crash Info Dump:\n", lwis_dev->name);
-
-	/* Dump Current kernel timestamp &&  Last 5 Received Event*/
-	timestamp = ktime_to_ns(lwis_get_time());
-	dev_info(lwis_dev->dev, " AT %lld Dump Last %d Received Events:\n\n", timestamp, dump_cnt);
-	lwis_debug_print_event_states_info(lwis_dev, /*lwis_event_dump_cnt=*/dump_cnt);
 }
 
 void lwis_save_register_io_info(struct lwis_device *lwis_dev, struct lwis_io_entry *io_entry,

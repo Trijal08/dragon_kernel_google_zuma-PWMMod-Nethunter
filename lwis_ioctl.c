@@ -20,6 +20,7 @@
 #include "lwis_allocator.h"
 #include "lwis_buffer.h"
 #include "lwis_commands.h"
+#include "lwis_debug.h"
 #include "lwis_device.h"
 #include "lwis_device_dpm.h"
 #include "lwis_device_i2c.h"
@@ -733,7 +734,7 @@ static int cmd_dump_debug_state(struct lwis_client *lwis_client, struct lwis_cmd
 
 	mutex_lock(&lwis_dev->client_lock);
 	/* Dump lwis device crash info */
-	lwis_device_crash_info_dump(lwis_dev);
+	lwis_debug_crash_info_dump(lwis_dev);
 	mutex_unlock(&lwis_dev->client_lock);
 
 	header->ret_code = 0;
