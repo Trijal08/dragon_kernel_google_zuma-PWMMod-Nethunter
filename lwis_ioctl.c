@@ -1815,23 +1815,17 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 		break;
 	case LWIS_CMD_ID_TRANSACTION_SUBMIT:
 	case LWIS_CMD_ID_TRANSACTION_SUBMIT_V2:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_transaction_submit(lwis_client, header,
 					     (struct lwis_cmd_pkt __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_TRANSACTION_CANCEL:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_transaction_cancel(lwis_client, header,
 					     (struct lwis_cmd_transaction_cancel __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_TRANSACTION_REPLACE:
 	case LWIS_CMD_ID_TRANSACTION_REPLACE_V2:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_transaction_replace(lwis_client, header,
 					      (struct lwis_cmd_pkt __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_PERIODIC_IO_SUBMIT:
 		mutex_lock(&lwis_client->lock);
