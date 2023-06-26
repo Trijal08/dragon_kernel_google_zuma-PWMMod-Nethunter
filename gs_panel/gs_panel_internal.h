@@ -49,6 +49,26 @@ static int gs_panel_create_debugfs_entries(struct gs_panel *ctx, struct dentry *
 }
 #endif
 
+/* gs_dsi_dcs_helper.c */
+/**
+ * gs_dsi_dcs_transfer - Executes a dsi dcs transfer
+ * @dsi: handle for dsi device
+ * @type: type of transfer
+ * @data: data to transfer
+ * @len: length of data
+ * @flags: flags for transfer
+ *
+ * This function is more granular than the public-facing
+ * `gs_dsi_dcs_write_buffer` function, in that it allows for explicitly setting
+ * the `type` argument. It is not exposed outwardly to reduce API redundancy,
+ * but it is retained here in order to allow some internal access (for example,
+ * for the debugfs dsi interface)
+ *
+ * Return: result of transfer operation
+ */
+ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *data, size_t len,
+			    u16 flags);
+
 /* gs_panel.c */
 int gs_panel_first_enable(struct gs_panel *ctx);
 

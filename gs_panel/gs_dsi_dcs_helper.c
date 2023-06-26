@@ -19,6 +19,8 @@
 #include <drm/drm_mipi_dsi.h>
 #include <video/mipi_display.h>
 
+#include "gs_panel_internal.h"
+
 void gs_dsi_send_cmd_set_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_cmd_set *cmd_set,
 			       u32 panel_rev, u32 flags)
 {
@@ -79,8 +81,8 @@ void gs_dsi_send_cmd_set(struct mipi_dsi_device *dsi, const struct gs_dsi_cmd_se
 }
 EXPORT_SYMBOL(gs_dsi_send_cmd_set);
 
-static ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *data,
-				   size_t len, u16 flags)
+ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *data, size_t len,
+			    u16 flags)
 {
 	const struct mipi_dsi_host_ops *ops = dsi->host->ops;
 	struct mipi_dsi_msg msg = {
