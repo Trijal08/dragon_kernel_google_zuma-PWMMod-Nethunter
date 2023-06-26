@@ -28,6 +28,12 @@
 #define CREATE_TRACE_POINTS
 #include <trace/panel_trace.h>
 
+/* CONSTANTS */
+
+/* ext_info registers */
+static const char ext_info_regs[] = { 0xDA, 0xDB, 0xDC };
+#define EXT_INFO_SIZE ARRAY_SIZE(ext_info_regs)
+
 /* DEVICE TREE */
 
 struct gs_drm_connector *get_gs_drm_connector_parent(const struct gs_panel *ctx)
@@ -227,6 +233,31 @@ static int gs_panel_of_parse_backlight(struct gs_panel *ctx)
 #else
 	return 0;
 #endif
+}
+
+/* Panel Info */
+
+static int gs_panel_read_extinfo(struct gs_panel *ctx)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
+	char buf[EXT_INFO_SIZE];
+	int i, ret;
+
+	/* extinfo already set, skip reading */
+	if (ctx->panel_extinfo[0] != '\0')
+		return 0;
+
+	for (i = 0; i < EXT_INFO_SIZE; i++) {
+		ret = mipi_dsi_dcs_read(dsi, ext_info_regs[i], buf + i, 1);
+		if (ret != 1) {
+			dev_warn(ctx->dev, "Unable to read panel extinfo (0x%x: %d)\n",
+				 ext_info_regs[i], ret);
+			return ret;
+		}
+	}
+	bin2hex(ctx->panel_extinfo, buf, EXT_INFO_SIZE);
+
+	return 0;
 }
 
 /* Modes */
@@ -492,28 +523,24 @@ int gs_panel_first_enable(struct gs_panel *ctx)
 		return 0;
 	}
 
-	/*TODO(tknelms)
 	ret = gs_panel_read_extinfo(ctx);
 	if (!ret)
 		ctx->initialized = true;
-	*/
 
-	/*TODO(tknelms)
-	if (funcs && funcs->get_panel_rev) {
-		u32 id;
+	if (!ctx->panel_rev) {
+		if (gs_panel_has_func(ctx, get_panel_rev)) {
+			u32 id;
 
-		if (kstrtou32(ctx->panel_extinfo, 16, &id)) {
-			dev_warn(ctx->dev,
-				"failed to get panel extinfo, "
-				"default to latest\n");
-			ctx->panel_rev = PANEL_REV_LATEST;
+			if (kstrtou32(ctx->panel_extinfo, 16, &id)) {
+				dev_warn(dev, "failed to get panel extinfo, default to latest\n");
+				ctx->panel_rev = PANEL_REV_LATEST;
+			} else
+				funcs->get_panel_rev(ctx, id);
 		} else {
-			funcs->get_panel_rev(ctx, id);
+			dev_warn(dev, "unable to get panel rev, default to latest\n");
+			ctx->panel_rev = PANEL_REV_LATEST;
 		}
-	} else {
-	*/
-	dev_warn(dev, "unable to get panel rev, default to latest\n");
-	ctx->panel_rev = PANEL_REV_LATEST;
+	}
 
 	/*TODO(tknelms)
 	if (funcs && funcs->read_id)
