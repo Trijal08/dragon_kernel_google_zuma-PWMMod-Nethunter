@@ -348,7 +348,6 @@ static int cmd_echo(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
 
 	buffer = kmalloc(echo_msg.msg.size + 1, GFP_KERNEL);
 	if (!buffer) {
-		dev_err(lwis_dev->dev, "Failed to allocate buffer for echo message\n");
 		header->ret_code = -ENOMEM;
 		return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
 	}
@@ -775,7 +774,6 @@ static int cmd_dma_buffer_enroll(struct lwis_client *lwis_client, struct lwis_cm
 
 	buffer = kmalloc(sizeof(*buffer), GFP_KERNEL);
 	if (!buffer) {
-		dev_err(lwis_dev->dev, "Failed to allocate lwis_enrolled_buffer struct\n");
 		header->ret_code = -ENOMEM;
 		return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
 	}
@@ -879,7 +877,6 @@ static int cmd_dma_buffer_alloc(struct lwis_client *lwis_client, struct lwis_cmd
 
 	buffer = kmalloc(sizeof(*buffer), GFP_KERNEL);
 	if (!buffer) {
-		dev_err(lwis_dev->dev, "Failed to allocated lwis_allocated_buffer\n");
 		return -ENOMEM;
 	}
 
@@ -1016,7 +1013,6 @@ static int cmd_event_control_set(struct lwis_client *lwis_client, struct lwis_cm
 	}
 	k_event_controls = kmalloc(buf_size, GFP_KERNEL);
 	if (!k_event_controls) {
-		dev_err(lwis_dev->dev, "Failed to allocate event controls\n");
 		header->ret_code = -ENOMEM;
 		return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
 	}
@@ -1163,7 +1159,6 @@ static int construct_transaction_from_cmd(struct lwis_client *client, uint32_t c
 
 	k_transaction = kmalloc(sizeof(*k_transaction), GFP_KERNEL);
 	if (!k_transaction) {
-		dev_err(lwis_dev->dev, "Failed to allocate transaction info\n");
 		return -ENOMEM;
 	}
 
@@ -1409,7 +1404,6 @@ static int construct_periodic_io_from_cmd(struct lwis_client *client,
 
 	k_periodic_io = kmalloc(sizeof(struct lwis_periodic_io), GFP_KERNEL);
 	if (!k_periodic_io) {
-		dev_err(lwis_dev->dev, "Failed to allocate periodic io\n");
 		return -ENOMEM;
 	}
 
@@ -1515,7 +1509,6 @@ static int cmd_dpm_clk_update(struct lwis_device *lwis_dev, struct lwis_cmd_pkt 
 	}
 	clk_settings = kmalloc(buf_size, GFP_KERNEL);
 	if (!clk_settings) {
-		dev_err(lwis_dev->dev, "Failed to allocate clock settings\n");
 		ret = -ENOMEM;
 		goto exit;
 	}
@@ -1563,7 +1556,6 @@ static int cmd_dpm_qos_update(struct lwis_device *lwis_dev, struct lwis_cmd_pkt 
 	}
 	k_qos_settings = kmalloc(buf_size, GFP_KERNEL);
 	if (!k_qos_settings) {
-		dev_err(lwis_dev->dev, "Failed to allocate qos settings\n");
 		ret = -ENOMEM;
 		goto exit;
 	}
@@ -1626,7 +1618,6 @@ static int cmd_dpm_qos_update_v2(struct lwis_device *lwis_dev, struct lwis_cmd_p
 	}
 	k_qos_settings = kmalloc(buf_size, GFP_KERNEL);
 	if (!k_qos_settings) {
-		dev_err(lwis_dev->dev, "Failed to allocate qos settings\n");
 		ret = -ENOMEM;
 		goto exit;
 	}
@@ -1824,23 +1815,17 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 		break;
 	case LWIS_CMD_ID_TRANSACTION_SUBMIT:
 	case LWIS_CMD_ID_TRANSACTION_SUBMIT_V2:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_transaction_submit(lwis_client, header,
 					     (struct lwis_cmd_pkt __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_TRANSACTION_CANCEL:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_transaction_cancel(lwis_client, header,
 					     (struct lwis_cmd_transaction_cancel __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_TRANSACTION_REPLACE:
 	case LWIS_CMD_ID_TRANSACTION_REPLACE_V2:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_transaction_replace(lwis_client, header,
 					      (struct lwis_cmd_pkt __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_PERIODIC_IO_SUBMIT:
 		mutex_lock(&lwis_client->lock);

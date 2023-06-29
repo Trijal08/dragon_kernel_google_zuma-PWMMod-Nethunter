@@ -117,7 +117,6 @@ static int lwis_spi_device_probe(struct spi_device *spi)
 	/* Allocate SPI device specific data construct */
 	spi_dev = devm_kzalloc(dev, sizeof(*spi_dev), GFP_KERNEL);
 	if (!spi_dev) {
-		dev_err(dev, "Failed to allocate spi device structure\n");
 		return -ENOMEM;
 	}
 

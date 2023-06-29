@@ -103,7 +103,6 @@ static struct lwis_periodic_io_list *periodic_io_list_create_locked(struct lwis_
 	struct lwis_periodic_io_list *periodic_io_list =
 		kmalloc(sizeof(struct lwis_periodic_io_list), GFP_ATOMIC);
 	if (!periodic_io_list) {
-		dev_err(lwis_dev->dev, "Cannot allocate new event list\n");
 		return NULL;
 	}
 
@@ -412,7 +411,6 @@ static int prepare_response(struct lwis_client *client, struct lwis_periodic_io 
 		    read_buf_size * info->batch_size;
 	periodic_io->resp = kmalloc(resp_size, GFP_KERNEL);
 	if (!periodic_io->resp) {
-		pr_err_ratelimited("Cannot allocate periodic io response\n");
 		return -ENOMEM;
 	}
 	periodic_io->resp->batch_size = 0;

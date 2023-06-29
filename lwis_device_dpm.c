@@ -200,7 +200,6 @@ static int lwis_dpm_device_probe(struct platform_device *plat_dev)
 	/* Allocate top device specific data construct */
 	dpm_dev = devm_kzalloc(dev, sizeof(struct lwis_dpm_device), GFP_KERNEL);
 	if (!dpm_dev) {
-		dev_err(dev, "Failed to allocate dpm device structure\n");
 		return -ENOMEM;
 	}
 

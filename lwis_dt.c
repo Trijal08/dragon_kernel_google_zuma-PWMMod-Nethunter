@@ -120,7 +120,6 @@ static int parse_irq_gpios(struct lwis_device *lwis_dev)
 
 	irq_gpios_names = kmalloc(LWIS_MAX_NAME_STRING_LEN * name_count, GFP_KERNEL);
 	if (IS_ERR_OR_NULL(irq_gpios_names)) {
-		pr_err("Allocating event list failed\n");
 		ret = -ENOMEM;
 		goto error_parse_irq_gpios;
 	}
@@ -137,7 +136,6 @@ static int parse_irq_gpios(struct lwis_device *lwis_dev)
 
 	irq_gpios_types = kmalloc(sizeof(u32) * type_count, GFP_KERNEL);
 	if (IS_ERR_OR_NULL(irq_gpios_types)) {
-		pr_err("Allocating irq_gpios_types list failed\n");
 		ret = -ENOMEM;
 		goto error_parse_irq_gpios;
 	}
@@ -153,7 +151,6 @@ static int parse_irq_gpios(struct lwis_device *lwis_dev)
 
 	irq_gpios_events = kmalloc(sizeof(u64) * event_count, GFP_KERNEL);
 	if (IS_ERR_OR_NULL(irq_gpios_events)) {
-		pr_err("Allocating event list failed\n");
 		ret = -ENOMEM;
 		goto error_parse_irq_gpios;
 	}
@@ -431,7 +428,6 @@ static int parse_irq_reg_bits(struct device_node *info, int *bits_num_result, u3
 
 	int_reg_bits = kmalloc(sizeof(u32) * int_reg_bits_num, GFP_KERNEL);
 	if (IS_ERR_OR_NULL(int_reg_bits)) {
-		pr_err("Failed to allocate memory for irq regiater bits\n");
 		return -ENOMEM;
 	}
 
@@ -464,7 +460,6 @@ static int parse_critical_irq_events(struct device_node *event_info, u64 **irq_e
 
 	*irq_events = kmalloc(sizeof(u64) * critical_irq_events_num, GFP_KERNEL);
 	if (*irq_events == NULL) {
-		pr_err("Failed to allocate memory for critical events\n");
 		return 0;
 	}
 

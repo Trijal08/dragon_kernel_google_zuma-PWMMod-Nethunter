@@ -221,7 +221,6 @@ int lwis_fence_create(struct lwis_device *lwis_dev)
 	/* Allocate a new instance of lwis_fence struct */
 	new_fence = kmalloc(sizeof(struct lwis_fence), GFP_ATOMIC);
 	if (!new_fence) {
-		dev_err(lwis_dev->dev, "Failed to allocate lwis_fence at creating new fence\n");
 		return -ENOMEM;
 	}
 
@@ -264,7 +263,6 @@ transaction_list_create(struct lwis_fence *fence, struct lwis_client *owner)
 	struct lwis_fence_trigger_transaction_list *tx_list =
 		kmalloc(sizeof(struct lwis_fence_trigger_transaction_list), GFP_ATOMIC);
 	if (!tx_list) {
-		dev_err(fence->lwis_top_dev->dev, "Cannot allocate new event list\n");
 		return NULL;
 	}
 	tx_list->owner = owner;
@@ -312,8 +310,6 @@ static int lwis_trigger_fence_add_transaction(int fence_fd, struct lwis_client *
 	pending_transaction_id = kmalloc(sizeof(struct lwis_pending_transaction_id), GFP_ATOMIC);
 	if (!pending_transaction_id) {
 		fput(fp);
-		dev_err(client->lwis_dev->dev,
-			"Failed to allocate lwis_pending_transaction_id at adding transactions to fence\n");
 		return -ENOMEM;
 	}
 	pending_transaction_id->id = transaction->info.id;
@@ -615,8 +611,6 @@ struct lwis_fence_pending_signal *lwis_fence_pending_signal_create(struct lwis_f
 	struct lwis_fence_pending_signal *pending_fence_signal =
 		kmalloc(sizeof(struct lwis_fence_pending_signal), GFP_ATOMIC);
 	if (!pending_fence_signal) {
-		dev_err(fence->lwis_top_dev->dev,
-			"Cannot allocate new fence pending signal list\n");
 		return NULL;
 	}
 	pending_fence_signal->fp = fp;
