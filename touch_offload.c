@@ -474,7 +474,6 @@ static long touch_offload_ioctl(struct file *file, unsigned int ioctl_num,
 	case TOUCH_OFFLOAD_IOC_WR_CONFIGURE:
 	{
 		struct TouchOffloadIocConfigure configure;
-		int NUM_BUFFERS = 6;
 		int num_channels;
 
 		err = copy_from_user(&configure, (void *)ioctl_param,
@@ -550,7 +549,7 @@ static long touch_offload_ioctl(struct file *file, unsigned int ioctl_num,
 		       sizeof(context->config));
 
 		/* Allocate frames */
-		err = touch_offload_allocate_buffers(context, NUM_BUFFERS);
+		err = touch_offload_allocate_buffers(context, TOUCH_OFFLOAD_BUFFER_NUM);
 		if (err != 0) {
 			pr_err("%s: failed to allocate buffers. err = 0x%08X.\n",
 			       __func__, (unsigned int)err);
@@ -622,7 +621,7 @@ int touch_offload_reserve_frame(struct touch_offload_context *context,
 
 	return ret;
 }
-EXPORT_SYMBOL(touch_offload_reserve_frame);
+EXPORT_SYMBOL_GPL(touch_offload_reserve_frame);
 
 int touch_offload_queue_frame(struct touch_offload_context *context,
 			      struct touch_offload_frame *frame)
@@ -653,7 +652,7 @@ int touch_offload_queue_frame(struct touch_offload_context *context,
 
 	return ret;
 }
-EXPORT_SYMBOL(touch_offload_queue_frame);
+EXPORT_SYMBOL_GPL(touch_offload_queue_frame);
 
 int touch_offload_init(struct touch_offload_context *context)
 {
@@ -724,7 +723,7 @@ err_cdev_add:
 	unregister_chrdev_region(context->dev_num, 1);
 	return ret;
 }
-EXPORT_SYMBOL(touch_offload_init);
+EXPORT_SYMBOL_GPL(touch_offload_init);
 
 int touch_offload_cleanup(struct touch_offload_context *context)
 {
@@ -744,7 +743,7 @@ int touch_offload_cleanup(struct touch_offload_context *context)
 
 	return 0;
 }
-EXPORT_SYMBOL(touch_offload_cleanup);
+EXPORT_SYMBOL_GPL(touch_offload_cleanup);
 
 MODULE_DESCRIPTION("Touch Offload to AP");
 MODULE_AUTHOR("Steve Pfetsch <spfetsch@google.com>");
