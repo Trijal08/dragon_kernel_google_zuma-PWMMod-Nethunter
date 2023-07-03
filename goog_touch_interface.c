@@ -39,6 +39,7 @@ static void goog_set_display_state(struct goog_touch_interface *gti,
 /*-----------------------------------------------------------------------------
  * GTI/proc: forward declarations, structures and functions.
  */
+static int goog_proc_dump_show(struct seq_file *m, void *v);
 static int goog_proc_ms_base_show(struct seq_file *m, void *v);
 static int goog_proc_ms_diff_show(struct seq_file *m, void *v);
 static int goog_proc_ms_raw_show(struct seq_file *m, void *v);
@@ -47,6 +48,7 @@ static int goog_proc_ss_diff_show(struct seq_file *m, void *v);
 static int goog_proc_ss_raw_show(struct seq_file *m, void *v);
 static struct proc_dir_entry *gti_proc_dir_root;
 static char *gti_proc_name[GTI_PROC_NUM] = {
+	[GTI_PROC_DUMP] = "dump",
 	[GTI_PROC_MS_BASE] = "ms_base",
 	[GTI_PROC_MS_DIFF] = "ms_diff",
 	[GTI_PROC_MS_RAW] = "ms_raw",
@@ -55,6 +57,7 @@ static char *gti_proc_name[GTI_PROC_NUM] = {
 	[GTI_PROC_SS_RAW] = "ss_raw",
 };
 static int (*gti_proc_show[GTI_PROC_NUM]) (struct seq_file *, void *) = {
+	[GTI_PROC_DUMP] = goog_proc_dump_show,
 	[GTI_PROC_MS_BASE] = goog_proc_ms_base_show,
 	[GTI_PROC_MS_DIFF] = goog_proc_ms_diff_show,
 	[GTI_PROC_MS_RAW] = goog_proc_ms_raw_show,
@@ -62,6 +65,7 @@ static int (*gti_proc_show[GTI_PROC_NUM]) (struct seq_file *, void *) = {
 	[GTI_PROC_SS_DIFF] = goog_proc_ss_diff_show,
 	[GTI_PROC_SS_RAW] = goog_proc_ss_raw_show,
 };
+DEFINE_PROC_SHOW_ATTRIBUTE(goog_proc_dump);
 DEFINE_PROC_SHOW_ATTRIBUTE(goog_proc_ms_base);
 DEFINE_PROC_SHOW_ATTRIBUTE(goog_proc_ms_diff);
 DEFINE_PROC_SHOW_ATTRIBUTE(goog_proc_ms_raw);
@@ -176,6 +180,82 @@ heatmap_process_err:
 		cmd->buffer = NULL;
 		cmd->size = 0;
 	}
+	return ret;
+}
+
+static int goog_proc_dump_show(struct seq_file *m, void *v)
+{
+	char trace_tag[128];
+	u64 i, hc_cnt, input_cnt;
+	int ret;
+	ktime_t delta_time;
+	time64_t time64_utc;
+	s32 remainder;
+	struct tm utc;
+	struct goog_touch_interface *gti = m->private;
+	struct gti_debug_healthcheck *hc_history = gti->debug_healthcheck_history;
+	struct gti_debug_input *input_history = gti->debug_input_history;
+
+	hc_cnt = min_t(u64, gti->irq_index, GTI_DEBUG_HEALTHCHECK_KFIFO_LEN);
+	input_cnt = min_t(u64, gti->released_index, GTI_DEBUG_INPUT_KFIFO_LEN);
+
+	ret = mutex_lock_interruptible(&gti->input_process_lock);
+	if (ret) {
+		seq_puts(m, "error: has been interrupted!\n");
+		GOOG_WARN(gti, "error: has been interrupted!\n");
+		return ret;
+	}
+
+	scnprintf(trace_tag, sizeof(trace_tag), "%s\n", __func__);
+	ATRACE_BEGIN(trace_tag);
+	gti_debug_healthcheck_dump(gti);
+	gti_debug_input_dump(gti);
+
+	seq_puts(m, "\t### Interrupt ###\n");
+	seq_printf(m, "%23s %8s %8s %12s\n", "TIME(UTC)", "INT#", "INPUT#", "SLOT-STATE");
+	for (i = 0 ; i < hc_cnt ; i++) {
+		if (hc_history[i].irq_index == 0)
+			continue;
+
+		time64_utc = div_s64_rem(ktime_to_ns(hc_history[i].irq_time),
+			NSEC_PER_SEC, &remainder);
+		time64_to_tm(time64_utc, 0, &utc);
+		seq_printf(m, "%4d-%02d-%02d %02d:%02d:%02d.%03d %8llu %8llu %#12lx\n",
+			utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday,
+			utc.tm_hour, utc.tm_min, utc.tm_sec, remainder/NSEC_PER_MSEC,
+			hc_history[i].irq_index,
+			hc_history[i].input_index, hc_history[i].slot_bit_active);
+	}
+	seq_puts(m, "\n");
+
+	seq_puts(m, "\t### Coordinate(s) ###\n");
+	seq_printf(m, "%23s %14s %8s %12s %12s %12s %12s\n",
+		"TIME(UTC)", "DURATION(MS)", "SLOT#", "INT#DOWN", "INT#UP",
+		"X-DELTA(PX)", "Y-DELTA(PX)");
+	for (i = 0 ; i < input_cnt ; i++) {
+		delta_time = ktime_sub(input_history[i].released.time,
+				input_history[i].pressed.time);
+		if (delta_time <= 0)
+			continue;
+
+		time64_utc = div_s64_rem(ktime_to_ns(input_history[i].pressed.time),
+			NSEC_PER_SEC, &remainder);
+		time64_to_tm(time64_utc, 0, &utc);
+		seq_printf(m, "%4d-%02d-%02d %02d:%02d:%02d.%03d %14lld %8d %12d %12d %12d %12d\n",
+			utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday,
+			utc.tm_hour, utc.tm_min, utc.tm_sec, remainder/NSEC_PER_MSEC,
+			ktime_to_ms(delta_time),
+			input_history[i].slot,
+			input_history[i].pressed.irq_index, input_history[i].released.irq_index,
+			input_history[i].released.coord.x - input_history[i].pressed.coord.x,
+			input_history[i].released.coord.y - input_history[i].pressed.coord.y);
+	}
+	seq_puts(m, "\n");
+
+	mutex_unlock(&gti->input_process_lock);
+	seq_puts(m, "\n\n");
+	ATRACE_END();
+
 	return ret;
 }
 
@@ -316,13 +396,13 @@ static void goog_init_proc(struct goog_touch_interface *gti)
 		return;
 	}
 
-	for (type = GTI_PROC_MS_BASE; type < GTI_PROC_NUM; type++) {
+	for (type = GTI_PROC_DUMP; type < GTI_PROC_NUM; type++) {
 		char *name = gti_proc_name[type];
 
 		if (gti_proc_show[type])
-			gti->proc_heatmap[type] = proc_create_single_data(
+			gti->proc_show[type] = proc_create_single_data(
 				name, 0555, gti->proc_dir, gti_proc_show[type], gti);
-		if (!gti->proc_heatmap[type])
+		if (!gti->proc_show[type])
 			GOOG_ERR(gti, "proc_create_single_data failed for %s!\n", name);
 	}
 }
@@ -511,8 +591,6 @@ static ssize_t force_active_store(struct device *dev,
 	}
 
 	if (locked) {
-		gti_debug_hc_dump(gti);
-		gti_debug_input_dump(gti);
 		if (gti->ignore_force_active)
 			GOOG_WARN(gti, "operation not supported!\n");
 		else
@@ -1238,22 +1316,22 @@ static ssize_t vrr_enabled_store(struct device *dev,
 /*-----------------------------------------------------------------------------
  * Debug: functions.
  */
-#ifdef GTI_DEBUG_KFIFO_LEN
-inline void gti_debug_hc_push(struct goog_touch_interface *gti)
+#ifdef GTI_DEBUG_HEALTHCHECK_KFIFO_LEN
+inline void gti_debug_healthcheck_push(struct goog_touch_interface *gti)
 {
 	/*
 	 * Use kfifo as circular buffer by skipping one element
 	 * when fifo is full.
 	 */
-	if (kfifo_is_full(&gti->debug_fifo_hc))
-		kfifo_skip(&gti->debug_fifo_hc);
-	kfifo_in(&gti->debug_fifo_hc, &gti->debug_hc, 1);
+	if (kfifo_is_full(&gti->debug_fifo_healthcheck))
+		kfifo_skip(&gti->debug_fifo_healthcheck);
+	kfifo_in(&gti->debug_fifo_healthcheck, &gti->debug_healthcheck, 1);
 }
 
-inline int gti_debug_hc_pop(struct goog_touch_interface *gti,
-	struct gti_debug_health_check *fifo, unsigned int len)
+inline int gti_debug_healthcheck_pop(struct goog_touch_interface *gti,
+	struct gti_debug_healthcheck *fifo, unsigned int len)
 {
-	if (len > GTI_DEBUG_KFIFO_LEN) {
+	if (len > GTI_DEBUG_HEALTHCHECK_KFIFO_LEN) {
 		GOOG_ERR(gti, "invalid fifo pop len(%d)!\n", len);
 		return -EINVAL;
 	}
@@ -1261,38 +1339,44 @@ inline int gti_debug_hc_pop(struct goog_touch_interface *gti,
 	 * Keep data without pop-out to support different timing
 	 * print-out by each caller.
 	 */
-	return kfifo_out_peek(&gti->debug_fifo_hc, fifo, len) == len ? 0 : -EFAULT;
+	return kfifo_out_peek(&gti->debug_fifo_healthcheck, fifo, len) == len ? 0 : -EFAULT;
 }
 
-inline void gti_debug_hc_update(struct goog_touch_interface *gti, bool from_top_half)
+inline void gti_debug_healthcheck_update(struct goog_touch_interface *gti, bool from_top_half)
 {
 	if (from_top_half) {
-		gti->debug_hc.irq_time = ktime_get();
-		gti->debug_hc.irq_index = gti->irq_index;
+		gti->debug_healthcheck.irq_time = ktime_get_real();
+		gti->debug_healthcheck.irq_index = gti->irq_index;
 	} else {
-		gti->debug_hc.input_index = gti->input_index;
-		gti->debug_hc.slot_bit_active = gti->slot_bit_active;
-		gti_debug_hc_push(gti);
+		gti->debug_healthcheck.input_index = gti->input_index;
+		gti->debug_healthcheck.slot_bit_active = gti->slot_bit_active;
+		gti_debug_healthcheck_push(gti);
 	}
 }
 
-void gti_debug_hc_dump(struct goog_touch_interface *gti)
+void gti_debug_healthcheck_dump(struct goog_touch_interface *gti)
 {
 	int ret;
 	u64 i, count;
+	u64 index;
 	s64 delta;
 	s64 sec_delta;
 	u32 ms_delta;
-	ktime_t current_time = ktime_get();
-	struct gti_debug_health_check last_fifo[GTI_DEBUG_KFIFO_LEN] = { 0 };
+	ktime_t current_time = ktime_get_real();
+	struct gti_debug_healthcheck *last_fifo = gti->debug_healthcheck_history;
 
-	count = min_t(u64, gti->irq_index, ARRAY_SIZE(last_fifo));
-	ret = gti_debug_hc_pop(gti, last_fifo, count);
+	count = min_t(u64, gti->irq_index, GTI_DEBUG_HEALTHCHECK_KFIFO_LEN);
+	ret = gti_debug_healthcheck_pop(gti, last_fifo, count);
 	if (ret) {
 		GOOG_ERR(gti, "Failed to peek debug hc, err: %d\n", ret);
 		return;
 	}
-	for (i = 0 ; i < count ; i++) {
+
+	if (count <= GTI_DEBUG_HEALTHCHECK_LOGS_LEN)
+		index = 0;
+	else
+		index = count - GTI_DEBUG_HEALTHCHECK_LOGS_LEN;
+	for (i = index ; i < count ; i++) {
 		sec_delta = -1;
 		ms_delta = 0;
 		/*
@@ -1306,7 +1390,9 @@ void gti_debug_hc_dump(struct goog_touch_interface *gti)
 			last_fifo[i].input_index, last_fifo[i].slot_bit_active);
 	}
 }
+#endif /* GTI_DEBUG_HEALTHCHECK_KFIFO_LEN */
 
+#ifdef GTI_DEBUG_INPUT_KFIFO_LEN
 inline void gti_debug_input_push(struct goog_touch_interface *gti, int slot)
 {
 	struct gti_debug_input fifo;
@@ -1330,7 +1416,7 @@ inline void gti_debug_input_push(struct goog_touch_interface *gti, int slot)
 inline int gti_debug_input_pop(struct goog_touch_interface *gti,
 	struct gti_debug_input *fifo, unsigned int len)
 {
-	if (len > GTI_DEBUG_KFIFO_LEN) {
+	if (len > GTI_DEBUG_INPUT_KFIFO_LEN) {
 		GOOG_ERR(gti, "invalid fifo pop len(%d)!\n", len);
 		return -EINVAL;
 	}
@@ -1346,7 +1432,7 @@ inline void gti_debug_input_update(struct goog_touch_interface *gti)
 {
 	int slot;
 	u64 irq_index = gti->irq_index;
-	ktime_t time = ktime_get();
+	ktime_t time = ktime_get_real();
 
 	for_each_set_bit(slot, &gti->slot_bit_changed, MAX_SLOTS) {
 		if (test_bit(slot, &gti->slot_bit_active)) {
@@ -1372,22 +1458,28 @@ void gti_debug_input_dump(struct goog_touch_interface *gti)
 {
 	int slot, ret;
 	u64 i, count;
+	u64 index;
 	s64 delta;
 	s64 sec_delta_down;
 	u32 ms_delta_down;
 	s64 sec_delta_duration;
 	u32 ms_delta_duration;
 	s32 px_delta_x, px_delta_y;
-	ktime_t current_time = ktime_get();
-	struct gti_debug_input last_fifo[GTI_DEBUG_KFIFO_LEN] = { 0 };
+	ktime_t current_time = ktime_get_real();
+	struct gti_debug_input *last_fifo = gti->debug_input_history;
 
-	count = min_t(u64, gti->released_index, ARRAY_SIZE(last_fifo));
+	count = min_t(u64, gti->released_index, GTI_DEBUG_INPUT_KFIFO_LEN);
 	ret = gti_debug_input_pop(gti, last_fifo, count);
 	if (ret) {
 		GOOG_ERR(gti, "Failed to peek debug input, err: %d\n", ret);
 		return;
 	}
-	for (i = 0 ; i < count ; i++) {
+
+	if (count <= GTI_DEBUG_INPUT_LOGS_LEN)
+		index = 0;
+	else
+		index = count - GTI_DEBUG_INPUT_LOGS_LEN;
+	for (i = index ; i < count ; i++) {
 		if (last_fifo[i].slot < 0 ||
 			last_fifo[i].slot >= MAX_SLOTS) {
 			GOOG_INFO(gti, "dump: #%d: invalid slot #!\n", last_fifo[i].slot);
@@ -1439,7 +1531,7 @@ void gti_debug_input_dump(struct goog_touch_interface *gti)
 		GOOG_INFO(gti, "slot #%d is active!\n", slot);
 	}
 }
-#endif /* GTI_DEBUG_KFIFO_LEN */
+#endif /* GTI_DEBUG_INPUT_KFIFO_LEN */
 
 /*-----------------------------------------------------------------------------
  * DRM: functions and structures.
@@ -3155,7 +3247,7 @@ void goog_init_input(struct goog_touch_interface *gti)
 	if (!gti)
 		return;
 
-	INIT_KFIFO(gti->debug_fifo_hc);
+	INIT_KFIFO(gti->debug_fifo_healthcheck);
 	INIT_KFIFO(gti->debug_fifo_input);
 	for (i = 0 ; i < MAX_SLOTS ; i++)
 		gti->debug_input[i].slot = i;
@@ -3476,7 +3568,7 @@ static void goog_pm_suspend(struct gti_pm *pm)
 		if (ret)
 			GOOG_ERR(gti, "tbn_release_bus failed, ret %d!\n", ret);
 	}
-	gti_debug_hc_dump(gti);
+	gti_debug_healthcheck_dump(gti);
 	gti_debug_input_dump(gti);
 
 	goog_input_release_all_fingers(gti);
@@ -3818,7 +3910,7 @@ static irqreturn_t gti_irq_handler(int irq, void *data)
 		ret = gti->vendor_irq_handler(irq, gti->vendor_irq_cookie);
 	else
 		ret = IRQ_WAKE_THREAD;
-	gti_debug_hc_update(gti, true);
+	gti_debug_healthcheck_update(gti, true);
 	return ret;
 }
 
@@ -3863,7 +3955,7 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 		ret = gti->options.post_irq_thread_fn(irq, gti->vendor_irq_cookie);
 	}
 
-	gti_debug_hc_update(gti, false);
+	gti_debug_healthcheck_update(gti, false);
 	cpu_latency_qos_update_request(&gti->pm_qos_req, PM_QOS_DEFAULT_VALUE);
 	if (gti->tbn_enabled)
 		goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_IRQ);
