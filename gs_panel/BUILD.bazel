@@ -5,6 +5,7 @@ load("//build/kernel/kleaf:kernel.bzl", "kernel_module")
 kernel_module(
     name = "gs_panel",
     srcs = glob([
+        "*.h",
         "*.c",
         "Kbuild",
     ]) + [
