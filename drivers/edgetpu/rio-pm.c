@@ -83,6 +83,7 @@ static void rio_patch_lpm(struct edgetpu_dev *etdev)
 	EDGETPU_LPM_IMEM_OPS_SET(etdev, 200, 0x0bc95001);
 	EDGETPU_LPM_IMEM_OPS_SET(etdev, 201, 0x14171018);
 	EDGETPU_LPM_IMEM_OPS_SET(etdev, 202, 0x02001118);
+
 	/* psm_1_state_table_0_trans_1_next_state */
 	edgetpu_dev_write_32_sync(etdev, 0x1c2020, 0x00000000);
 	/* psm_1_state_table_0_trans_1_seq_addr */
@@ -93,6 +94,15 @@ static void rio_patch_lpm(struct edgetpu_dev *etdev)
 	edgetpu_dev_write_32_sync(etdev, 0x1c2034, 0x00000001);
 	/* trigger_csr_events_en_5_hi */
 	edgetpu_dev_write_32_sync(etdev, 0x1c012c, 0x00000003);
+
+        /*
+         * FRC clocking fix for b/287661979.
+         *
+         * Increases the delay between cluster clock enablement and logic
+         * retention/restore activation.
+         */
+	EDGETPU_LPM_IMEM_OPS_SET(etdev, 3, 0x21261101);
+	EDGETPU_LPM_IMEM_OPS_SET(etdev, 4, 0x11111005);
 }
 
 static int rio_lpm_up(struct edgetpu_dev *etdev)

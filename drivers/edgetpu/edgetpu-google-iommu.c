@@ -19,7 +19,6 @@
 #include "edgetpu-internal.h"
 #include "edgetpu-mapping.h"
 #include "edgetpu-mmu.h"
-#include "edgetpu-soc.h"
 
 #if !defined(EDGETPU_NUM_PREALLOCATED_DOMAINS)
 #define EDGETPU_NUM_PREALLOCATED_DOMAINS 0
@@ -555,7 +554,6 @@ int edgetpu_mmu_attach_domain(struct edgetpu_dev *etdev,
 		goto err_detach;
 	}
 
-	edgetpu_soc_activate_context(etdev, pasid);
 	etiommu->gdomains[pasid] = gdomain;
 	etdomain->pasid = pasid;
 	return 0;
@@ -575,11 +573,6 @@ void edgetpu_mmu_detach_domain(struct edgetpu_dev *etdev,
 	if (pasid <= 0 || pasid >= EDGETPU_NCONTEXTS)
 		return;
 
-	/*
-	 * Deactivate the context before domain detaching to prevent speculative accesses from being
-	 * issued to a disabled context.
-	 */
-	edgetpu_soc_deactivate_context(etdev, pasid);
 	etiommu->gdomains[pasid] = NULL;
 	etdomain->pasid = IOMMU_PASID_INVALID;
 	iommu_aux_detach_device(etdomain->gdomain->domain, etdev->dev);
