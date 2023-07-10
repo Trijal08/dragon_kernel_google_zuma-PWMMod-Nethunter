@@ -288,9 +288,6 @@ static int lwis_interrupt_read_and_clear_src_reg(struct lwis_interrupt *irq, uin
 
 		/* Overflow is triggered */
 		if (*overflow_value != 0) {
-			dev_warn(irq->lwis_dev->dev,
-				 "IRQ(%s) overflow register(0x%llx) value(%lld) is detected\n",
-				 irq->name, irq->irq_overflow_reg, *overflow_value);
 			/* Write back to the overflow register */
 			ret = lwis_device_single_register_write(irq->lwis_dev, irq->irq_reg_bid,
 								irq->irq_overflow_reg,
