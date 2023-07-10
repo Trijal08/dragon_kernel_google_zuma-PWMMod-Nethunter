@@ -60,8 +60,6 @@
 #define SSMT_NS_READ_STREAM_VID_REG(base, n)  ((base) + SSMT_NS_READ_STREAM_VID_OFFSET(n))
 #define SSMT_NS_WRITE_STREAM_VID_REG(base, n) ((base) + SSMT_NS_WRITE_STREAM_VID_OFFSET(n))
 
-#define SSMT_BYPASS	(1 << 31)
-
 #define PLL_CON3_OFFSET 0x10c
 #define PLL_DIV_M_POS 16
 #define PLL_DIV_M_WIDTH 10
@@ -153,25 +151,26 @@ int edgetpu_soc_init(struct edgetpu_dev *etdev)
 	return 0;
 }
 
-static void gsx01_setup_ssmt(struct edgetpu_dev *etdev)
+/* Caller ensures vid < EDGETPU_MAX_STREAM_ID. */
+static void set_ssmt_vid(struct edgetpu_dev *etdev, uint vid, uint val)
 {
 	struct edgetpu_soc_data *soc_data = etdev->soc_data;
-	int i, j;
-
-	for (i = 0; i < soc_data->num_ssmts; i++)
-		if (!soc_data->ssmt_base[i])
-			return;
+	int i;
 
 	for (i = 0; i < soc_data->num_ssmts; i++) {
-		etdev_dbg(etdev, "Setting up SSMT_D%d to feed-through mode\n", i);
-
-		for (j = 0; j < EDGETPU_MAX_STREAM_ID; j++) {
-			writel(SSMT_BYPASS,
-			       SSMT_NS_READ_STREAM_VID_REG(soc_data->ssmt_base[i], j));
-			writel(SSMT_BYPASS,
-			       SSMT_NS_WRITE_STREAM_VID_REG(soc_data->ssmt_base[i], j));
+		if (soc_data->ssmt_base[i]) {
+			writel(val, SSMT_NS_READ_STREAM_VID_REG(soc_data->ssmt_base[i], vid));
+			writel(val, SSMT_NS_WRITE_STREAM_VID_REG(soc_data->ssmt_base[i], vid));
 		}
 	}
+}
+
+static void gsx01_setup_ssmt(struct edgetpu_dev *etdev)
+{
+	int i;
+
+	for (i = 0; i < EDGETPU_MAX_STREAM_ID; i++)
+		set_ssmt_vid(etdev, i, 0);
 }
 
 int edgetpu_soc_prepare_firmware(struct edgetpu_dev *etdev)
@@ -610,4 +609,26 @@ void edgetpu_soc_thermal_exit(struct edgetpu_dev *etdev)
 
 	if (etdev->soc_data->bcl_dev)
 		exynos_pm_qos_remove_notifier(PM_QOS_TPU_FREQ_MAX, nb);
+}
+
+int edgetpu_soc_activate_context(struct edgetpu_dev *etdev, int pasid)
+{
+	const uint vid = pasid;
+
+	if (vid >= EDGETPU_MAX_STREAM_ID)
+		return -EINVAL;
+
+	set_ssmt_vid(etdev, vid, vid);
+
+	return 0;
+}
+
+void edgetpu_soc_deactivate_context(struct edgetpu_dev *etdev, int pasid)
+{
+	const uint vid = pasid;
+
+	if (vid >= EDGETPU_MAX_STREAM_ID)
+		return;
+
+	set_ssmt_vid(etdev, vid, 0);
 }
