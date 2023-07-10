@@ -31,7 +31,7 @@ static struct lwis_device_subclass_operations dpm_vops = {
 };
 
 static int find_bts_block(struct lwis_device *lwis_dev, struct lwis_device *target_dev,
-			  struct lwis_qos_setting_v2 *qos_setting)
+			  struct lwis_qos_setting_v3 *qos_setting)
 {
 	int i;
 
@@ -59,7 +59,7 @@ static int find_bts_block(struct lwis_device *lwis_dev, struct lwis_device *targ
 /*
  *  lwis_dpm_update_qos: update qos requirement for lwis device.
  */
-int lwis_dpm_update_qos(struct lwis_device *lwis_dev, struct lwis_qos_setting_v2 *qos_setting)
+int lwis_dpm_update_qos(struct lwis_device *lwis_dev, struct lwis_qos_setting_v3 *qos_setting)
 {
 	int ret = 0, bts_block = -1;
 	int64_t peak_bw = 0;

@@ -1567,16 +1567,11 @@ static int cmd_dpm_qos_update(struct lwis_device *lwis_dev, struct lwis_cmd_pkt 
 	}
 
 	for (i = 0; i < k_msg.reqs.num_settings; i++) {
-		if (sizeof(struct lwis_qos_setting) != sizeof(struct lwis_qos_setting_v2)) {
-			struct lwis_qos_setting_v2 k_qos_setting_v2;
-			memcpy(&k_qos_setting_v2, &k_qos_settings[i],
-			       sizeof(struct lwis_qos_setting));
-			k_qos_setting_v2.bts_block_name[0] = '\0';
-			ret = lwis_dpm_update_qos(lwis_dev, &k_qos_setting_v2);
-		} else {
-			ret = lwis_dpm_update_qos(lwis_dev,
-						  (struct lwis_qos_setting_v2 *)&k_qos_settings[i]);
-		}
+		struct lwis_qos_setting_v3 k_qos_setting_v3;
+		memcpy(&k_qos_setting_v3, &k_qos_settings[i], sizeof(struct lwis_qos_setting));
+		k_qos_setting_v3.bts_block_name[0] = '\0';
+		k_qos_setting_v3.clock_family_name[0] = '\0';
+		ret = lwis_dpm_update_qos(lwis_dev, &k_qos_setting_v3);
 		if (ret) {
 			dev_err(lwis_dev->dev, "Failed to apply qos setting, ret: %d\n", ret);
 			kfree(k_qos_settings);
@@ -1612,6 +1607,62 @@ static int cmd_dpm_qos_update_v2(struct lwis_device *lwis_dev, struct lwis_cmd_p
 	// Copy qos settings from user buffer.
 	buf_size = sizeof(struct lwis_qos_setting_v2) * k_msg.reqs.num_settings;
 	if (buf_size / sizeof(struct lwis_qos_setting_v2) != k_msg.reqs.num_settings) {
+		dev_err(lwis_dev->dev, "Failed to copy qos settings due to integer overflow.\n");
+		ret = -EOVERFLOW;
+		goto exit;
+	}
+	k_qos_settings = kmalloc(buf_size, GFP_KERNEL);
+	if (!k_qos_settings) {
+		ret = -ENOMEM;
+		goto exit;
+	}
+	if (copy_from_user(k_qos_settings, (void __user *)k_msg.reqs.qos_settings, buf_size)) {
+		dev_err(lwis_dev->dev, "Failed to copy clk settings from user\n");
+		kfree(k_qos_settings);
+		ret = -EFAULT;
+		goto exit;
+	}
+
+	for (i = 0; i < k_msg.reqs.num_settings; i++) {
+		struct lwis_qos_setting_v3 k_qos_setting_v3;
+		memcpy(&k_qos_setting_v3, &k_qos_settings[i], sizeof(struct lwis_qos_setting_v2));
+		k_qos_setting_v3.clock_family_name[0] = '\0';
+		ret = lwis_dpm_update_qos(lwis_dev, &k_qos_setting_v3);
+		if (ret) {
+			dev_err(lwis_dev->dev, "Failed to apply qos setting, ret: %d\n", ret);
+			kfree(k_qos_settings);
+			goto exit;
+		}
+	}
+	kfree(k_qos_settings);
+exit:
+	header->ret_code = ret;
+	return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
+}
+
+static int cmd_dpm_qos_update_v3(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
+				 struct lwis_cmd_dpm_qos_update_v3 __user *u_msg)
+{
+	struct lwis_cmd_dpm_qos_update_v3 k_msg;
+	struct lwis_qos_setting_v3 *k_qos_settings;
+	int ret = 0;
+	int i;
+	size_t buf_size;
+
+	if (lwis_dev->type != DEVICE_TYPE_DPM) {
+		dev_err(lwis_dev->dev, "not supported device type: %d\n", lwis_dev->type);
+		ret = -EINVAL;
+		goto exit;
+	}
+
+	if (copy_from_user((void *)&k_msg, (void __user *)u_msg, sizeof(k_msg))) {
+		dev_err(lwis_dev->dev, "Failed to copy ioctl message from user\n");
+		return -EFAULT;
+	}
+
+	// Copy qos settings from user buffer.
+	buf_size = sizeof(struct lwis_qos_setting_v3) * k_msg.reqs.num_settings;
+	if (buf_size / sizeof(struct lwis_qos_setting_v3) != k_msg.reqs.num_settings) {
 		dev_err(lwis_dev->dev, "Failed to copy qos settings due to integer overflow.\n");
 		ret = -EOVERFLOW;
 		goto exit;
@@ -1855,6 +1906,12 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 		mutex_lock(&lwis_client->lock);
 		ret = cmd_dpm_qos_update_v2(lwis_dev, header,
 					    (struct lwis_cmd_dpm_qos_update_v2 __user *)user_msg);
+		mutex_unlock(&lwis_client->lock);
+		break;
+	case LWIS_CMD_ID_DPM_QOS_UPDATE_V3:
+		mutex_lock(&lwis_client->lock);
+		ret = cmd_dpm_qos_update_v3(lwis_dev, header,
+					    (struct lwis_cmd_dpm_qos_update_v3 __user *)user_msg);
 		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_DPM_GET_CLOCK:
