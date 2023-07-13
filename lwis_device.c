@@ -29,6 +29,7 @@
 #include "lwis_device_dpm.h"
 #include "lwis_device_slc.h"
 #include "lwis_device_test.h"
+#include "lwis_device_top.h"
 #include "lwis_dt.h"
 #include "lwis_event.h"
 #include "lwis_gpio.h"
@@ -1873,7 +1874,9 @@ static void __exit lwis_driver_exit(void)
 		}
 		/* Release event subscription components */
 		if (lwis_dev->type == DEVICE_TYPE_TOP) {
-			lwis_dev->top_dev->subscribe_ops.release(lwis_dev);
+			struct lwis_top_device *top_dev;
+			top_dev = container_of(lwis_dev, struct lwis_top_device, base_dev);
+			top_dev->subscribe_ops.release(lwis_dev);
 		}
 
 		/* Destroy device */
