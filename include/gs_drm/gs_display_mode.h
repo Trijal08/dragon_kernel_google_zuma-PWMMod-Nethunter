@@ -19,6 +19,67 @@
 #endif
 
 /**
+ * DRM_H_TIMING() - fills in horizontal timing in struct drm_display_mode
+ * @HDISPLAY: Horizontal active region
+ * @HFP: Horizontal front porch
+ * @HSA: Horizontal sync
+ * @HBP: Horizontal back porch
+ *
+ * This macro autocalculates and/or fills in the .hdisplay, .hsync_start,
+ * .hsync_end, and .htotal timing parameters in the struct drm_display_mode
+ * structure. It is meant to be used in the structure definition.
+ */
+#define DRM_H_TIMING(HDISPLAY, HFP, HSA, HBP) \
+	.hdisplay = HDISPLAY,                 \
+	.hsync_start = HDISPLAY + HFP,        \
+	.hsync_end = HDISPLAY + HFP + HSA,    \
+	.htotal = HDISPLAY + HFP + HSA + HBP
+
+/**
+ * DRM_V_TIMING() - fills in vertical timing in struct drm_display_mode
+ * @VDISPLAY: Vertical active region
+ * @VFP: Vertical front porch
+ * @VSA: Vertical sync
+ * @VBP: Vertical back porch
+ *
+ * This macro autocalculates and/or fills in the .vdisplay, .vsync_start,
+ * .vsync_end, and .vtotal timing parameters in the struct drm_display_mode
+ * structure. It is meant to be used in the structure definition.
+ */
+#define DRM_V_TIMING(VDISPLAY, VFP, VSA, VBP) \
+	.vdisplay = VDISPLAY,                 \
+	.vsync_start = VDISPLAY + VFP,        \
+	.vsync_end = VDISPLAY + VFP + VSA,    \
+	.vtotal = VDISPLAY + VFP + VSA + VBP
+
+/**
+ * DRM_MODE_TIMING() - fills in timing parameters in struct drm_display_mode
+ * @REFRESH_FREQ: Image refresh frequency, in Hz
+ * @HDISPLAY: Horizontal active region
+ * @HFP: Horizontal front porch
+ * @HSA: Horizontal sync
+ * @HBP: Horizontal back porch
+ * @VDISPLAY: Vertical active region
+ * @VFP: Vertical front porch
+ * @VSA: Vertical sync
+ * @VBP: Vertical back porch
+ *
+ * This macro calculates the pixel clock for use in the struct drm_display_mode
+ * structure, as well as the horizontal and vertical timing parameters (by way
+ * of the DRM_H_TIMING() and DRM_V_TIMING() macros).
+ *
+ * Context: This macro may not handle fractional refresh rates correctly, and is
+ *          vulnerable to rounding errors. Please double-check the resulting
+ *          .clock member against a known target value, especially for lower
+ *          framerates!
+ */
+#define DRM_MODE_TIMING(REFRESH_FREQ, HDISPLAY, HFP, HSA, HBP, VDISPLAY, VFP, VSA, VBP)       \
+	.clock = ((HDISPLAY + HFP + HSA + HBP) * (VDISPLAY + VFP + VSA + VBP) * REFRESH_FREQ) \
+		 / 1000,                                                                      \
+	DRM_H_TIMING(HDISPLAY, HFP, HSA, HBP),                                                \
+	DRM_V_TIMING(VDISPLAY, VFP, VSA, VBP)
+
+/**
  * struct gs_display_dsc - Information about a mode's DSC parameters
  * @enabled: Whether DSC is enabled for this mode
  * @dsc_count: Number of encoders to be used by DPU (TODO:b/283964743)
