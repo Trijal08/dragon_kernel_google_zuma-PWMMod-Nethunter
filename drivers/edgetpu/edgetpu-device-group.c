@@ -33,6 +33,7 @@
 #include "edgetpu-kci.h"
 #include "edgetpu-mapping.h"
 #include "edgetpu-mmu.h"
+#include "edgetpu-soc.h"
 #include "edgetpu-sw-watchdog.h"
 #include "edgetpu-wakelock.h"
 #include "edgetpu.h"
@@ -83,6 +84,7 @@ static int edgetpu_group_activate(struct edgetpu_device_group *group)
 		return 0;
 
 	mailbox_id = edgetpu_group_context_id_locked(group);
+	edgetpu_soc_activate_context(group->etdev, mailbox_id);
 	ret = edgetpu_mailbox_activate(group->etdev, mailbox_id, group->mbox_attr.client_priv,
 				       group->vcid, !group->activated);
 	if (ret) {
@@ -116,6 +118,11 @@ static void edgetpu_group_deactivate(struct edgetpu_device_group *group)
 	edgetpu_sw_wdt_dec_active_ref(group->etdev);
 	mailbox_id = edgetpu_group_context_id_locked(group);
 	edgetpu_mailbox_deactivate(group->etdev, mailbox_id);
+	/*
+	 * Deactivate the context to prevent speculative accesses from being issued to a disabled
+	 * context.
+	 */
+	edgetpu_soc_deactivate_context(group->etdev, mailbox_id);
 }
 
 /*
