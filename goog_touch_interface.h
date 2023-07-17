@@ -342,7 +342,7 @@ struct gti_display_vrefresh_cmd {
 };
 
 struct gti_fw_version_cmd {
-	char buffer[0x100];
+	char buffer[0x200];
 };
 
 struct gti_grip_cmd {
