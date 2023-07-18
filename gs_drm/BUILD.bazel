@@ -3,13 +3,12 @@
 load("//build/kernel/kleaf:kernel.bzl", "kernel_module")
 
 kernel_module(
-    name = "connector",
+    name = "gs_drm",
     srcs = glob([
         "*.c",
         "Kbuild",
     ]) + [
         "//private/google-modules/display/common:headers",
-        "//private/google-modules/soc/gs:gs_soc_headers",
     ],
     outs = [
         "gs-drm-connector.ko",
@@ -18,9 +17,5 @@ kernel_module(
     visibility = [
         "//private/devices/google:__subpackages__",
         "//private/google-modules/display:__subpackages__",
-        "//private/google-modules/soc/gs:__pkg__",
-    ],
-    deps = [
-        "//private/google-modules/soc/gs:gs_soc_module",
     ],
 )

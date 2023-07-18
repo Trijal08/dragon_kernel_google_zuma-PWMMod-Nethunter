@@ -10,7 +10,6 @@ kernel_module(
         "Kbuild",
     ]) + [
         "//private/google-modules/display/common:headers",
-        "//private/google-modules/soc/gs:gs_soc_headers",
     ],
     outs = [
         "gs-panel.ko",
@@ -18,11 +17,9 @@ kernel_module(
     kernel_build = "//private/google-modules/soc/gs:gs_kernel_build",
     visibility = [
         "//private/devices/google:__subpackages__",
-        "//private/google-modules/display:__subpackages__",
-        "//private/google-modules/soc/gs:__pkg__",
+        "//private/google-modules/display/common/panels:__subpackages__",
     ],
     deps = [
-        "//private/google-modules/display/common/gs_drm:connector",
-        "//private/google-modules/soc/gs:gs_soc_module",
+        "//private/google-modules/display/common/gs_drm",
     ],
 )
