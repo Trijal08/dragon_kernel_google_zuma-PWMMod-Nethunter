@@ -2517,7 +2517,6 @@ void goog_offload_input_report(void *handle,
 			input_mt_slot(gti->vendor_input_dev, i);
 			input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE, 0);
 			input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_FINGER, 0);
-			input_report_abs(gti->vendor_input_dev, ABS_MT_TRACKING_ID, -1);
 		}
 	}
 	input_report_key(gti->vendor_input_dev, BTN_TOUCH, touch_down);
@@ -2815,7 +2814,11 @@ static void goog_input_flush_offload_fingers(struct goog_touch_interface *gti)
 				ABS_MT_TOUCH_MINOR, coords[i].minor);
 			input_report_abs(gti->vendor_input_dev,
 				ABS_MT_PRESSURE, max_t(int, 1, coords[i].pressure));
+			if (gti->offload.caps.rotation_reporting)
+				input_report_abs(gti->vendor_input_dev, ABS_MT_ORIENTATION,
+					coords[i].rotation);
 		} else {
+			input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE, 0);
 			input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_FINGER, false);
 		}
 	}
