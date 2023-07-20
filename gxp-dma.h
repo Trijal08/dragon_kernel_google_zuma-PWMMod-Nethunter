@@ -102,11 +102,12 @@ int gxp_dma_domain_attach_device(struct gxp_dev *gxp,
  * gxp_dma_domain_detach_device() - Detach the page table from the device.
  * @gxp: The GXP device to detach
  * @gdomain: The IOMMU domain to be detached
+ * @core_list: The physical cores to detach.
  *
  * Caller ensures a BLOCK wakelock is hold for the iommu detaching.
  */
-void gxp_dma_domain_detach_device(struct gxp_dev *gxp,
-				  struct gcip_iommu_domain *gdomain);
+void gxp_dma_domain_detach_device(struct gxp_dev *gxp, struct gcip_iommu_domain *gdomain,
+				  uint core_list);
 
 /**
  * gxp_dma_init_default_resources() - Set the various buffers/registers with

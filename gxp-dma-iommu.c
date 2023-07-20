@@ -68,17 +68,16 @@ static int dma_info_to_prot(enum dma_data_direction dir, bool coherent,
 	}
 }
 
-static int gxp_dma_ssmt_program(struct gxp_dev *gxp,
-				struct iommu_domain *domain, uint core_list)
+static int gxp_dma_ssmt_activate(struct gxp_dev *gxp,
+				 struct iommu_domain *domain, uint core_list)
 {
 	struct gxp_dma_iommu_manager *mgr = container_of(
 		gxp->dma_mgr, struct gxp_dma_iommu_manager, dma_mgr);
-	int pasid;
 	uint core;
+	int pasid = iommu_aux_get_pasid(domain, gxp->dev);
 
 	/* Program VID only when cores are managed by us. */
 	if (gxp_is_direct_mode(gxp) || gxp_core_boot(gxp)) {
-		pasid = iommu_aux_get_pasid(domain, gxp->dev);
 		for (core = 0; core < GXP_NUM_CORES; core++)
 			if (BIT(core) & core_list) {
 				dev_dbg(gxp->dev, "Assign core%u to PASID %d\n",
@@ -86,9 +85,28 @@ static int gxp_dma_ssmt_program(struct gxp_dev *gxp,
 				gxp_ssmt_set_core_vid(&mgr->ssmt, core, pasid);
 			}
 	} else {
-		gxp_ssmt_set_bypass(&mgr->ssmt);
+		gxp_ssmt_activate_scid(&mgr->ssmt, pasid);
 	}
 	return 0;
+}
+
+static void gxp_dma_ssmt_deactivate(struct gxp_dev *gxp,
+				    struct iommu_domain *domain, uint core_list)
+{
+	struct gxp_dma_iommu_manager *mgr = container_of(
+		gxp->dma_mgr, struct gxp_dma_iommu_manager, dma_mgr);
+	uint core;
+	int pasid = iommu_aux_get_pasid(domain, gxp->dev);
+
+	/* Program VID only when cores are managed by us. */
+	if (gxp_is_direct_mode(gxp) || gxp_core_boot(gxp)) {
+		for (core = 0; core < GXP_NUM_CORES; core++) {
+			if (BIT(core) & core_list)
+				gxp_ssmt_set_core_vid(&mgr->ssmt, core, 0);
+		}
+	} else {
+		gxp_ssmt_deactivate_scid(&mgr->ssmt, pasid);
+	}
 }
 
 /* Fault handler */
@@ -284,14 +302,15 @@ int gxp_dma_domain_attach_device(struct gxp_dev *gxp,
 	ret = iommu_aux_attach_device(gdomain->domain, gxp->dev);
 	if (ret)
 		goto out;
-	gxp_dma_ssmt_program(gxp, gdomain->domain, core_list);
+	gxp_dma_ssmt_activate(gxp, gdomain->domain, core_list);
 out:
 	return ret;
 }
 
-void gxp_dma_domain_detach_device(struct gxp_dev *gxp,
-				  struct gcip_iommu_domain *gdomain)
+void gxp_dma_domain_detach_device(struct gxp_dev *gxp, struct gcip_iommu_domain *gdomain,
+				  uint core_list)
 {
+	gxp_dma_ssmt_deactivate(gxp, gdomain->domain, core_list);
 	iommu_aux_detach_device(gdomain->domain, gxp->dev);
 }
 

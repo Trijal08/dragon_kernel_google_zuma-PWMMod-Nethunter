@@ -38,10 +38,19 @@ int gxp_ssmt_init(struct gxp_dev *gxp, struct gxp_ssmt *ssmt);
  */
 void gxp_ssmt_set_core_vid(struct gxp_ssmt *ssmt, uint core, uint vid);
 
-/*
- * Programs SSMT to always use SCIDs as VIDs.
- * Supports both client-driven and clamp mode.
+/**
+ * gxp_ssmt_activate_scid() - Activates the transactions with SCID @scid.
+ *
+ * SSMT will be configured as streams with SCID=@scid to have VID=@scid for memory transactions.
  */
-void gxp_ssmt_set_bypass(struct gxp_ssmt *ssmt);
+void gxp_ssmt_activate_scid(struct gxp_ssmt *ssmt, uint scid);
+
+/**
+ * gxp_ssmt_deactivate_scid() - Deactivates the transactions with SCID @scid.
+ *
+ * SSMT will be configured as streams with SCID=@scid to have VID=0 signal for memory
+ * transactions.
+ */
+void gxp_ssmt_deactivate_scid(struct gxp_ssmt *ssmt, uint scid);
 
 #endif /* __GXP_SSMT_H__ */

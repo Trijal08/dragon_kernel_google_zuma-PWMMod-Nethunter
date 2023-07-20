@@ -11,6 +11,11 @@
 #include "gxp-internal.h"
 #include "gxp-ssmt.h"
 
+static inline bool ssmt_is_client_driven(struct gxp_ssmt *ssmt)
+{
+	return readl(ssmt->idma_ssmt_base + SSMT_CFG_OFFSET) == SSMT_MODE_CLIENT;
+}
+
 static inline void ssmt_set_vid_for_idx(void __iomem *ssmt, uint vid, uint idx)
 {
 	/* NS_READ_STREAM_VID_<sid> */
@@ -74,20 +79,38 @@ void gxp_ssmt_set_core_vid(struct gxp_ssmt *ssmt, uint core, uint vid)
 	}
 }
 
-void gxp_ssmt_set_bypass(struct gxp_ssmt *ssmt)
+/*
+ * Programs SSMT to always use SCIDs as VIDs.
+ * Assumes clamp mode.
+ */
+static void gxp_ssmt_set_bypass(struct gxp_ssmt *ssmt)
 {
-	u32 mode;
-	uint core, i;
+	uint core;
 
-	mode = readl(ssmt->idma_ssmt_base + SSMT_CFG_OFFSET);
-	if (mode == SSMT_MODE_CLIENT) {
-		for (i = 0; i < MAX_NUM_CONTEXTS; i++) {
-			ssmt_set_vid_for_idx(ssmt->idma_ssmt_base, i, i);
-			ssmt_set_vid_for_idx(ssmt->inst_data_ssmt_base, i, i);
-		}
+	for (core = 0; core < GXP_NUM_CORES; core++)
+		gxp_ssmt_set_core_vid(ssmt, core, SSMT_CLAMP_MODE_BYPASS);
+}
+
+void gxp_ssmt_activate_scid(struct gxp_ssmt *ssmt, uint scid)
+{
+	if (ssmt_is_client_driven(ssmt)) {
+		ssmt_set_vid_for_idx(ssmt->idma_ssmt_base, scid, scid);
+		ssmt_set_vid_for_idx(ssmt->inst_data_ssmt_base, scid, scid);
 	} else {
-		for (core = 0; core < GXP_NUM_CORES; core++)
-			gxp_ssmt_set_core_vid(ssmt, core,
-					      SSMT_CLAMP_MODE_BYPASS);
+		/*
+		 * In clamp mode, we can't configure specific SCID. We can only mark all
+		 * transactions as "bypassed" which have all streams to use their SCID as VID.
+		 */
+		gxp_ssmt_set_bypass(ssmt);
+	}
+}
+
+void gxp_ssmt_deactivate_scid(struct gxp_ssmt *ssmt, uint scid)
+{
+	if (ssmt_is_client_driven(ssmt)) {
+		ssmt_set_vid_for_idx(ssmt->idma_ssmt_base, scid, 0);
+		ssmt_set_vid_for_idx(ssmt->inst_data_ssmt_base, scid, 0);
+	} else {
+		dev_warn_once(ssmt->gxp->dev, "Unable to deactivate context on clamp mode");
 	}
 }
