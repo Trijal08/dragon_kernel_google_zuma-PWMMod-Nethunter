@@ -486,7 +486,7 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 
 	top_dev->base_dev.type = DEVICE_TYPE_TOP;
 	top_dev->base_dev.vops = top_vops;
-	top_dev->base_dev.subscribe_ops = top_subscribe_ops;
+	top_dev->subscribe_ops = top_subscribe_ops;
 	top_dev->base_dev.plat_dev = plat_dev;
 	top_dev->base_dev.k_dev = &plat_dev->dev;
 

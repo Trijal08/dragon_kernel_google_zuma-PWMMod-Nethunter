@@ -16,6 +16,26 @@
 #define SCRATCH_MEMORY_SIZE 16
 
 /*
+ * struct lwis_event_subscribe_operations
+ * This struct contains the 'virtual' functions for lwis_device subclasses
+ * Top device should be the only device to implement it.
+ */
+struct lwis_event_subscribe_operations {
+	/* Subscribe an event for subscriber device */
+	int (*subscribe_event)(struct lwis_device *lwis_dev, int64_t trigger_event_id,
+			       int trigger_device_id, int subscriber_device_id);
+	/* Unsubscribe an event for subscriber device */
+	int (*unsubscribe_event)(struct lwis_device *lwis_dev, int64_t trigger_event_id,
+				 int subscriber_device_id);
+	/* Notify subscriber when an event is happening */
+	void (*notify_event_subscriber)(struct lwis_device *lwis_dev, int64_t trigger_event_id,
+					int64_t trigger_event_count,
+					int64_t trigger_event_timestamp);
+	/* Clean up event subscription hash table when unloading top device */
+	void (*release)(struct lwis_device *lwis_dev);
+};
+
+/*
  *  struct lwis_top_device
  *  "Derived" lwis_device struct, with added top device related elements.
  */
@@ -35,6 +55,7 @@ struct lwis_top_device {
 	/* Subscription thread */
 	struct kthread_worker subscribe_worker;
 	struct task_struct *subscribe_worker_thread;
+	struct lwis_event_subscribe_operations subscribe_ops;
 };
 
 int lwis_top_device_init(void);
