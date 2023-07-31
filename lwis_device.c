@@ -277,6 +277,13 @@ static int lwis_release(struct inode *node, struct file *fp)
 		if (lwis_dev->enabled == 0) {
 			lwis_debug_crash_info_dump(lwis_dev);
 			dev_info(lwis_dev->dev, "No more client, power down\n");
+			if (lwis_dev->power_up_to_suspend) {
+				if (!lwis_dev->is_suspended) {
+					rc = lwis_dev_process_power_sequence(lwis_dev, lwis_dev->suspend_sequence,
+					      /*set_active=*/false, /*skip_error=*/false);
+					dev_info(lwis_dev->dev, "Need suspend before power down\n");
+				}
+			}
 			rc = lwis_dev_power_down_locked(lwis_dev);
 			lwis_dev->is_suspended = false;
 		}
