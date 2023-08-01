@@ -59,7 +59,9 @@ static int find_bts_block(struct lwis_device *lwis_dev, struct lwis_device *targ
 
 /*
  *  lwis_dpm_update_qos_with_clock_family: update qos requirement for lwis device with
- *  clock family (will deprecate soon).
+ *  clock family.
+ *  TODO(b/294268791) Function will be merged into platform code
+ *  (lwis_dpm_update_qos_with_clock_family).
  */
 static int lwis_dpm_update_qos_with_clock_family(struct lwis_device *lwis_dev,
 						 struct lwis_device *target_dev,
@@ -150,8 +152,8 @@ int lwis_dpm_update_qos(struct lwis_device *lwis_dev, struct lwis_qos_setting_v3
 	// As for qos update, either of qos_family_name or clock_family need set.
 	if (strlen(qos_setting->qos_family_name) > 0) {
 		// (TODO: linyuny) Platform Related stuff will be separated into the following CL.
-		ret = 0;
-	} else if (qos_setting->clock_family != -1) {
+		ret = lwis_platform_dpm_update_qos(lwis_dev, target_dev, qos_setting);
+	} else if (qos_setting->clock_family != CLOCK_FAMILY_INVALID) {
 		ret = lwis_dpm_update_qos_with_clock_family(lwis_dev, target_dev, qos_setting);
 	} else {
 		dev_err(lwis_dev->dev, "Invalid clock family name and clock family %d\n",

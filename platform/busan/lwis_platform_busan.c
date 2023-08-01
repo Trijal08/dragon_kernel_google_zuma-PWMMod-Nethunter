@@ -263,6 +263,12 @@ int lwis_platform_update_qos(struct lwis_device *lwis_dev, int value, int32_t cl
 	return 0;
 }
 
+int lwis_platform_dpm_update_qos(struct lwis_device *lwis_dev, struct lwis_device *target_dev,
+				 struct lwis_qos_setting_v3 *qos_setting)
+{
+	return 0;
+}
+
 int lwis_platform_remove_qos(struct lwis_device *lwis_dev)
 {
 	struct lwis_platform *platform;
