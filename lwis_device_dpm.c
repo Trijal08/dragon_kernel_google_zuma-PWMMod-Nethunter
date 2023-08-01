@@ -36,7 +36,8 @@ static int find_bts_block(struct lwis_device *lwis_dev, struct lwis_device *targ
 	int i;
 
 	if (strcmp(qos_setting->bts_block_name, "") == 0) {
-		if (target_dev->bts_block_num != 1) {
+		if (target_dev->bts_block_num != 1 ||
+		    target_dev->bts_block_names[0] != target_dev->name) {
 			dev_err(lwis_dev->dev,
 				"Device %s has %d bts blocks but no block name specified in qos setting\n",
 				target_dev->name, target_dev->bts_block_num);
@@ -57,28 +58,18 @@ static int find_bts_block(struct lwis_device *lwis_dev, struct lwis_device *targ
 }
 
 /*
- *  lwis_dpm_update_qos: update qos requirement for lwis device.
+ *  lwis_dpm_update_qos_with_clock_family: update qos requirement for lwis device with
+ *  clock family (will deprecate soon).
  */
-int lwis_dpm_update_qos(struct lwis_device *lwis_dev, struct lwis_qos_setting_v3 *qos_setting)
+static int lwis_dpm_update_qos_with_clock_family(struct lwis_device *lwis_dev,
+						 struct lwis_device *target_dev,
+						 struct lwis_qos_setting_v3 *qos_setting)
 {
 	int ret = 0, bts_block = -1;
 	int64_t peak_bw = 0;
 	int64_t read_bw = 0;
 	int64_t write_bw = 0;
 	int64_t rt_bw = 0;
-	struct lwis_device *target_dev = lwis_find_dev_by_id(qos_setting->device_id);
-	if (!target_dev) {
-		dev_err(lwis_dev->dev, "Can't find device by id: %d\n", qos_setting->device_id);
-		return -ENOENT;
-	}
-
-	/* b/190270885 : We see some ramdump issues due to dpm qos updates
-	 * when device is disabled. We might disallow to update qos on this case.
-	 */
-	if (target_dev->enabled == 0 && target_dev->type != DEVICE_TYPE_DPM) {
-		dev_warn(target_dev->dev, "%s disabled, no need to update qos\n", target_dev->name);
-		return -EPERM;
-	}
 
 	switch (qos_setting->clock_family) {
 	case CLOCK_FAMILY_MIF:
@@ -129,6 +120,42 @@ int lwis_dpm_update_qos(struct lwis_device *lwis_dev, struct lwis_qos_setting_v3
 		break;
 	default:
 		dev_err(lwis_dev->dev, "Invalid clock family %d\n", qos_setting->clock_family);
+		ret = -EINVAL;
+	}
+
+	return ret;
+}
+
+/*
+ *  lwis_dpm_update_qos: update qos requirement for lwis device.
+ */
+int lwis_dpm_update_qos(struct lwis_device *lwis_dev, struct lwis_qos_setting_v3 *qos_setting)
+{
+	int ret = 0;
+	struct lwis_device *target_dev = lwis_find_dev_by_id(qos_setting->device_id);
+	if (!target_dev) {
+		dev_err(lwis_dev->dev, "Can't find device by id: %d\n", qos_setting->device_id);
+		return -ENOENT;
+	}
+
+	/* b/190270885 : We see some ramdump issues due to dpm qos updates
+	 * when device is disabled. We might disallow to update qos on this case.
+	 */
+	if (target_dev->enabled == 0 && target_dev->type != DEVICE_TYPE_DPM) {
+		dev_warn(target_dev->dev, "%s disabled, no need to update qos\n", target_dev->name);
+		return -EPERM;
+	}
+
+	// TODO: Real qos_family_name implementation will be done in b/291854347
+	// As for qos update, either of qos_family_name or clock_family need set.
+	if (strlen(qos_setting->qos_family_name) > 0) {
+		// (TODO: linyuny) Platform Related stuff will be separated into the following CL.
+		ret = 0;
+	} else if (qos_setting->clock_family != -1) {
+		ret = lwis_dpm_update_qos_with_clock_family(lwis_dev, target_dev, qos_setting);
+	} else {
+		dev_err(lwis_dev->dev, "Invalid clock family name and clock family %d\n",
+			qos_setting->clock_family);
 		ret = -EINVAL;
 	}
 
