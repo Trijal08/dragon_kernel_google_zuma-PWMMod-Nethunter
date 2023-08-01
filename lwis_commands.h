@@ -458,12 +458,13 @@ struct lwis_qos_setting_v2 {
 };
 
 struct lwis_qos_setting_v3 {
-	// Frequency in hz.
+	// Frequency in hz either clock_family or qos_family_name is valid
 	int64_t frequency_hz;
 	// Device id for this vote.
 	int32_t device_id;
 	// Target clock family.
 	int32_t clock_family;
+	// The following Bandwidth in KBytes if clock_family is valid
 	// read BW
 	int64_t read_bw;
 	// write BW
@@ -474,8 +475,23 @@ struct lwis_qos_setting_v3 {
 	int64_t rt_bw;
 	// Bts client name
 	char bts_block_name[LWIS_MAX_NAME_STRING_LEN];
-	// Target string clock family.
-	char clock_family_name[LWIS_MAX_NAME_STRING_LEN];
+	// The following Bandwidth in MBytes if qos_family_name is valid
+	// read constraints
+	uint32_t read_avg_bw;
+	uint32_t read_peak_bw;
+	uint32_t read_latency;
+	// read latency tolerance value
+	uint32_t read_ltv;
+	uint8_t read_vc;
+	// write BW
+	uint32_t write_avg_bw;
+	uint32_t write_peak_bw;
+	uint32_t write_latency;
+	// write latency tolerance value
+	uint32_t write_ltv;
+	uint8_t write_vc;
+	// Target string qos family.
+	char qos_family_name[LWIS_MAX_NAME_STRING_LEN];
 };
 
 struct lwis_dpm_qos_requirements {
