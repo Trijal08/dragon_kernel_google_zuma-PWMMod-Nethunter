@@ -14,6 +14,7 @@
 #include <linux/slab.h>
 
 #include "lwis_device.h"
+#include "lwis_device_top.h"
 #include "lwis_event.h"
 #include "lwis_transaction.h"
 #include "lwis_util.h"
@@ -284,6 +285,7 @@ static int lwis_client_event_subscribe(struct lwis_client *lwis_client, int64_t 
 	int ret = 0;
 	struct lwis_device *lwis_dev = lwis_client->lwis_dev;
 	struct lwis_device *trigger_device;
+	struct lwis_top_device *top_dev;
 	int trigger_device_id = EVENT_OWNER_DEVICE_ID(trigger_event_id);
 
 	/* Check if top device probe failed */
@@ -314,8 +316,9 @@ static int lwis_client_event_subscribe(struct lwis_client *lwis_client, int64_t 
 
 		return -EINVAL;
 	}
-	ret = lwis_dev->top_dev->subscribe_ops.subscribe_event(lwis_dev->top_dev, trigger_event_id,
-							       trigger_device->id, lwis_dev->id);
+	top_dev = container_of(lwis_dev->top_dev, struct lwis_top_device, base_dev);
+	ret = top_dev->subscribe_ops.subscribe_event(lwis_dev->top_dev, trigger_event_id,
+						     trigger_device->id, lwis_dev->id);
 	if (ret < 0)
 		dev_err(lwis_dev->dev, "Failed to subscribe event: 0x%llx\n", trigger_event_id);
 
@@ -327,6 +330,7 @@ static int lwis_client_event_unsubscribe(struct lwis_client *lwis_client, int64_
 	int ret = 0;
 	struct lwis_device *lwis_dev = lwis_client->lwis_dev;
 	struct lwis_device_event_state *event_state;
+	struct lwis_top_device *top_dev;
 	unsigned long flags;
 
 	/* Check if top device probe failed */
@@ -335,8 +339,8 @@ static int lwis_client_event_unsubscribe(struct lwis_client *lwis_client, int64_
 		return -EINVAL;
 	}
 
-	ret = lwis_dev->top_dev->subscribe_ops.unsubscribe_event(lwis_dev->top_dev, event_id,
-								 lwis_dev->id);
+	top_dev = container_of(lwis_dev->top_dev, struct lwis_top_device, base_dev);
+	ret = top_dev->subscribe_ops.unsubscribe_event(lwis_dev->top_dev, event_id, lwis_dev->id);
 	if (ret < 0) {
 		dev_err(lwis_dev->dev, "Failed to unsubscribe event: 0x%llx\n", event_id);
 	}
@@ -824,6 +828,7 @@ static int lwis_device_event_emit_impl(struct lwis_device *lwis_dev, int64_t eve
 	/* Our iterators */
 	struct lwis_client *lwis_client;
 	struct list_head *p, *n;
+	struct lwis_top_device *top_dev;
 	int64_t timestamp;
 	int64_t event_counter;
 	/* Flags for IRQ disable */
@@ -857,8 +862,9 @@ static int lwis_device_event_emit_impl(struct lwis_device *lwis_dev, int64_t eve
 
 	/* Emit event to subscriber via top device */
 	if (has_subscriber) {
-		lwis_dev->top_dev->subscribe_ops.notify_event_subscriber(
-			lwis_dev->top_dev, event_id, event_counter, timestamp);
+		top_dev = container_of(lwis_dev->top_dev, struct lwis_top_device, base_dev);
+		top_dev->subscribe_ops.notify_event_subscriber(lwis_dev->top_dev, event_id,
+							       event_counter, timestamp);
 	}
 
 	/* Run internal handler if any */

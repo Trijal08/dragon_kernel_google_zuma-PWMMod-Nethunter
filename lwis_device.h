@@ -132,26 +132,6 @@ struct lwis_device_subclass_operations {
 };
 
 /*
- * struct lwis_event_subscribe_operations
- * This struct contains the 'virtual' functions for lwis_device subclasses
- * Top device should be the only device to implement it.
- */
-struct lwis_event_subscribe_operations {
-	/* Subscribe an event for subscriber device */
-	int (*subscribe_event)(struct lwis_device *lwis_dev, int64_t trigger_event_id,
-			       int trigger_device_id, int subscriber_device_id);
-	/* Unsubscribe an event for subscriber device */
-	int (*unsubscribe_event)(struct lwis_device *lwis_dev, int64_t trigger_event_id,
-				 int subscriber_device_id);
-	/* Notify subscriber when an event is happening */
-	void (*notify_event_subscriber)(struct lwis_device *lwis_dev, int64_t trigger_event_id,
-					int64_t trigger_event_count,
-					int64_t trigger_event_timestamp);
-	/* Clean up event subscription hash table when unloading top device */
-	void (*release)(struct lwis_device *lwis_dev);
-};
-
-/*
  * struct lwis_device_power_sequence_info
  * This struct is to store the power up/down sequence information
  */
@@ -254,7 +234,6 @@ struct lwis_device {
 	unsigned int native_value_bitwidth;
 	/* Point to lwis_top_dev */
 	struct lwis_device *top_dev;
-	struct lwis_event_subscribe_operations subscribe_ops;
 #ifdef CONFIG_DEBUG_FS
 	/* DebugFS directory and files */
 	struct dentry *dbg_dir;
@@ -291,9 +270,11 @@ struct lwis_device {
 	/* Resume sequence information */
 	struct lwis_device_power_sequence_list *resume_sequence;
 	/* GPIOs list */
-	struct lwis_gpios_list *gpios_list;
+	struct list_head gpios_list;
 	/* GPIO interrupts list */
 	struct lwis_gpios_info irq_gpios_info;
+	/* Is power up to suspend mode */
+	bool power_up_to_suspend;
 
 	/* Power management hibernation state of the device */
 	int pm_hibernation;

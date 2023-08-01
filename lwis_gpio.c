@@ -16,6 +16,9 @@
 #include "lwis_gpio.h"
 #include "lwis_interrupt.h"
 
+#define SHARED_STRING "shared-"
+#define PULSE_STRING "pulse-"
+
 /* debug function */
 void lwis_gpio_list_print(char *name, struct gpio_descs *gpios)
 {
@@ -102,59 +105,90 @@ int lwis_gpio_list_set_input(struct gpio_descs *gpios)
 	return 0;
 }
 
-struct lwis_gpios_list *lwis_gpios_list_alloc(int count)
+int lwis_gpios_list_add_info_by_name(struct device *dev, struct list_head *list, const char *name)
 {
-	struct lwis_gpios_list *list;
+	struct lwis_gpios_info *gpios_info;
+	struct gpio_descs *descs;
 
-	/* No need to allocate if count is invalid */
-	if (count <= 0) {
-		return ERR_PTR(-EINVAL);
+	/* Check gpio already exist or not */
+	gpios_info = lwis_gpios_get_info_by_name(list, name);
+	if (!IS_ERR_OR_NULL(gpios_info)) {
+		return 0;
 	}
 
-	list = kmalloc(sizeof(struct lwis_gpios_list), GFP_KERNEL);
-	if (!list) {
-		return ERR_PTR(-ENOMEM);
+	gpios_info = kmalloc(sizeof(struct lwis_gpios_info), GFP_KERNEL);
+	if (IS_ERR_OR_NULL(gpios_info)) {
+		pr_err("Allocate lwis_gpios_info failed\n");
+		return -ENOMEM;
 	}
 
-	list->gpios_info = kmalloc(count * sizeof(struct lwis_gpios_info), GFP_KERNEL);
-	if (!list->gpios_info) {
-		kfree(list);
-		return ERR_PTR(-ENOMEM);
+	descs = lwis_gpio_list_get(dev, name);
+	if (IS_ERR_OR_NULL(descs)) {
+		pr_err("Error parsing GPIO list %s (%ld)\n", name, PTR_ERR(descs));
+		kfree(gpios_info);
+		return PTR_ERR(descs);
+	}
+	gpios_info->id = desc_to_gpio(descs->desc[0]);
+	gpios_info->hold_dev = dev;
+	/*
+	* The GPIO pins are valid, release the list as we do not need to hold
+	* on to the pins yet
+	*/
+	lwis_gpio_list_put(descs, dev);
+
+	gpios_info->gpios = NULL;
+	gpios_info->irq_list = NULL;
+	strscpy(gpios_info->name, name, LWIS_MAX_NAME_STRING_LEN);
+
+	if (strncmp(SHARED_STRING, name, strlen(SHARED_STRING)) == 0) {
+		gpios_info->is_shared = true;
+	} else {
+		gpios_info->is_shared = false;
+	}
+	if (strncmp(PULSE_STRING, name, strlen(PULSE_STRING)) == 0) {
+		gpios_info->is_pulse = true;
+	} else {
+		gpios_info->is_pulse = false;
 	}
 
-	list->count = count;
-
-	return list;
+	list_add(&gpios_info->node, list);
+	return 0;
 }
 
-void lwis_gpios_list_free(struct lwis_gpios_list *list)
+void lwis_gpios_list_free(struct list_head *list)
 {
-	if (!list) {
+	struct lwis_gpios_info *gpio_node;
+	struct list_head *it_node, *it_tmp;
+
+	if (!list || list_empty(list)) {
 		return;
 	}
 
-	if (list->gpios_info->irq_list) {
-		lwis_interrupt_list_free(list->gpios_info->irq_list);
+	list_for_each_safe (it_node, it_tmp, list) {
+		gpio_node = list_entry(it_node, struct lwis_gpios_info, node);
+		list_del(&gpio_node->node);
+		if (gpio_node->irq_list) {
+			lwis_interrupt_list_free(gpio_node->irq_list);
+		}
+		kfree(gpio_node);
 	}
-	if (list->gpios_info) {
-		kfree(list->gpios_info);
-	}
-
-	kfree(list);
 }
 
-struct lwis_gpios_info *lwis_gpios_get_info_by_name(struct lwis_gpios_list *list, char *name)
+struct lwis_gpios_info *lwis_gpios_get_info_by_name(struct list_head *list, const char *name)
 {
-	int i;
+	struct lwis_gpios_info *gpio_node;
+	struct list_head *it_node, *it_tmp;
 
-	if (!list || !name) {
+	if (!list || !name || list_empty(list)) {
 		return ERR_PTR(-EINVAL);
 	}
 
-	for (i = 0; i < list->count; ++i) {
-		if (!strcmp(list->gpios_info[i].name, name)) {
-			return &list->gpios_info[i];
+	list_for_each_safe (it_node, it_tmp, list) {
+		gpio_node = list_entry(it_node, struct lwis_gpios_info, node);
+		if (!strcmp(gpio_node->name, name)) {
+			return gpio_node;
 		}
 	}
+
 	return ERR_PTR(-EINVAL);
 }
