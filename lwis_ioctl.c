@@ -1570,7 +1570,7 @@ static int cmd_dpm_qos_update(struct lwis_device *lwis_dev, struct lwis_cmd_pkt 
 		struct lwis_qos_setting_v3 k_qos_setting_v3;
 		memcpy(&k_qos_setting_v3, &k_qos_settings[i], sizeof(struct lwis_qos_setting));
 		k_qos_setting_v3.bts_block_name[0] = '\0';
-		k_qos_setting_v3.clock_family_name[0] = '\0';
+		k_qos_setting_v3.qos_family_name[0] = '\0';
 		ret = lwis_dpm_update_qos(lwis_dev, &k_qos_setting_v3);
 		if (ret) {
 			dev_err(lwis_dev->dev, "Failed to apply qos setting, ret: %d\n", ret);
@@ -1626,7 +1626,7 @@ static int cmd_dpm_qos_update_v2(struct lwis_device *lwis_dev, struct lwis_cmd_p
 	for (i = 0; i < k_msg.reqs.num_settings; i++) {
 		struct lwis_qos_setting_v3 k_qos_setting_v3;
 		memcpy(&k_qos_setting_v3, &k_qos_settings[i], sizeof(struct lwis_qos_setting_v2));
-		k_qos_setting_v3.clock_family_name[0] = '\0';
+		k_qos_setting_v3.qos_family_name[0] = '\0';
 		ret = lwis_dpm_update_qos(lwis_dev, &k_qos_setting_v3);
 		if (ret) {
 			dev_err(lwis_dev->dev, "Failed to apply qos setting, ret: %d\n", ret);
