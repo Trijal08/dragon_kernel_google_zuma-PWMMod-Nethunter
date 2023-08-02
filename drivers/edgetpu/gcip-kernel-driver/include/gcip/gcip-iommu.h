@@ -57,6 +57,12 @@
 #define GCIP_MAP_FLAGS_DMA_ATTR_BIT_SIZE 10
 #define GCIP_MAP_FLAGS_DMA_ATTR_TO_FLAGS(attr) ((u64)(attr) << GCIP_MAP_FLAGS_DMA_ATTR_OFFSET)
 
+#define GCIP_MAP_FLAGS_RESTRICT_IOVA_OFFSET                                                        \
+	(GCIP_MAP_FLAGS_DMA_ATTR_OFFSET + GCIP_MAP_FLAGS_DMA_ATTR_BIT_SIZE)
+#define GCIP_MAP_FLAGS_RESTRICT_IOVA_BIT_SIZE 1
+#define GCIP_MAP_FLAGS_RESTRICT_IOVA_TO_FLAGS(restrict)                                            \
+	((u64)(restrict) << GCIP_MAP_FLAGS_RESTRICT_IOVA_OFFSET)
+
 struct gcip_iommu_domain_ops;
 
 /*
@@ -126,8 +132,9 @@ struct gcip_iommu_domain_ops {
 	 * Only domains which are allocated after calling this callback will be affected.
 	 */
 	void (*enable_best_fit_algo)(struct gcip_iommu_domain *domain);
-	/* Allocates @size of buffer and returns its IOVA. */
-	dma_addr_t (*alloc_iova_space)(struct gcip_iommu_domain *domain, size_t size);
+	/* Allocates @size of IOVA space, optionally restricted to 32 bits, returns start IOVA. */
+	dma_addr_t (*alloc_iova_space)(struct gcip_iommu_domain *domain, size_t size,
+				       bool restrict_iova);
 	/* Releases @size of buffer which was allocated to @iova. */
 	void (*free_iova_space)(struct gcip_iommu_domain *domain, dma_addr_t iova, size_t size);
 };
@@ -246,7 +253,9 @@ static inline bool gcip_iommu_domain_is_legacy_mode(struct gcip_iommu_domain *do
  *   [12:3]  - DMA_ATTR:
  *               Not used in the non-legacy mode.
  *               (See [REDACTED]
- *   [63:13] - RESERVED
+ *   [13:13] - RESTRICT_IOVA:
+ *               Restrict the IOVA assignment to 32 bit address window.
+ *   [63:14] - RESERVED
  *               Set RESERVED bits to 0 to ensure backwards compatibility.
  *
  * One can use `GCIP_MAP_FLAGS_DMA_*_TO_FLAGS` macros to generate a flag.

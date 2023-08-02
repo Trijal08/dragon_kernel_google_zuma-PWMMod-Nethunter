@@ -28,7 +28,7 @@
 #include "edgetpu-pm.c"
 #include "edgetpu-soc.h"
 
-#define BLOCK_DOWN_RETRY_TIMES 50
+#define BLOCK_DOWN_RETRY_TIMES 1000
 #define BLOCK_DOWN_MIN_DELAY_US 1000
 #define BLOCK_DOWN_MAX_DELAY_US 1500
 

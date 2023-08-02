@@ -242,7 +242,6 @@ int edgetpu_mmu_attach(struct edgetpu_dev *etdev, void *mmu_info)
 		etdev_err(etdev, "Unable create domain pool (%d)\n", ret);
 		goto err_free_etiommu;
 	}
-	gcip_iommu_domain_pool_enable_best_fit_algo(&etiommu->domain_pool);
 
 	idr_init(&etiommu->domain_id_pool);
 	mutex_init(&etiommu->pool_lock);
@@ -344,7 +343,8 @@ int edgetpu_mmu_map_sgt(struct edgetpu_dev *etdev, struct sg_table *sgt,
 	u64 gcip_map_flags =
 		GCIP_MAP_FLAGS_DMA_DIRECTION_TO_FLAGS(dir) |
 		GCIP_MAP_FLAGS_DMA_COHERENT_TO_FLAGS((mmu_flags & EDGETPU_MMU_COHERENT) != 0) |
-		GCIP_MAP_FLAGS_DMA_ATTR_TO_FLAGS(dma_attrs);
+		GCIP_MAP_FLAGS_DMA_ATTR_TO_FLAGS(dma_attrs) |
+		GCIP_MAP_FLAGS_RESTRICT_IOVA_TO_FLAGS(!(mmu_flags & EDGETPU_MMU_CC_NO_ACCESS));
 	int ret;
 
 	gdomain = get_domain_by_context_id(etdev, context_id);
