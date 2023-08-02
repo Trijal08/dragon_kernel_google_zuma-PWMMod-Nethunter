@@ -29,6 +29,7 @@
 #include "lwis_device_dpm.h"
 #include "lwis_device_slc.h"
 #include "lwis_device_test.h"
+#include "lwis_device_top.h"
 #include "lwis_device_spi.h"
 #include "lwis_dt.h"
 #include "lwis_event.h"
@@ -113,7 +114,6 @@ static int lwis_open(struct inode *node, struct file *fp)
 
 	lwis_client = kzalloc(sizeof(struct lwis_client), GFP_KERNEL);
 	if (!lwis_client) {
-		dev_err(lwis_dev->dev, "Failed to allocate lwis client\n");
 		return -ENOMEM;
 	}
 
@@ -277,6 +277,13 @@ static int lwis_release(struct inode *node, struct file *fp)
 		if (lwis_dev->enabled == 0) {
 			lwis_debug_crash_info_dump(lwis_dev);
 			dev_info(lwis_dev->dev, "No more client, power down\n");
+			if (lwis_dev->power_up_to_suspend) {
+				if (!lwis_dev->is_suspended) {
+					rc = lwis_dev_process_power_sequence(lwis_dev, lwis_dev->suspend_sequence,
+					      /*set_active=*/false, /*skip_error=*/false);
+					dev_info(lwis_dev->dev, "Need suspend before power down\n");
+				}
+			}
 			rc = lwis_dev_power_down_locked(lwis_dev);
 			lwis_dev->is_suspended = false;
 		}
@@ -366,7 +373,6 @@ static ssize_t lwis_read(struct file *fp, char __user *user_buf, size_t count, l
 	const size_t buffer_size = 8192;
 	char *buffer = kzalloc(buffer_size, GFP_KERNEL);
 	if (!buffer) {
-		pr_err("Failed to allocate read buffer\n");
 		return -ENOMEM;
 	}
 
@@ -638,7 +644,7 @@ int lwis_dev_process_power_sequence(struct lwis_device *lwis_dev,
 			int set_value = 0;
 			bool set_state = true;
 
-			gpios_info = lwis_gpios_get_info_by_name(lwis_dev->gpios_list,
+			gpios_info = lwis_gpios_get_info_by_name(&lwis_dev->gpios_list,
 								 list->seq_info[i].name);
 			if (IS_ERR_OR_NULL(gpios_info)) {
 				dev_err(lwis_dev->dev, "Get %s gpios info failed\n",
@@ -711,9 +717,9 @@ int lwis_dev_process_power_sequence(struct lwis_device *lwis_dev,
 				mutex_lock(&core.lock);
 				list_for_each_entry (lwis_dev_it, &core.lwis_dev_list, dev_list) {
 					if ((lwis_dev->id != lwis_dev_it->id) &&
-					    lwis_dev_it->enabled && lwis_dev_it->gpios_list) {
+					    lwis_dev_it->enabled) {
 						gpios_info_it = lwis_gpios_get_info_by_name(
-							lwis_dev_it->gpios_list,
+							&lwis_dev_it->gpios_list,
 							list->seq_info[i].name);
 						if (IS_ERR_OR_NULL(gpios_info_it)) {
 							continue;
@@ -1312,15 +1318,12 @@ struct lwis_device_power_sequence_list *lwis_dev_power_seq_list_alloc(int count)
 
 	list = kmalloc(sizeof(struct lwis_device_power_sequence_list), GFP_KERNEL);
 	if (!list) {
-		pr_err("Failed to allocate power sequence list\n");
 		return ERR_PTR(-ENOMEM);
 	}
 
 	list->seq_info =
 		kmalloc(count * sizeof(struct lwis_device_power_sequence_info), GFP_KERNEL);
 	if (!list->seq_info) {
-		pr_err("Failed to allocate lwis_device_power_sequence_info "
-		       "instances\n");
 		kfree(list);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -1492,6 +1495,9 @@ int lwis_base_probe(struct lwis_device *lwis_dev)
 	/* Initialize an empty list of clients */
 	INIT_LIST_HEAD(&lwis_dev->clients);
 
+	/* Initialize an empty list for gpio info nodes */
+	INIT_LIST_HEAD(&lwis_dev->gpios_list);
+
 	/* Initialize event state hash table */
 	hash_init(lwis_dev->event_states);
 
@@ -1591,9 +1597,8 @@ void lwis_base_unprobe(struct lwis_device *unprobe_lwis_dev)
 				lwis_dev->power_down_sequence = NULL;
 			}
 			/* Release device gpio list */
-			if (lwis_dev->gpios_list) {
-				lwis_gpios_list_free(lwis_dev->gpios_list);
-				lwis_dev->gpios_list = NULL;
+			if (!list_empty(&lwis_dev->gpios_list)) {
+				lwis_gpios_list_free(&lwis_dev->gpios_list);
 			}
 			/* Release device gpio info irq list */
 			if (lwis_dev->irq_gpios_info.irq_list) {
@@ -1635,7 +1640,6 @@ static int __init lwis_register_base_device(void)
 	/* Allocate ID management instance for device minor numbers */
 	core.idr = kzalloc(sizeof(struct idr), GFP_KERNEL);
 	if (!core.idr) {
-		pr_err("Cannot allocate idr instance\n");
 		return -ENOMEM;
 	}
 
@@ -1861,8 +1865,8 @@ static void __exit lwis_driver_exit(void)
 			lwis_dev_power_seq_list_free(lwis_dev->power_down_sequence);
 		}
 		/* Release device gpio list */
-		if (lwis_dev->gpios_list) {
-			lwis_gpios_list_free(lwis_dev->gpios_list);
+		if (!list_empty(&lwis_dev->gpios_list)) {
+			lwis_gpios_list_free(&lwis_dev->gpios_list);
 		}
 		/* Release device gpio info irq list */
 		if (lwis_dev->irq_gpios_info.irq_list) {
@@ -1882,7 +1886,9 @@ static void __exit lwis_driver_exit(void)
 		}
 		/* Release event subscription components */
 		if (lwis_dev->type == DEVICE_TYPE_TOP) {
-			lwis_dev->top_dev->subscribe_ops.release(lwis_dev);
+			struct lwis_top_device *top_dev;
+			top_dev = container_of(lwis_dev, struct lwis_top_device, base_dev);
+			top_dev->subscribe_ops.release(lwis_dev);
 		}
 
 		/* Destroy device */

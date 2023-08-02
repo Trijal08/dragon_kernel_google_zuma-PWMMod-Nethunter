@@ -51,13 +51,11 @@ struct lwis_interrupt_list *lwis_interrupt_list_alloc(struct lwis_device *lwis_d
 
 	list = kmalloc(sizeof(struct lwis_interrupt_list), GFP_KERNEL);
 	if (!list) {
-		pr_err("Failed to allocate IRQ list\n");
 		return ERR_PTR(-ENOMEM);
 	}
 
 	list->irq = kmalloc(count * sizeof(struct lwis_interrupt), GFP_KERNEL);
 	if (!list->irq) {
-		pr_err("Failed to allocate IRQs\n");
 		kfree(list);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -290,9 +288,6 @@ static int lwis_interrupt_read_and_clear_src_reg(struct lwis_interrupt *irq, uin
 
 		/* Overflow is triggered */
 		if (*overflow_value != 0) {
-			dev_warn(irq->lwis_dev->dev,
-				 "IRQ(%s) overflow register(0x%llx) value(%lld) is detected\n",
-				 irq->name, irq->irq_overflow_reg, *overflow_value);
 			/* Write back to the overflow register */
 			ret = lwis_device_single_register_write(irq->lwis_dev, irq->irq_reg_bid,
 								irq->irq_overflow_reg,
@@ -656,7 +651,6 @@ int lwis_interrupt_set_gpios_event_info(struct lwis_interrupt_list *list, int in
 
 	new_event = kzalloc(sizeof(struct lwis_single_event_info), GFP_KERNEL);
 	if (!new_event) {
-		dev_err(list->lwis_dev->dev, "Allocate event info failed\n");
 		return -ENOMEM;
 	}
 

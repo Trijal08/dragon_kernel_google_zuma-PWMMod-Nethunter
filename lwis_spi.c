@@ -12,6 +12,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-spi: " fmt
 
 #include "lwis_spi.h"
+#include "lwis_util.h"
 
 #include <linux/bits.h>
 #include <linux/kernel.h>
@@ -32,39 +33,6 @@
 static inline bool check_bitwidth(const int bitwidth, const int min, const int max)
 {
 	return (bitwidth >= min) && (bitwidth <= max) && ((bitwidth % 8) == 0);
-}
-
-/* value_to_buf(): SPI uses MSB, convert value to MSB buffer. */
-static void value_to_buf(uint64_t value, uint8_t *buf, int buf_size)
-{
-	if (buf_size == 1) {
-		buf[0] = value;
-	} else if (buf_size == 2) {
-		buf[0] = (value >> 8) & 0xFF;
-		buf[1] = value & 0xFF;
-	} else if (buf_size == 4) {
-		buf[0] = (value >> 24) & 0xFF;
-		buf[1] = (value >> 16) & 0xFF;
-		buf[2] = (value >> 8) & 0xFF;
-		buf[3] = value & 0xFF;
-	} else {
-		pr_err("Unsupported buffer size %d used for value_to_buf\n", buf_size);
-	}
-}
-
-/* buf_to_value(): SPI uses MSB, convert MSB buffer to value. */
-static uint64_t buf_to_value(uint8_t *buf, int buf_size)
-{
-	if (buf_size == 1) {
-		return buf[0];
-	} else if (buf_size == 2) {
-		return (buf[0] << 8) | buf[1];
-	} else if (buf_size == 4) {
-		return (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
-	}
-
-	pr_err("Unsupported buffer size %d used for buf_to_value\n", buf_size);
-	return 0;
 }
 
 static int lwis_spi_read(struct lwis_spi_device *spi_dev, uint64_t offset, uint64_t *value)
@@ -110,7 +78,7 @@ static int lwis_spi_read(struct lwis_spi_device *spi_dev, uint64_t offset, uint6
 	spi_message_init(&msg);
 
 	memset(&tx, 0, sizeof(tx));
-	value_to_buf(offset, (uint8_t *)&wbuf, offset_bytes);
+	lwis_value_to_be_buf(offset, (uint8_t *)&wbuf, offset_bytes);
 	tx.len = offset_bytes;
 	tx.tx_buf = &wbuf;
 	spi_message_add_tail(&tx, &msg);
@@ -128,7 +96,7 @@ static int lwis_spi_read(struct lwis_spi_device *spi_dev, uint64_t offset, uint6
 		return ret;
 	}
 
-	*value = buf_to_value((uint8_t *)&rbuf, value_bytes);
+	*value = lwis_be_buf_to_value((uint8_t *)&rbuf, value_bytes);
 
 	return ret;
 }
@@ -189,8 +157,8 @@ static int lwis_spi_write(struct lwis_spi_device *spi_dev, uint64_t offset, uint
 	wbuf = (uint8_t *)&wbuf_val;
 	memset(&tx, 0, sizeof(struct spi_transfer));
 	offset |= offset_overflow_value;
-	value_to_buf(offset, wbuf, offset_bytes);
-	value_to_buf(value, wbuf + offset_bytes, value_bytes);
+	lwis_value_to_be_buf(offset, wbuf, offset_bytes);
+	lwis_value_to_be_buf(value, wbuf + offset_bytes, value_bytes);
 	tx.len = offset_bytes + value_bytes;
 	tx.tx_buf = wbuf;
 	spi_message_add_tail(&tx, &msg);
@@ -239,7 +207,7 @@ static int lwis_spi_read_batch(struct lwis_spi_device *spi_dev, uint64_t offset,
 	spi_message_init(&msg);
 
 	memset(&tx, 0, sizeof(tx));
-	value_to_buf(offset, (uint8_t *)&wbuf, offset_bytes);
+	lwis_value_to_be_buf(offset, (uint8_t *)&wbuf, offset_bytes);
 	tx.len = offset_bytes;
 	tx.tx_buf = &wbuf;
 	spi_message_add_tail(&tx, &msg);
@@ -299,7 +267,6 @@ static int lwis_spi_write_batch(struct lwis_spi_device *spi_dev, uint64_t offset
 	msg_bytes = offset_bytes + write_buf_size;
 	buf = kmalloc(msg_bytes, GFP_KERNEL);
 	if (!buf) {
-		dev_err(spi_dev->base_dev.dev, "Failed to allocate memory for SPI buffer\n");
 		return -ENOMEM;
 	}
 
@@ -307,7 +274,7 @@ static int lwis_spi_write_batch(struct lwis_spi_device *spi_dev, uint64_t offset
 
 	memset(&tx, 0, sizeof(struct spi_transfer));
 	offset |= offset_overflow_value;
-	value_to_buf(offset, buf, offset_bytes);
+	lwis_value_to_be_buf(offset, buf, offset_bytes);
 	memcpy(buf + offset_bytes, write_buf, write_buf_size);
 	tx.len = msg_bytes;
 	tx.tx_buf = buf;

@@ -11,7 +11,9 @@
 #ifndef LWIS_GPIO_H_
 #define LWIS_GPIO_H_
 
+#include <linux/device.h>
 #include <linux/gpio/consumer.h>
+#include <linux/list.h>
 #include "lwis_commands.h"
 #include "lwis_interrupt.h"
 
@@ -27,16 +29,7 @@ struct lwis_gpios_info {
 	bool is_pulse;
 	struct gpio_descs *gpios;
 	struct lwis_interrupt_list *irq_list;
-};
-
-/*
- * struct lwis_gpios_list
- * This structure is to store the gpios that have been acquired
- */
-struct lwis_gpios_list {
-	struct lwis_gpios_info *gpios_info;
-	/* Count of gpios info */
-	int count;
+	struct list_head node;
 };
 
 /*
@@ -75,21 +68,20 @@ int lwis_gpio_list_set_output_value_raw(struct gpio_descs *gpios, int value);
 int lwis_gpio_list_set_input(struct gpio_descs *gpios);
 
 /*
- *  Allocate an instance of the lwis_gpios_info and initialize
- *  the data structures according to the number of lwis_gpios_info
- *  specified.
+ *  Allocate gpios info and add to the list if the name is not found in exist
+ *  list.
  */
-struct lwis_gpios_list *lwis_gpios_list_alloc(int count);
+int lwis_gpios_list_add_info_by_name(struct device *dev, struct list_head *list, const char *name);
 
 /*
- *  Deallocate the lwis_gpios_list structure.
+ *  Free the nodes in the list.
  */
-void lwis_gpios_list_free(struct lwis_gpios_list *list);
+void lwis_gpios_list_free(struct list_head *list);
 
 /*
  *  Search the lwis_device_gpios_list and return the lwis_gpios_info
  *  if the name is matched
  */
-struct lwis_gpios_info *lwis_gpios_get_info_by_name(struct lwis_gpios_list *list, char *name);
+struct lwis_gpios_info *lwis_gpios_get_info_by_name(struct list_head *list, const char *name);
 
 #endif /* LWIS_GPIO_H_ */

@@ -56,13 +56,6 @@ static struct lwis_device_subclass_operations i2c_vops = {
 	.close = NULL,
 };
 
-static struct lwis_event_subscribe_operations i2c_subscribe_ops = {
-	.subscribe_event = NULL,
-	.unsubscribe_event = NULL,
-	.notify_event_subscriber = NULL,
-	.release = NULL,
-};
-
 static int lwis_i2c_device_enable(struct lwis_device *lwis_dev)
 {
 	int ret;
@@ -243,13 +236,11 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 	/* Allocate I2C device specific data construct */
 	i2c_dev = devm_kzalloc(dev, sizeof(struct lwis_i2c_device), GFP_KERNEL);
 	if (!i2c_dev) {
-		dev_err(dev, "Failed to allocate i2c device structure\n");
 		return -ENOMEM;
 	}
 
 	i2c_dev->base_dev.type = DEVICE_TYPE_I2C;
 	i2c_dev->base_dev.vops = i2c_vops;
-	i2c_dev->base_dev.subscribe_ops = i2c_subscribe_ops;
 	i2c_dev->base_dev.plat_dev = plat_dev;
 	i2c_dev->base_dev.k_dev = &plat_dev->dev;
 

@@ -168,7 +168,6 @@ int lwis_allocator_init(struct lwis_device *lwis_dev)
 
 	block_mgr = kzalloc(sizeof(struct lwis_allocator_block_mgr), GFP_KERNEL);
 	if (block_mgr == NULL) {
-		dev_err(lwis_dev->dev, "Allocate block_mgr failed\n");
 		mutex_unlock(&lwis_dev->client_lock);
 		return -ENOMEM;
 	}
@@ -300,7 +299,6 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size, gfp_t g
 	if (idx > 19) {
 		block = kmalloc(sizeof(struct lwis_allocator_block), gfp_flags);
 		if (block == NULL) {
-			dev_err(lwis_dev->dev, "Allocate failed\n");
 			return NULL;
 		}
 		block->type = idx;
@@ -308,7 +306,6 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size, gfp_t g
 		block->prev = NULL;
 		block->ptr = kvmalloc(size, gfp_flags);
 		if (block->ptr == NULL) {
-			dev_err(lwis_dev->dev, "Allocate failed\n");
 			kfree(block);
 			return NULL;
 		}
@@ -335,7 +332,6 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size, gfp_t g
 	/* Allocate new block */
 	block = kmalloc(sizeof(struct lwis_allocator_block), gfp_flags);
 	if (block == NULL) {
-		dev_err(lwis_dev->dev, "Allocate failed\n");
 		return NULL;
 	}
 	block->type = idx;
@@ -344,7 +340,6 @@ void *lwis_allocator_allocate(struct lwis_device *lwis_dev, size_t size, gfp_t g
 	block_size = 1 << idx;
 	block->ptr = kvmalloc(block_size, gfp_flags);
 	if (block->ptr == NULL) {
-		dev_err(lwis_dev->dev, "Allocate failed\n");
 		kfree(block);
 		return NULL;
 	}

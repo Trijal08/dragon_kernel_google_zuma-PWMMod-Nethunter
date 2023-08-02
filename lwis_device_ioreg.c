@@ -47,13 +47,6 @@ static struct lwis_device_subclass_operations ioreg_vops = {
 	.close = NULL,
 };
 
-static struct lwis_event_subscribe_operations ioreg_subscribe_ops = {
-	.subscribe_event = NULL,
-	.unsubscribe_event = NULL,
-	.notify_event_subscriber = NULL,
-	.release = NULL,
-};
-
 static int lwis_ioreg_device_enable(struct lwis_device *lwis_dev)
 {
 	return 0;
@@ -105,13 +98,11 @@ static int lwis_ioreg_device_probe(struct platform_device *plat_dev)
 	/* Allocate IOREG device specific data construct */
 	ioreg_dev = devm_kzalloc(dev, sizeof(struct lwis_ioreg_device), GFP_KERNEL);
 	if (!ioreg_dev) {
-		dev_err(dev, "Failed to allocate IOREG device structure\n");
 		return -ENOMEM;
 	}
 
 	ioreg_dev->base_dev.type = DEVICE_TYPE_IOREG;
 	ioreg_dev->base_dev.vops = ioreg_vops;
-	ioreg_dev->base_dev.subscribe_ops = ioreg_subscribe_ops;
 	ioreg_dev->base_dev.plat_dev = plat_dev;
 	ioreg_dev->base_dev.k_dev = &plat_dev->dev;
 
