@@ -11,6 +11,7 @@
 
 /* Maximum number of channels of touch data */
 #define MAX_CHANNELS 5
+#define TOUCH_OFFLOAD_BUFFER_NUM 6
 
 #define DEVICE_NAME "touch_offload"
 #define CLASS_NAME "touch_offload"

@@ -29,11 +29,23 @@
 					__func__, ##args)
 #define GOOG_ERR(gti, fmt, args...)    pr_err("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
 					__func__, ##args)
+
 #define MAX_SLOTS 10
+/*
+ * GTI_DEBUG_HEALTHCHECK_KFIFO_LEN
+ * Define the array length of struct gti_debug_healthcheck to track recent
+ * touch interrupts information for debug.
+ */
+#define GTI_DEBUG_HEALTHCHECK_KFIFO_LEN 32	/* must be power of 2. */
+#define GTI_DEBUG_HEALTHCHECK_LOGS_LEN 4
+/*
+ * GTI_DEBUG_INPUT_KFIFO_LEN
+ * Define the array length of struct gti_debug_input to track recent
+ * touch input report for debug.
+ */
+#define GTI_DEBUG_INPUT_KFIFO_LEN 16	/* must be power of 2. */
+#define GTI_DEBUG_INPUT_LOGS_LEN 4
 
-#define GTI_DEBUG_KFIFO_LEN 4 /* must be power of 2. */
-
-#define GTI_SENSOR_2D_OUT_FORMAT_WIDTH(size) ((size > (PAGE_SIZE * sizeof(s16) / 6)) ? 1 : 5)
 /*-----------------------------------------------------------------------------
  * enums.
  */
@@ -172,6 +184,7 @@ enum gti_pm_wakelock_type : u32 {
 };
 
 enum gti_proc_type : u32 {
+	GTI_PROC_DUMP,
 	GTI_PROC_MS_BASE,
 	GTI_PROC_MS_DIFF,
 	GTI_PROC_MS_RAW,
@@ -316,7 +329,7 @@ struct gti_debug_coord {
 	struct TouchOffloadCoord coord;
 };
 
-struct gti_debug_health_check {
+struct gti_debug_healthcheck {
 	ktime_t irq_time;
 	u64 irq_index;
 	u64 input_index;
@@ -611,6 +624,8 @@ struct gti_pm {
  * @slot_bit_in_use: bitmap of slot in use for this input process cycle.
  * @slot_bit_changed: bitmap of slot state changed for this input process cycle.
  * @slot_bit_active: bitmap of active slot during GTI lifecycle.
+ * @slot_bit_last_active: bitmap of last active slot when reporting offload inputs.
+ * @slot_bit_offload_active: bitmap of active slot from offload.
  * @dev_id: dev_t used for google interface driver.
  * @panel_id: id of the display panel.
  * @charger_state: indicates a USB charger is connected.
@@ -622,10 +637,11 @@ struct gti_pm {
  * @vendor_irq_cookie: irq cookie that register by vendor driver.
  * @vendor_default_handler: touch vendor driver default operation.
  * @released_index: finger up count.
+ * @debug_warning_limit: limit number of warning logs.
  * @debug_input: struct that used to debug input.
- * @debug_fifo_input: kfifo struct to track recent coordinate report for input debug.
- * @debug_hc: struct that used for the health check.
- * @debug_fifo_hc: kfifo struct to track recent touch interrupt information for health check.
+ * @debug_fifo_input: kfifo struct to track input report.
+ * @debug_healthcheck: struct that used for the health check.
+ * @debug_fifo_healthcheck: kfifo struct to track touch interrupt information.
  */
 
 struct goog_touch_interface {
@@ -643,7 +659,7 @@ struct goog_touch_interface {
 	struct drm_connector *connector;
 	struct gti_union_cmd_data cmd;
 	struct proc_dir_entry *proc_dir;
-	struct proc_dir_entry *proc_heatmap[GTI_PROC_NUM];
+	struct proc_dir_entry *proc_show[GTI_PROC_NUM];
 	ktime_t input_timestamp;
 	ktime_t mf_downtime;
 
@@ -698,6 +714,8 @@ struct goog_touch_interface {
 	unsigned long slot_bit_in_use;
 	unsigned long slot_bit_changed;
 	unsigned long slot_bit_active;
+	unsigned long slot_bit_last_active;
+	unsigned long slot_bit_offload_active;
 	dev_t dev_id;
 	int panel_id;
 	char fw_name[64];
@@ -718,17 +736,21 @@ struct goog_touch_interface {
 
 	/* Debug used. */
 	u64 released_index;
+	int debug_warning_limit;
 	struct gti_debug_input debug_input[MAX_SLOTS];
-	DECLARE_KFIFO(debug_fifo_input, struct gti_debug_input, GTI_DEBUG_KFIFO_LEN);
-	struct gti_debug_health_check debug_hc;
-	DECLARE_KFIFO(debug_fifo_hc, struct gti_debug_health_check, GTI_DEBUG_KFIFO_LEN);
+	struct gti_debug_input debug_input_history[GTI_DEBUG_INPUT_KFIFO_LEN];
+	DECLARE_KFIFO(debug_fifo_input, struct gti_debug_input, GTI_DEBUG_INPUT_KFIFO_LEN);
+	struct gti_debug_healthcheck debug_healthcheck;
+	struct gti_debug_healthcheck debug_healthcheck_history[GTI_DEBUG_HEALTHCHECK_KFIFO_LEN];
+	DECLARE_KFIFO(debug_fifo_healthcheck, struct gti_debug_healthcheck,
+		GTI_DEBUG_HEALTHCHECK_KFIFO_LEN);
 };
 
 /*-----------------------------------------------------------------------------
  * Forward declarations.
  */
 inline bool goog_check_spi_dma_enabled(struct spi_device *spi_dev);
-inline bool goog_input_legacy_report(struct goog_touch_interface *gti);
+inline ktime_t *goog_input_get_timestamp(struct goog_touch_interface *gti);
 inline void goog_input_lock(struct goog_touch_interface *gti);
 inline void goog_input_unlock(struct goog_touch_interface *gti);
 inline void goog_input_set_timestamp(
@@ -786,7 +808,7 @@ int goog_pm_unregister_notification(struct goog_touch_interface *gti);
 
 void goog_notify_fw_status_changed(struct goog_touch_interface *gti,
 		enum gti_fw_status status, struct gti_fw_status_data* data);
-void gti_debug_hc_dump(struct goog_touch_interface *gti);
+void gti_debug_healthcheck_dump(struct goog_touch_interface *gti);
 void gti_debug_input_dump(struct goog_touch_interface *gti);
 
 int goog_get_lptw_triggered(struct goog_touch_interface *gti);
