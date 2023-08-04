@@ -2649,7 +2649,7 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 	/* Register for charger plugging status */
 	gti->charger_notifier.notifier_call = gti_charger_state_change;
 	ret = power_supply_reg_notifier(&gti->charger_notifier);
-	if (!ret) {
+	if (ret) {
 		GOOG_ERR(gti, "Failed to register power_supply_reg_notifier!\n");
 		goto err_offload_probe;
 	}
