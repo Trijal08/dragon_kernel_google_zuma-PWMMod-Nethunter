@@ -2343,7 +2343,7 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 static void goog_offload_set_running(struct goog_touch_interface *gti, bool running)
 {
 	if (gti->offload.offload_running != running) {
-		GOOG_INFO(gti, "Set offload_running=%d, irq_index=%d, input_index=%d\n",
+		GOOG_INFO(gti, "Set offload_running=%d, irq_index=%llu, input_index=%llu\n",
 			running, gti->irq_index, gti->input_index);
 
 		gti->offload.offload_running = running;
@@ -3826,6 +3826,13 @@ int goog_devm_request_threaded_irq(struct goog_touch_interface *gti,
 	return ret;
 }
 EXPORT_SYMBOL(goog_devm_request_threaded_irq);
+
+void goog_devm_free_irq(struct goog_touch_interface *gti,
+		struct device *dev, unsigned int irq)
+{
+	devm_free_irq(dev, irq, gti);
+}
+EXPORT_SYMBOL(goog_devm_free_irq);
 
 int goog_request_threaded_irq(struct goog_touch_interface *gti,
 		unsigned int irq, irq_handler_t handler, irq_handler_t thread_fn,

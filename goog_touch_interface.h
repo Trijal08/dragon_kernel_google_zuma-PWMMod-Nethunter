@@ -752,6 +752,8 @@ inline int goog_devm_request_threaded_irq(struct goog_touch_interface *gti,
 		irq_handler_t handler, irq_handler_t thread_fn,
 		unsigned long irqflags, const char *devname,
 		void *dev_id);
+void goog_devm_free_irq(struct goog_touch_interface *gti,
+		struct device *dev, unsigned int irq);
 inline int goog_request_threaded_irq(struct goog_touch_interface *gti,
 		unsigned int irq, irq_handler_t handler, irq_handler_t thread_fn,
 		unsigned long irqflags, const char *devname, void *dev_id);
