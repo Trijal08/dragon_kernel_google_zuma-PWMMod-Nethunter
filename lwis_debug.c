@@ -160,6 +160,13 @@ static void list_enrolled_buffers(struct lwis_client *client, char *k_buf, size_
 	hash_for_each (client->enrolled_buffers, i, enrollment_list, node) {
 		list_for_each (it_enrollment, &enrollment_list->list) {
 			buffer = list_entry(it_enrollment, struct lwis_enrolled_buffer, list_node);
+			if (IS_ERR_OR_NULL((void *)buffer->info.dma_vaddr)) {
+				scnprintf(tmp_buf, sizeof(tmp_buf),
+					  "Enrolled buffers: dma_vaddr %pad is invalid\n",
+					  &buffer->info.dma_vaddr);
+				strlcat(k_buf, tmp_buf, k_buf_size);
+				continue;
+			}
 			end_dma_vaddr = buffer->info.dma_vaddr + (buffer->dma_buf->size - 1);
 			scnprintf(tmp_buf, sizeof(tmp_buf),
 				  "[%2d] FD: %d Mode: %s%s Addr:[%pad ~ %pad] Size: %zu\n", idx++,
