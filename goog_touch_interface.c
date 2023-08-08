@@ -1329,20 +1329,6 @@ inline void gti_debug_healthcheck_push(struct goog_touch_interface *gti)
 	kfifo_in(&gti->debug_fifo_healthcheck, &gti->debug_healthcheck, 1);
 }
 
-inline int gti_debug_healthcheck_pop(struct goog_touch_interface *gti,
-	struct gti_debug_healthcheck *fifo, unsigned int len)
-{
-	if (len > GTI_DEBUG_HEALTHCHECK_KFIFO_LEN) {
-		GOOG_ERR(gti, "invalid fifo pop len(%d)!\n", len);
-		return -EINVAL;
-	}
-	/*
-	 * Keep data without pop-out to support different timing
-	 * print-out by each caller.
-	 */
-	return kfifo_out_peek(&gti->debug_fifo_healthcheck, fifo, len) == len ? 0 : -EFAULT;
-}
-
 inline void gti_debug_healthcheck_update(struct goog_touch_interface *gti, bool from_top_half)
 {
 	if (from_top_half) {
@@ -1357,27 +1343,22 @@ inline void gti_debug_healthcheck_update(struct goog_touch_interface *gti, bool 
 
 void gti_debug_healthcheck_dump(struct goog_touch_interface *gti)
 {
-	int ret;
-	u64 i, count;
-	u64 index;
+	s16 i, count;
 	s64 delta;
 	s64 sec_delta;
 	u32 ms_delta;
 	ktime_t current_time = ktime_get_real();
 	struct gti_debug_healthcheck *last_fifo = gti->debug_healthcheck_history;
 
-	count = min_t(u64, gti->irq_index, GTI_DEBUG_HEALTHCHECK_KFIFO_LEN);
-	ret = gti_debug_healthcheck_pop(gti, last_fifo, count);
-	if (ret) {
-		GOOG_ERR(gti, "Failed to peek debug hc, err: %d\n", ret);
-		return;
-	}
+	/*
+	 * Use peek to keep data without pop-out to support different timing
+	 * print-out by each caller.
+	 */
+	count = kfifo_out_peek(&gti->debug_fifo_healthcheck, last_fifo,
+				GTI_DEBUG_HEALTHCHECK_KFIFO_LEN);
 
-	if (count <= GTI_DEBUG_HEALTHCHECK_LOGS_LEN)
-		index = 0;
-	else
-		index = count - GTI_DEBUG_HEALTHCHECK_LOGS_LEN;
-	for (i = index ; i < count ; i++) {
+	i = max_t(s16, 0, count - GTI_DEBUG_HEALTHCHECK_LOGS_LEN);
+	for (; i < count ; i++) {
 		sec_delta = -1;
 		ms_delta = 0;
 		/*
@@ -1414,21 +1395,6 @@ inline void gti_debug_input_push(struct goog_touch_interface *gti, int slot)
 	kfifo_in(&gti->debug_fifo_input, &fifo, 1);
 }
 
-inline int gti_debug_input_pop(struct goog_touch_interface *gti,
-	struct gti_debug_input *fifo, unsigned int len)
-{
-	if (len > GTI_DEBUG_INPUT_KFIFO_LEN) {
-		GOOG_ERR(gti, "invalid fifo pop len(%d)!\n", len);
-		return -EINVAL;
-	}
-
-	/*
-	 * Keep coords without pop-out to support different timing
-	 * print-out by each caller.
-	 */
-	return kfifo_out_peek(&gti->debug_fifo_input, fifo, len) == len ? 0 : -EFAULT;
-}
-
 inline void gti_debug_input_update(struct goog_touch_interface *gti)
 {
 	int slot;
@@ -1457,9 +1423,8 @@ inline void gti_debug_input_update(struct goog_touch_interface *gti)
 
 void gti_debug_input_dump(struct goog_touch_interface *gti)
 {
-	int slot, ret;
-	u64 i, count;
-	u64 index;
+	int slot;
+	s16 i, count;
 	s64 delta;
 	s64 sec_delta_down;
 	u32 ms_delta_down;
@@ -1469,18 +1434,15 @@ void gti_debug_input_dump(struct goog_touch_interface *gti)
 	ktime_t current_time = ktime_get_real();
 	struct gti_debug_input *last_fifo = gti->debug_input_history;
 
-	count = min_t(u64, gti->released_index, GTI_DEBUG_INPUT_KFIFO_LEN);
-	ret = gti_debug_input_pop(gti, last_fifo, count);
-	if (ret) {
-		GOOG_ERR(gti, "Failed to peek debug input, err: %d\n", ret);
-		return;
-	}
+	/*
+	 * Use peek to keep data without pop-out to support different timing
+	 * print-out by each caller.
+	 */
+	count = kfifo_out_peek(&gti->debug_fifo_input, last_fifo,
+				GTI_DEBUG_INPUT_KFIFO_LEN);
 
-	if (count <= GTI_DEBUG_INPUT_LOGS_LEN)
-		index = 0;
-	else
-		index = count - GTI_DEBUG_INPUT_LOGS_LEN;
-	for (i = index ; i < count ; i++) {
+	i = max_t(s16, 0, count - GTI_DEBUG_INPUT_LOGS_LEN);
+	for ( ; i < count ; i++) {
 		if (last_fifo[i].slot < 0 ||
 			last_fifo[i].slot >= MAX_SLOTS) {
 			GOOG_INFO(gti, "dump: #%d: invalid slot #!\n", last_fifo[i].slot);
