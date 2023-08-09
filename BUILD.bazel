@@ -9,7 +9,6 @@ filegroup(
     ],
     visibility = [
         "//private/google-modules/display:__subpackages__",
-        "//private/google-modules/display_legacy:__subpackages__",
     ],
 )
 
@@ -30,7 +29,6 @@ kernel_module(
     visibility = [
         "//private/devices/google:__subpackages__",
         "//private/google-modules/display:__subpackages__",
-        "//private/google-modules/display_legacy:__subpackages__",
         "//private/google-modules/soc/gs:__pkg__",
     ],
     deps = [
