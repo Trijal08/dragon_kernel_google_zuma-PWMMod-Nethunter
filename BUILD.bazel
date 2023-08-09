@@ -31,8 +31,8 @@ kernel_module(
         "Kbuild",
     ]) + [
         "//private/google-modules/aoc:headers",
-        "//private/google-modules/display_legacy/samsung:headers",
-        "//private/google-modules/display_legacy/samsung/include:headers",
+        "//private/google-modules/display/samsung:headers",
+        "//private/google-modules/display/samsung/include:headers",
         "//private/google-modules/soc/gs:gs_soc_headers",
     ],
     outs = [
