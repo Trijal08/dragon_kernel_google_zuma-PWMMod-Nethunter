@@ -128,8 +128,8 @@ static int lwis_spi_device_probe(struct spi_device *spi)
 	spi_dev->base_dev.k_dev = &spi->dev;
 	spi_dev->spi = spi;
 
-	/* Initialize spin lock */
-	spin_lock_init(&spi_dev->spi_lock);
+	/* Initialize mutex lock */
+	mutex_init(&spi_dev->spi_lock);
 
 	/* Call the base device probe function */
 	ret = lwis_base_probe(&spi_dev->base_dev);

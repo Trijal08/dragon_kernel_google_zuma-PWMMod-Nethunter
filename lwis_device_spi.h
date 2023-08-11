@@ -12,6 +12,7 @@
 #ifndef LWIS_DEVICE_SPI_H_
 #define LWIS_DEVICE_SPI_H_
 
+#include <linux/mutex.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/spidev.h>
 
@@ -24,7 +25,7 @@
 struct lwis_spi_device {
 	struct lwis_device base_dev;
 	struct spi_device *spi;
-	spinlock_t spi_lock;
+	struct mutex spi_lock;
 };
 
 int lwis_spi_device_init(void);
