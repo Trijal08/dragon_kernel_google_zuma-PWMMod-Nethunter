@@ -83,58 +83,65 @@ struct gs_dsi_cmd {
 };
 
 /**
- * struct gs_dsi_cmd_set - a dsi command sequence.
+ * struct gs_dsi_cmdset - a dsi command sequence.
  * @num_cmd:  Number of dsi commands in this sequence.
  * @cmds:     Pointer to a dsi command sequence.
  */
-struct gs_dsi_cmd_set {
+struct gs_dsi_cmdset {
 	const u32 num_cmd;
 	const struct gs_dsi_cmd *cmds;
 };
 
+/* Arrays */
+
 /**
- * GS_DSI_CMD_REV - construct a struct gs_dsi_cmd from inline data
- * @cmd: The command to pack into the struct
+ * GS_DSI_DELAY_REV_CMDLIST - construct a struct gs_dsi_cmd from inline data
  * @delay: The delay to attach to sending the command
  * @rev: The panel revision this applies to, if any
+ * @cmdlist: The binary array of data to be sent to the device
  *
  * Return: struct gs_dsi_cmd holding data necessary to send the command to the
  * panel.
  */
-#define GS_DSI_CMD_REV(cmd, delay, rev)           \
-	{                                         \
-		sizeof(cmd),                      \
-		cmd,                              \
-		delay,                            \
-		(u32)rev,                         \
-	}
-#define GS_DSI_CMD(cmd, delay) GS_DSI_CMD_REV(cmd, delay, PANEL_REV_ALL)
-#define GS_DSI_CMD0_REV(cmd, rev) GS_DSI_CMD_REV(cmd, 0, rev)
-#define GS_DSI_CMD0(cmd) GS_DSI_CMD(cmd, 0)
+#define GS_DSI_DELAY_REV_CMDLIST(delay, rev, cmdlist) \
+{                                                     \
+	sizeof(cmdlist),                              \
+	cmdlist,                                      \
+	delay,                                        \
+	(u32)rev,                                     \
+}
+#define GS_DSI_DELAY_CMDLIST(delay, cmdlist) GS_DSI_DELAY_REV_CMDLIST(delay, PANEL_REV_ALL, cmdlist)
+#define GS_DSI_REV_CMDLIST(rev, cmdlist) GS_DSI_DELAY_REV_CMDLIST(0, rev, cmdlist)
+#define GS_DSI_CMDLIST(cmdlist) GS_DSI_DELAY_REV_CMDLIST(0, PANEL_REV_ALL, cmdlist)
+
+/* Variadic */
 
 /**
- * GS_DSI_CMD_SEQ_DELAY_REV - construct a struct gs_dsi_cmd from inline data
- * @rev: The panel revision this applies to, if any
+ * GS_DSI_DELAY_REV_CMD - construct a struct gs_dsi_cmd from inline data
  * @delay: The delay to attach to sending the command
- * @seq: The sequence of commands to pack into a buffer and send
+ * @rev: The panel revision this applies to, if any
+ * @seq: Sequence of binary data to be sent to the device
+ *
+ * This is functionally the same as the CMDLIST invocation, except that it takes
+ * a variadic list of bytes to pack into the struct gs_dsi_cmd.
  *
  * Return: struct gs_dsi_cmd holding data necessary to send the command to the
  * panel.
  */
-#define GS_DSI_CMD_SEQ_DELAY_REV(rev, delay, seq...) \
-	GS_DSI_CMD_REV(((const u8[]){ seq }), delay, rev)
-#define GS_DSI_CMD_SEQ_DELAY(delay, seq...) GS_DSI_CMD_SEQ_DELAY_REV(PANEL_REV_ALL, delay, seq)
-#define GS_DSI_CMD_SEQ_REV(rev, seq...) GS_DSI_CMD_SEQ_DELAY_REV(rev, 0, seq)
-#define GS_DSI_CMD_SEQ(seq...) GS_DSI_CMD_SEQ_DELAY(0, seq)
+#define GS_DSI_DELAY_REV_CMD(delay, rev, seq...) \
+	GS_DSI_DELAY_REV_CMDLIST(delay, rev, ((const u8[]){ seq }))
+#define GS_DSI_DELAY_CMD(delay, seq...) GS_DSI_DELAY_REV_CMD(delay, PANEL_REV_ALL, seq)
+#define GS_DSI_REV_CMD(rev, seq...) GS_DSI_DELAY_REV_CMD(0, rev, seq)
+#define GS_DSI_CMD(seq...) GS_DSI_DELAY_REV_CMD(0, PANEL_REV_ALL, seq)
 
 /**
- * DEFINE_GS_CMD_SET - Construct a struct gs_dsi_cmd_set from array of commands
+ * DEFINE_GS_CMDSET - Construct a struct gs_dsi_cmdset from array of commands
  * @name: The name of the array of `struct gs_dsi_cmd` members
  *
  * This function does some preprocessor expansion to attach the length of a
- * static array of `struct gs_dsi_cmd`s to that array inside a `gs_dsi_cmd_set`
+ * static array of `struct gs_dsi_cmd`s to that array inside a `gs_dsi_cmdset`
  * data structure. It does this using a particular naming convention, where the
- * input must be named ending in `_cmds` and the output has `_cmd_set` appended
+ * input must be named ending in `_cmds` and the output has `_cmdset` appended
  * to it.
  *
  * Usage example:
@@ -142,15 +149,15 @@ struct gs_dsi_cmd_set {
  *   GS_DSI_CMD_SEQ(0x01, 0x02, 0x03, 0x04),
  *   GS_DSI_CMD0(0xB9),
  * };
- * static DEFINE_GS_CMD_SET(my_panel_turn_on);
+ * static DEFINE_GS_CMDSET(my_panel_turn_on);
  *
  * This expands to:
- * static const struct gs_dsi_cmd_set my_panel_turn_on_cmd_set = {...};
+ * static const struct gs_dsi_cmdset my_panel_turn_on_cmdset = {...};
  *
- * Return: expansion of array of commands into a `struct gs_dsi_cmd_set`;
+ * Return: expansion of array of commands into a `struct gs_dsi_cmdset`;
  */
-#define DEFINE_GS_CMD_SET(name)                        \
-	const struct gs_dsi_cmd_set name##_cmd_set = { \
+#define DEFINE_GS_CMDSET(name)                        \
+	const struct gs_dsi_cmdset name##_cmdset = {   \
 	  .num_cmd = ARRAY_SIZE(name##_cmds),          \
 	  .cmds = name##_cmds                          \
 	}
@@ -173,13 +180,13 @@ struct gs_panel_te2_timing {
  * struct gs_binned_lp - information for binned lp mode.
  * @name: Name of this binned lp mode
  * @bl_threshold: Max brightnes supported by this mode
- * @cmd_set: A dsi command sequence to enter this mode
+ * @cmdset: A dsi command sequence to enter this mode
  * @te2_timing: TE2 signal timing
  */
 struct gs_binned_lp {
 	const char *name;
 	u32 bl_threshold;
-	struct gs_dsi_cmd_set cmd_set;
+	struct gs_dsi_cmdset cmdset;
 	struct gs_panel_te2_timing te2_timing;
 };
 
@@ -187,7 +194,7 @@ struct gs_binned_lp {
  * BINNED_LP_MODE_TIMING - Constructor for struct gs_binned_lp
  * @mode_name: Name to attach to this binned LP mode
  * @bl_thr: Max brightness supported by this mode
- * @cmd_set: Array of gs_dsi_cmds used to enter this mode
+ * @cmdset: Array of gs_dsi_cmds used to enter this mode
  * @rising: TE2 rising time
  * @falling: TE2 falling time
  *
@@ -207,25 +214,25 @@ struct gs_binned_lp {
 /* Command Sets */
 
 /**
- * gs_dsi_send_cmd_set_flags() - Sends a series of dsi commands to the panel
+ * gs_dsi_send_cmdset_flags() - Sends a series of dsi commands to the panel
  * @dsi: pointer to mipi_dsi_device by which to write to panel
- * @cmd_set: Set of commands to send
+ * @cmdset: Set of commands to send
  * @panel_rev: revision identifier for panel to be matched against commands
  * @flags: Any of the Private DSI msg flags to affect command behavior
  */
-void gs_dsi_send_cmd_set_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_cmd_set *cmd_set,
-			       u32 panel_rev, u32 flags);
+void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmdset,
+			      u32 panel_rev, u32 flags);
 
 /**
- * gs_dsi_send_cmd_set() - Sends a series of dsi commands to the panel
+ * gs_dsi_send_cmdset() - Sends a series of dsi commands to the panel
  * @dsi: pointer to mipi_dsi_device by which to write to panel
- * @cmd_set: Set of commands to send
+ * @cmdset: Set of commands to send
  * @panel_rev: revision identifier for panel to be matched against commands
  */
-void gs_dsi_send_cmd_set(struct mipi_dsi_device *dsi, const struct gs_dsi_cmd_set *cmd_set,
-			 u32 panel_rev);
+void gs_dsi_send_cmdset(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmdset,
+			u32 panel_rev);
 
-/* Raw dcs writes */
+/* Raw DCS Writes */
 
 ssize_t gs_dsi_dcs_write_buffer(struct mipi_dsi_device *dsi, const void *data,
 				size_t len, u16 flags);
@@ -261,43 +268,48 @@ static inline int gs_dcs_write_dsc_config(struct device *dev, const struct drm_d
 }
 #endif
 
-#define GS_DCS_WRITE_SEQ_FLAGS(dev, flags, seq...)                           \
-	do {                                                                 \
-		struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);       \
-		u8 d[] = { seq };                                            \
-		gs_dsi_dcs_write_buffer(dsi, d, ARRAY_SIZE(d), flags); \
+/* Arrays */
+
+#define GS_DCS_WRITE_DELAY_FLAGS_CMDLIST(dev, delay_ms, flags, cmdlist)            \
+	do {                                                                       \
+		struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);             \
+		gs_dsi_dcs_write_buffer(dsi, cmdlist, ARRAY_SIZE(cmdlist), flags); \
+		usleep_range(delay_ms * 1000, delay_ms * 1000 + 10);               \
 	} while (0)
+#define GS_DCS_WRITE_DELAY_CMDLIST(dev, delay_ms, cmdlist) \
+	GS_DCS_WRITE_DELAY_FLAGS_CMDLIST(dev, delay_ms, 0, cmdlist)
+#define GS_DCS_WRITE_FLAGS_CMDLIST(dev, flags, cmdlist) \
+	GS_DCS_WRITE_DELAY_FLAGS_CMDLIST(dev, 0, flags, cmdlist)
+#define GS_DCS_WRITE_CMDLIST(dev, cmdlist) \
+	GS_DCS_WRITE_DELAY_FLAGS_CMDLIST(dev, 0, 0, cmdlist)
 
-#define GS_DCS_WRITE_SEQ(dev, seq...) GS_DCS_WRITE_SEQ_FLAGS(dev, 0, seq)
+/* Variadic */
 
-#define GS_DCS_WRITE_SEQ_DELAY(dev, delay_ms, seq...)                \
-	do {                                                         \
-		GS_DCS_WRITE_SEQ(dev, seq);                          \
-		usleep_range(delay_ms * 1000, delay_ms * 1000 + 10); \
+#define GS_DCS_WRITE_DELAY_FLAGS_CMD(dev, delay_ms, flags, seq...)         \
+	do {                                                               \
+		u8 d[] = { seq };                                          \
+		GS_DCS_WRITE_DELAY_FLAGS_CMDLIST(dev, delay_ms, flags, d); \
 	} while (0)
+#define GS_DCS_WRITE_DELAY_CMD(dev, delay_ms, seq...) \
+	GS_DCS_WRITE_DELAY_FLAGS_CMD(dev, delay_ms, 0, seq)
+#define GS_DCS_WRITE_FLAGS_CMD(dev, flags, seq...) \
+	GS_DCS_WRITE_DELAY_FLAGS_CMD(dev, 0, flags, seq)
+#define GS_DCS_WRITE_CMD(dev, seq...) \
+	GS_DCS_WRITE_DELAY_FLAGS_CMD(dev, 0, 0, seq)
 
-#define GS_DCS_WRITE_TABLE_FLAGS(dev, table, flags)                                  \
-	do {                                                                         \
-		struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);               \
-		gs_dsi_dcs_write_buffer(dsi, table, ARRAY_SIZE(table), flags); \
-	} while (0)
+/* Buffered Writes (Arrays) */
 
-#define GS_DCS_WRITE_TABLE(dev, table) GS_DCS_WRITE_TABLE_FLAGS(dev, table, 0)
+#define GS_DCS_BUF_ADD_CMDLIST(dev, cmdlist) \
+	GS_DCS_WRITE_FLAGS_CMDLIST(dev, GS_DSI_MSG_QUEUE, cmdlist)
+#define GS_DCS_BUF_ADD_CMDLIST_AND_FLUSH(dev, cmdlist) \
+	GS_DCS_WRITE_FLAGS_CMDLIST(dev, GS_DSI_MSG_IGNORE_VBLANK, cmdlist)
 
-#define GS_DCS_WRITE_TABLE_DELAY(dev, delay_ms, table)               \
-	do {                                                         \
-		GS_DCS_WRITE_TABLE(dev, table);                      \
-		usleep_range(delay_ms * 1000, delay_ms * 1000 + 10); \
-	} while (0)
+/* Buffered Writes (Variadic) */
 
-#define GS_DCS_BUF_ADD(dev, seq...) GS_DCS_WRITE_SEQ_FLAGS(dev, GS_DSI_MSG_QUEUE, seq)
+#define GS_DCS_BUF_ADD_CMD(dev, seq...) \
+	GS_DCS_WRITE_FLAGS_CMD(dev, GS_DSI_MSG_QUEUE, seq)
+#define GS_DCS_BUF_ADD_CMD_AND_FLUSH(dev, seq...) \
+	GS_DCS_WRITE_FLAGS_CMD(dev, GS_DSI_MSG_IGNORE_VBLANK, seq)
 
-#define GS_DCS_BUF_ADD_SET(dev, set) GS_DCS_WRITE_TABLE_FLAGS(dev, set, GS_DSI_MSG_QUEUE)
-
-#define GS_DCS_BUF_ADD_AND_FLUSH(dev, seq...) \
-	GS_DCS_WRITE_SEQ_FLAGS(dev, GS_DSI_MSG_IGNORE_VBLANK, seq)
-
-#define GS_DCS_BUF_ADD_SET_AND_FLUSH(dev, set) \
-	GS_DCS_WRITE_TABLE_FLAGS(dev, set, GS_DSI_MSG_IGNORE_VBLANK)
 
 #endif // _GS_DCS_HELPER_H_

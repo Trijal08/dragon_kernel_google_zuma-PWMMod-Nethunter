@@ -26,7 +26,7 @@ int gs_panel_disable(struct drm_panel *panel)
 
 	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
-	gs_panel_send_cmd_set(ctx, ctx->desc->off_cmd_set);
+	gs_panel_send_cmdset(ctx, ctx->desc->off_cmdset);
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 	dev_dbg(ctx->dev, "%s\n", __func__);
 	return 0;

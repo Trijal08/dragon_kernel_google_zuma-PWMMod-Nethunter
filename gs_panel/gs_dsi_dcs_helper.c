@@ -21,7 +21,7 @@
 
 #include "gs_panel_internal.h"
 
-void gs_dsi_send_cmd_set_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_cmd_set *cmd_set,
+void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmd_set,
 			       u32 panel_rev, u32 flags)
 {
 	const struct gs_dsi_cmd *c;
@@ -72,14 +72,14 @@ void gs_dsi_send_cmd_set_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_
 			usleep_range(delay_ms * 1000, delay_ms * 1000 + 10);
 	}
 }
-EXPORT_SYMBOL(gs_dsi_send_cmd_set_flags);
+EXPORT_SYMBOL(gs_dsi_send_cmdset_flags);
 
-void gs_dsi_send_cmd_set(struct mipi_dsi_device *dsi, const struct gs_dsi_cmd_set *cmd_set,
+void gs_dsi_send_cmdset(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmd_set,
 			 u32 panel_rev)
 {
-	gs_dsi_send_cmd_set_flags(dsi, cmd_set, panel_rev, 0);
+	gs_dsi_send_cmdset_flags(dsi, cmd_set, panel_rev, 0);
 }
-EXPORT_SYMBOL(gs_dsi_send_cmd_set);
+EXPORT_SYMBOL(gs_dsi_send_cmdset);
 
 ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *data, size_t len,
 			    u16 flags)

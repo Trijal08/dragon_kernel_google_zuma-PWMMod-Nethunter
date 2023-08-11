@@ -396,8 +396,8 @@ struct gs_panel_desc {
 	u32 bl_num_ranges;
 	const struct gs_panel_mode_array *modes;
 	const struct gs_panel_mode_array *lp_modes;
-	const struct gs_dsi_cmd_set *off_cmd_set;
-	const struct gs_dsi_cmd_set *lp_cmd_set;
+	const struct gs_dsi_cmdset *off_cmdset;
+	const struct gs_dsi_cmdset *lp_cmdset;
 	const struct gs_binned_lp *binned_lp;
 	const size_t num_binned_lp;
 	const struct drm_panel_funcs *panel_func;
@@ -632,15 +632,15 @@ u16 gs_panel_get_brightness(struct gs_panel *panel);
 
 /** Command Functions with specific purposes **/
 
-static inline void gs_panel_send_cmd_set_flags(struct gs_panel *ctx,
-					       const struct gs_dsi_cmd_set *cmd_set, u32 flags)
+static inline void gs_panel_send_cmdset_flags(struct gs_panel *ctx,
+					       const struct gs_dsi_cmdset *cmd_set, u32 flags)
 {
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
-	gs_dsi_send_cmd_set_flags(dsi, cmd_set, ctx->panel_rev, flags);
+	gs_dsi_send_cmdset_flags(dsi, cmd_set, ctx->panel_rev, flags);
 }
-static inline void gs_panel_send_cmd_set(struct gs_panel *ctx, const struct gs_dsi_cmd_set *cmd_set)
+static inline void gs_panel_send_cmdset(struct gs_panel *ctx, const struct gs_dsi_cmdset *cmd_set)
 {
-	gs_panel_send_cmd_set_flags(ctx, cmd_set, 0);
+	gs_panel_send_cmdset_flags(ctx, cmd_set, 0);
 }
 static inline int gs_dcs_set_brightness(struct gs_panel *ctx, u16 br)
 {
@@ -701,7 +701,7 @@ int gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi);
  * Creates a debugfs entry for the given cmdset, which will allow its contents
  * to be read for debugging purposes.
  */
-void gs_panel_debugfs_create_cmdset(struct dentry *parent, const struct gs_dsi_cmd_set *cmdset,
+void gs_panel_debugfs_create_cmdset(struct dentry *parent, const struct gs_dsi_cmdset *cmdset,
 				    const char *name);
 
 #define GS_VREFRESH_TO_PERIOD_USEC(rate) DIV_ROUND_UP(USEC_PER_SEC, (rate) ? (rate) : 60)
