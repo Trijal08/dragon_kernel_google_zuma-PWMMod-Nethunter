@@ -1799,9 +1799,9 @@ static int __init lwis_base_device_init(void)
 	return 0;
 
 spi_failure:
-	lwis_spi_device_deinit();
-test_failure:
 	lwis_test_device_deinit();
+test_failure:
+	lwis_dpm_device_deinit();
 dpm_failure:
 	lwis_slc_device_deinit();
 slc_failure:
