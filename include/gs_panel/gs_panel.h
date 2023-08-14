@@ -103,6 +103,12 @@ enum gs_panel_idle_mode {
 	GIDLE_MODE_ON_SELF_REFRESH,
 };
 
+enum gs_acl_mode {
+	ACL_OFF = 0,
+	ACL_NORMAL,
+	ACL_ENHANCED,
+};
+
 /**
  * enum gs_panel_te2_opt - option of TE2 frequency
  * TODO: reword, rethink, refactor (code style for enums relevant)
@@ -125,6 +131,21 @@ enum gs_local_hbm_enable_state {
 	GLOCAL_HBM_DISABLED = 0,
 	GLOCAL_HBM_ENABLED,
 	GLOCAL_HBM_ENABLING,
+};
+
+/**
+ * enum mode_progress_type - the type while mode switch is in progress
+ * @MODE_DONE: mode switch is done
+ * @MODE_RES_IN_PROGRESS: mode switch is in progress, only resolution is changed
+ * @MODE_RR_IN_PROGRESS: mode switch is in progress, only refresh rate is changed
+ * @MODE_RES_AND_RR_IN_PROGRESS: mode switch is in progress, both resolution and
+ *                               refresh rate are changed
+ */
+enum mode_progress_type {
+	MODE_DONE = 0,
+	MODE_RES_IN_PROGRESS,
+	MODE_RR_IN_PROGRESS,
+	MODE_RES_AND_RR_IN_PROGRESS,
 };
 
 struct gs_panel;
@@ -264,6 +285,17 @@ struct gs_panel_funcs {
 	void (*get_panel_rev)(struct gs_panel *gs_panel, u32 id);
 
 	/**
+	 * @set_acl_mode:
+	 *
+	 * This callback is used to implement panel specific logic for acl mode
+	 * enablement. If this is not defined, it means that panel does not
+	 * support acl.
+	 *
+	 * TODO(tknelms): implement default version
+	 */
+	void (*set_acl_mode)(struct gs_panel *gs_panel, enum gs_acl_mode mode);
+
+	/**
 	 * @panel_config:
 	 *
 	 * This callback is used to do one time panel configuration before the
@@ -278,6 +310,14 @@ struct gs_panel_funcs {
 	 * specific functions.
 	 */
 	void (*panel_init)(struct gs_panel *gs_panel);
+
+	/**
+	 * @run_normal_mode_work
+	 *
+	 * This callback is used to run the periodic work for each panel in
+	 * normal mode.
+	 */
+	void (*run_normal_mode_work)(struct gs_panel *gs_panel);
 };
 
 /* PANEL DESC */
@@ -530,6 +570,12 @@ struct gs_panel {
 	struct device_node *touch_dev;
 	struct gs_panel_timestamps timestamps;
 	struct delayed_work idle_work;
+
+	/* Automatic Current Limiting(ACL) */
+	enum gs_acl_mode acl_mode;
+
+	/* current type of mode switch */
+	enum mode_progress_type mode_in_progress;
 
 	/* GHBM (maybe reevaluate */
 	enum gs_hbm_mode hbm_mode;
