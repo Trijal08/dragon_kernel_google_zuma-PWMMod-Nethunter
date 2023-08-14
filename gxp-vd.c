@@ -787,7 +787,7 @@ int gxp_vd_block_ready(struct gxp_virtual_device *vd)
 	if (gxp->after_vd_block_ready) {
 		ret = gxp->after_vd_block_ready(gxp, vd);
 		if (ret) {
-			gxp_dma_domain_detach_device(gxp, vd->domain);
+			gxp_dma_domain_detach_device(gxp, vd->domain, vd->core_list);
 			vd->state = orig_state;
 			return ret;
 		}
@@ -816,7 +816,7 @@ void gxp_vd_block_unready(struct gxp_virtual_device *vd)
 		gxp->before_vd_block_unready(gxp, vd);
 	if (vd->state == GXP_VD_READY)
 		vd->state = GXP_VD_OFF;
-	gxp_dma_domain_detach_device(gxp, vd->domain);
+	gxp_dma_domain_detach_device(gxp, vd->domain, vd->core_list);
 
 	if (vd->is_secure)
 		gxp_pm_idle(gxp);
