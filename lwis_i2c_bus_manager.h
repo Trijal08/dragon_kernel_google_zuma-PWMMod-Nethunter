@@ -71,7 +71,7 @@ struct lwis_i2c_bus_manager {
 	/* Lock to control access to bus transfers */
 	struct mutex i2c_bus_lock;
 	/* Lock to control access to the I2C process queue for this bus */
-	spinlock_t i2c_process_queue_lock;
+	struct mutex i2c_process_queue_lock;
 	/* I2C Bus thread priority */
 	u32 i2c_bus_thread_priority;
 	/* Worker thread */

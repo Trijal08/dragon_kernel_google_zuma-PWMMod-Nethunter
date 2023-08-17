@@ -46,13 +46,6 @@ static struct lwis_device_subclass_operations slc_vops = {
 	.close = NULL,
 };
 
-static struct lwis_event_subscribe_operations slc_subscribe_ops = {
-	.subscribe_event = NULL,
-	.unsubscribe_event = NULL,
-	.notify_event_subscriber = NULL,
-	.release = NULL,
-};
-
 static int lwis_slc_enable(struct lwis_device *lwis_dev)
 {
 #ifdef CONFIG_OF
@@ -255,13 +248,11 @@ static int lwis_slc_device_probe(struct platform_device *plat_dev)
 	/* Allocate SLC device specific data construct */
 	slc_dev = devm_kzalloc(dev, sizeof(struct lwis_slc_device), GFP_KERNEL);
 	if (!slc_dev) {
-		dev_err(dev, "Failed to allocate slc device structure\n");
 		return -ENOMEM;
 	}
 
 	slc_dev->base_dev.type = DEVICE_TYPE_SLC;
 	slc_dev->base_dev.vops = slc_vops;
-	slc_dev->base_dev.subscribe_ops = slc_subscribe_ops;
 	slc_dev->base_dev.plat_dev = plat_dev;
 	slc_dev->base_dev.k_dev = &plat_dev->dev;
 

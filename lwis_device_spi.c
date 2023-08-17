@@ -51,13 +51,6 @@ static struct lwis_device_subclass_operations spi_vops = {
 	.close = NULL,
 };
 
-static struct lwis_event_subscribe_operations spi_subscribe_ops = {
-	.subscribe_event = NULL,
-	.unsubscribe_event = NULL,
-	.notify_event_subscriber = NULL,
-	.release = NULL,
-};
-
 static int lwis_spi_device_enable(struct lwis_device *lwis_dev)
 {
 	return 0;
@@ -117,13 +110,11 @@ static int lwis_spi_device_probe(struct spi_device *spi)
 	/* Allocate SPI device specific data construct */
 	spi_dev = devm_kzalloc(dev, sizeof(*spi_dev), GFP_KERNEL);
 	if (!spi_dev) {
-		dev_err(dev, "Failed to allocate spi device structure\n");
 		return -ENOMEM;
 	}
 
 	spi_dev->base_dev.type = DEVICE_TYPE_SPI;
 	spi_dev->base_dev.vops = spi_vops;
-	spi_dev->base_dev.subscribe_ops = spi_subscribe_ops;
 	spi_dev->base_dev.plat_dev = NULL;
 	spi_dev->base_dev.k_dev = &spi->dev;
 	spi_dev->spi = spi;

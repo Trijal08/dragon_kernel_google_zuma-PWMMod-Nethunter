@@ -20,6 +20,7 @@
 #include "lwis_device.h"
 #include "lwis_device_slc.h"
 #include "lwis_platform_dma.h"
+#include "lwis_trace.h"
 
 static struct lwis_buffer_enrollment_list *enrollment_list_find(struct lwis_client *client,
 								dma_addr_t dma_vaddr)
@@ -39,7 +40,6 @@ static struct lwis_buffer_enrollment_list *enrollment_list_create(struct lwis_cl
 	struct lwis_buffer_enrollment_list *enrollment_list =
 		kmalloc(sizeof(struct lwis_buffer_enrollment_list), GFP_KERNEL);
 	if (!enrollment_list) {
-		dev_err(client->lwis_dev->dev, "Cannot allocate new entrollment list\n");
 		return NULL;
 	}
 	enrollment_list->vaddr = dma_vaddr;
@@ -176,6 +176,7 @@ int lwis_buffer_enroll(struct lwis_client *lwis_client, struct lwis_enrolled_buf
 	struct list_head *it_enrollment;
 	struct lwis_enrolled_buffer *old_buffer;
 	char buffer_name[LWIS_MAX_NAME_STRING_LEN];
+	char trace_name[LWIS_MAX_NAME_STRING_LEN];
 
 	if (!lwis_client) {
 		pr_err("Enroll: LWIS client is NULL\n");
@@ -220,8 +221,12 @@ int lwis_buffer_enroll(struct lwis_client *lwis_client, struct lwis_enrolled_buf
 		return PTR_ERR(buffer->dma_buf_attachment);
 	}
 
+	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "lwis:buf_enroll_%s",
+		  lwis_client->lwis_dev->name);
+	LWIS_ATRACE_FUNC_BEGIN(lwis_client->lwis_dev, trace_name);
 	buffer->sg_table =
 		dma_buf_map_attachment(buffer->dma_buf_attachment, buffer->dma_direction);
+	LWIS_ATRACE_FUNC_END(lwis_client->lwis_dev, trace_name);
 	if (IS_ERR_OR_NULL(buffer->sg_table)) {
 		dev_err(lwis_client->lwis_dev->dev,
 			"Could not map dma attachment for fd: %d (errno: %ld)", buffer->info.fd,
@@ -274,6 +279,8 @@ err:
 
 int lwis_buffer_disenroll(struct lwis_client *lwis_client, struct lwis_enrolled_buffer *buffer)
 {
+	char trace_name[LWIS_MAX_NAME_STRING_LEN];
+
 	if (!lwis_client) {
 		pr_err("Disenroll: LWIS client is NULL\n");
 		return -ENODEV;
@@ -283,12 +290,16 @@ int lwis_buffer_disenroll(struct lwis_client *lwis_client, struct lwis_enrolled_
 		return -EINVAL;
 	}
 
+	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "lwis:buf_disenroll_%s",
+		  lwis_client->lwis_dev->name);
+	LWIS_ATRACE_FUNC_BEGIN(lwis_client->lwis_dev, trace_name);
 	lwis_platform_dma_buffer_unmap(lwis_client->lwis_dev, buffer->dma_buf_attachment,
 				       buffer->info.dma_vaddr);
 	dma_buf_unmap_attachment(buffer->dma_buf_attachment, buffer->sg_table,
 				 buffer->dma_direction);
 	dma_buf_detach(buffer->dma_buf, buffer->dma_buf_attachment);
 	dma_buf_put(buffer->dma_buf);
+	LWIS_ATRACE_FUNC_END(lwis_client->lwis_dev, trace_name);
 	/* Delete the node from the hash table */
 	list_del(&buffer->list_node);
 	if (list_empty(&buffer->enrollment_list->list)) {
