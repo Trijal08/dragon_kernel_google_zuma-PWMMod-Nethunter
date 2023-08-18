@@ -180,7 +180,7 @@ static u8 panel_get_cmd_type(const struct gs_dsi_cmd *cmd)
 
 static int panel_cmdset_show(struct seq_file *m, void *data)
 {
-	const struct gs_dsi_cmd_set *cmdset = m->private;
+	const struct gs_dsi_cmdset *cmdset = m->private;
 	const struct gs_dsi_cmd *cmd;
 	u8 type;
 	int i;
@@ -200,7 +200,7 @@ static int panel_cmdset_show(struct seq_file *m, void *data)
 }
 DEFINE_SHOW_ATTRIBUTE(panel_cmdset);
 
-void gs_panel_debugfs_create_cmdset(struct dentry *parent, const struct gs_dsi_cmd_set *cmdset,
+void gs_panel_debugfs_create_cmdset(struct dentry *parent, const struct gs_dsi_cmdset *cmdset,
 				    const char *name)
 {
 	if (!cmdset)
@@ -286,9 +286,9 @@ static int debugfs_add_cmdset_folder(struct gs_panel *ctx, struct gs_panel_debug
 		return -EFAULT;
 	}
 
-	gs_panel_debugfs_create_cmdset(entries->cmdset, desc->off_cmd_set, "off");
+	gs_panel_debugfs_create_cmdset(entries->cmdset, desc->off_cmdset, "off");
 
-	if (desc->lp_modes && desc->lp_cmd_set) {
+	if (desc->lp_modes && desc->lp_cmdset) {
 		struct dentry *lpd;
 		int i;
 
@@ -302,12 +302,12 @@ static int debugfs_add_cmdset_folder(struct gs_panel *ctx, struct gs_panel_debug
 			for (i = 0; i < desc->num_binned_lp; i++) {
 				const struct gs_binned_lp *b = &desc->binned_lp[i];
 
-				gs_panel_debugfs_create_cmdset(lpd, &b->cmd_set, b->name);
+				gs_panel_debugfs_create_cmdset(lpd, &b->cmdset, b->name);
 			}
 		} else {
 			lpd = entries->cmdset;
 		}
-		gs_panel_debugfs_create_cmdset(lpd, desc->lp_cmd_set, "lp_entry");
+		gs_panel_debugfs_create_cmdset(lpd, desc->lp_cmdset, "lp_entry");
 	}
 
 	return 0;
