@@ -2323,15 +2323,15 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 	gti->offload.caps.continuous_reporting = true;
 	gti->offload.caps.noise_reporting = false;
 	gti->offload.caps.cancel_reporting =
-		of_property_read_bool(np, "goog,offload-caps-cancel-reporting");
+		!of_property_read_bool(np, "goog,offload-caps-cancel-reporting-disabled");
 	gti->offload.caps.size_reporting = true;
 	gti->offload.caps.filter_grip = true;
 	gti->offload.caps.filter_palm = true;
 	gti->offload.caps.coord_filter = gti->coord_filter_enabled &&
 		of_property_read_bool(np, "goog,offload-caps-coord-filter");
 	gti->offload.caps.num_sensitivity_settings = 1;
-	gti->offload.caps.rotation_reporting = of_property_read_bool(np,
-		"goog,offload-caps-rotation-reporting");
+	gti->offload.caps.rotation_reporting =
+		!of_property_read_bool(np, "goog,offload-caps-rotation-reporting-disabled");
 
 	gti->offload.hcallback = (void *)gti;
 	gti->offload.report_cb = goog_offload_input_report;
