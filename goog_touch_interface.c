@@ -2529,15 +2529,17 @@ int gti_charger_state_change(struct notifier_block *nb, unsigned long action,
 
 		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
 						&present_val);
-		if (ret < 0)
+		if (ret < 0) {
 			GOOG_DBG(gti,
 				 "Error while getting power supply property: %d!\n",
 				 ret);
-		else if ((u8)present_val.intval != gti->charger_state) {
+		} else if ((u8)present_val.intval != gti->charger_state) {
 			/* Note: the expected values for present_val.intval are
 			 * 0 and 1. Cast to unsigned byte to ensure the
 			 * comparison is handled in the same variable data type.
 			 */
+			GOOG_INFO(gti, "Charger_state changed from %d to %d\n",
+				  gti->charger_state, present_val.intval);
 			gti->context_changed.charger_state = 1;
 			gti->charger_state = (u8)present_val.intval;
 		}
