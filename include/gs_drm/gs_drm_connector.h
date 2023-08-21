@@ -51,6 +51,7 @@ struct gs_drm_connector_properties {
 	struct drm_property *mipi_sync;
 	struct drm_property *panel_orientation;
 	struct drm_property *vrr_switch_duration;
+	struct drm_property *refresh_on_lp;
 };
 
 struct gs_display_partial {
