@@ -2418,7 +2418,7 @@ void goog_offload_input_report(void *handle,
 	unsigned long slot_bit_active = 0;
 	char trace_tag[128];
 	ktime_t ktime = ktime_get();
-	ktime_t *input_ktime = goog_input_get_timestamp(gti);
+	ktime_t *input_ktime;
 
 	scnprintf(trace_tag, sizeof(trace_tag),
 		"%s: IDX=%lld IN_TS=%lld TS=%lld DELTA=%lld ns.\n",
@@ -2427,6 +2427,9 @@ void goog_offload_input_report(void *handle,
 		ktime_to_ns(ktime_sub(ktime, report->timestamp)));
 	ATRACE_BEGIN(trace_tag);
 
+	goog_input_lock(gti);
+
+	input_ktime = goog_input_get_timestamp(gti);
 	if (input_ktime &&
 		ktime_before(report->timestamp, input_ktime[INPUT_CLK_MONO])) {
 		GOOG_WARN(gti, "Drop obsolete input(IDX=%lld IN_TS=%lld TS=%lld DELTA=%lld ns)!\n",
@@ -2434,11 +2437,11 @@ void goog_offload_input_report(void *handle,
 			ktime_to_ns(report->timestamp),
 			ktime_to_ns(input_ktime[INPUT_CLK_MONO]),
 			ktime_to_ns(ktime_sub(input_ktime[INPUT_CLK_MONO], report->timestamp)));
+		goog_input_unlock(gti);
 		ATRACE_END();
 		return;
 	}
 
-	goog_input_lock(gti);
 	input_set_timestamp(gti->vendor_input_dev, report->timestamp);
 	for (i = 0; i < MAX_SLOTS; i++) {
 		if (report->coords[i].status != COORD_STATUS_INACTIVE) {
