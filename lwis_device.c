@@ -686,6 +686,7 @@ int lwis_dev_process_power_sequence(struct lwis_device *lwis_dev,
 						}
 					}
 				}
+				gpios_info->hold_dev = lwis_dev->k_dev;
 				gpios_info->gpios = gpios;
 				set_value = 1;
 			} else {
