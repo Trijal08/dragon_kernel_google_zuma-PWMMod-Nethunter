@@ -315,7 +315,8 @@ int gs_drm_connector_create_properties(struct drm_connector *connector)
 	if (IS_ERR(p->vrr_switch_duration))
 		return PTR_ERR(p->vrr_switch_duration);
 
-	p->refresh_on_lp = drm_property_create_bool(dev, DRM_MODE_PROP_IMMUTABLE, "refresh_on_lp");
+	p->refresh_on_lp =
+		drm_property_create_bool(drm_dev, DRM_MODE_PROP_IMMUTABLE, "refresh_on_lp");
 	if (IS_ERR(p->refresh_on_lp))
 		return PTR_ERR(p->refresh_on_lp);
 
