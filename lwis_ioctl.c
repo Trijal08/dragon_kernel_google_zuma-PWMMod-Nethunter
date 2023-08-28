@@ -1906,9 +1906,11 @@ static int lwis_ioctl_handle_cmd_pkt(struct lwis_client *lwis_client,
 		     header.cmd_id == LWIS_CMD_ID_REG_IO ||
 		     header.cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT ||
 		     header.cmd_id == LWIS_CMD_ID_TRANSACTION_REPLACE ||
-		     header.cmd_id == LWIS_CMD_ID_PERIODIC_IO_SUBMIT)) {
+		     header.cmd_id == LWIS_CMD_ID_PERIODIC_IO_SUBMIT ||
+		     header.cmd_id == LWIS_CMD_ID_EVENT_CONTROL_SET)) {
 			dev_err_ratelimited(lwis_dev->dev,
-					    "Unsupported IOCTL on disabled device.\n");
+					    "Unsupported cmd_id(0x%x) on a disabled device.\n",
+					    header.cmd_id);
 			header.ret_code = -EBADFD;
 			return copy_pkt_to_user(lwis_dev, user_msg, (void *)&header,
 						sizeof(header));
