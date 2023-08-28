@@ -4007,6 +4007,11 @@ static irqreturn_t fts_interrupt_handler(int irq, void *handle)
 		for (count = 0; count < events_remaining + 1; count++) {
 			evt_data = &data[count * FIFO_EVENT_SIZE];
 
+			if (!VALID_EVENT_TYPE(evt_data[0])) {
+				dev_err(info->dev, "Got invalid event type: %*ph\n", 8, evt_data);
+				goto exit;
+			}
+
 			switch (GET_EVENT_TYPE(evt_data[0])) {
 			case EVT_ID_CONTROLLER_READY:
 			case EVT_ID_ERROR:
