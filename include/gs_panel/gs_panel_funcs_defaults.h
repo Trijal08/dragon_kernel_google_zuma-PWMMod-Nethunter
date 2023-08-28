@@ -39,4 +39,32 @@ struct gs_panel;
  */
 void gs_panel_get_panel_rev(struct gs_panel *ctx, u8 rev);
 
+/**
+ * gs_panel_read_slsi_ddic_id - Callback for reading the panel id.
+ *
+ * This will read the panel id information (serial number) from the SLSI_DDIC_ID
+ * reg. It is meant to be used on SLSI ddic's.
+ *
+ * @ctx: Handle for gs_panel private data. In particular, it will update the
+ *       `panel_id` member variable of this struct.
+ * Return: 0 on success, negative value on error.
+ */
+int gs_panel_read_slsi_ddic_id(struct gs_panel *ctx);
+
+/**
+ * gs_panel_read_id - Callback for reading the panel id.
+ *
+ * This will read the panel id information from the register referred to by
+ * the panel_id_reg member of the gs_panel_desc, or the PANEL_ID_REG_DEFAULT
+ * if no data exists for that register.
+ *
+ * NOTE: this function is deprecated; for new work, prefer use of
+ * gs_panel_read_slsi_ddic_id, or a more vendor-applicable method.
+ *
+ * @ctx: Handle for gs_panel private data. In particular, it will update the
+ *       `panel_id` member variable of this struct.
+ * Return: 0 on success, negative value on error.
+ */
+int gs_panel_read_id(struct gs_panel *ctx);
+
 #endif // _GS_PANEL_FUNCS_DEFAULTS_H_

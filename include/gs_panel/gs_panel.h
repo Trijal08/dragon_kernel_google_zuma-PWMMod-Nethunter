@@ -332,6 +332,14 @@ struct gs_panel_funcs {
 	void (*get_panel_rev)(struct gs_panel *gs_panel, u32 id);
 
 	/**
+	 * @read_id:
+	 *
+	 * This callback is used to read the panel's id. The id is unique for
+	 * each panel.
+	 */
+	int (*read_id)(struct gs_panel *gs_panel);
+
+	/**
 	 * @set_acl_mode:
 	 *
 	 * This callback is used to implement panel specific logic for acl mode

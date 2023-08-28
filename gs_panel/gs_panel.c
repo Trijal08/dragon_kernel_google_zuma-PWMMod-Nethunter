@@ -24,6 +24,7 @@
 
 #include "gs_drm/gs_drm_connector.h"
 #include "gs_panel_internal.h"
+#include "gs_panel/gs_panel_funcs_defaults.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/panel_trace.h>
@@ -540,14 +541,12 @@ int gs_panel_first_enable(struct gs_panel *ctx)
 		}
 	}
 
-	/*TODO(tknelms)
-	if (funcs && funcs->read_id)
+	if (gs_panel_has_func(ctx, read_id))
 		ret = funcs->read_id(ctx);
 	else
 		ret = gs_panel_read_id(ctx);
 	if (ret)
 		return ret;
-	*/
 
 	if (funcs && funcs->panel_init)
 		funcs->panel_init(ctx);
