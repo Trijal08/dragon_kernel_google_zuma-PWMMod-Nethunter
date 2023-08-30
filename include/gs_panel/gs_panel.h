@@ -184,10 +184,23 @@ struct gs_panel_funcs {
 	int (*set_brightness)(struct gs_panel *gs_panel, u16 br);
 
 	/**
+	 * @set_lp_mode:
+	 *
+	 * This callback is used to handle command sequences to enter low power modes.
+	 *
+	 * mode: LP mode to which to switch
+	 *
+	 * TODO(b/279521692): implementation
+	 */
+	void (*set_lp_mode)(struct gs_panel *gs_panel, const struct gs_panel_mode *mode);
+
+	/**
 	 * @set_nolp_mode:
 	 *
 	 * This callback is used to handle command sequences to exit from low power
 	 * modes.
+	 *
+	 * mode: mode to which to switch
 	 *
 	 * TODO(b/279521692): implementation
 	 */
@@ -203,6 +216,19 @@ struct gs_panel_funcs {
 	 * TODO(b/279521612): implementation
 	 */
 	void (*set_hbm_mode)(struct gs_panel *gs_panel, enum gs_hbm_mode mode);
+
+	/**
+	 * @set_dimming:
+	 *
+	 * This callback is used to implement panel specific logic for dimming mode
+	 * enablement. If this is not defined, it means that panel does not support
+	 * dimming.
+	 *
+	 * dimming_on: true for dimming enabled, false for dimming disabled
+	 *
+	 * TODO(b/279520614): implementation
+	 */
+	void (*set_dimming)(struct gs_panel *gs_panel, bool dimming_on);
 
 	/**
 	 * @set_local_hbm_mode:
@@ -228,6 +254,18 @@ struct gs_panel_funcs {
 	void (*mode_set)(struct gs_panel *gs_panel, const struct gs_panel_mode *mode);
 
 	/**
+	 * @update_te2:
+	 *
+	 * This callback is used to update the TE2 signal via DCS commands.
+	 * This should be called when the display state is changed between
+	 * normal and LP modes, or the refresh rate and LP brightness are
+	 * changed.
+	 *
+	 * TODO(b/279521893): implementation
+	 */
+	void (*update_te2)(struct gs_panel *gs_panel);
+
+	/**
 	 * @atomic_check
 	 *
 	 * This optional callback happens in atomic check phase, it gives a chance to panel driver
@@ -238,6 +276,15 @@ struct gs_panel_funcs {
 	 * TODO(b/279520499): implementation
 	 */
 	int (*atomic_check)(struct gs_panel *gs_panel, struct drm_atomic_state *state);
+
+	/**
+	 * @commit_done
+	 *
+	 * Called after atomic commit flush has completed but transfer may not have started yet
+	 *
+	 * TODO(b/279520499): implementation
+	 */
+	void (*commit_done)(struct gs_panel *gs_panel);
 
 	/**
 	 * @is_mode_seamless:
@@ -310,6 +357,15 @@ struct gs_panel_funcs {
 	 * specific functions.
 	 */
 	void (*panel_init)(struct gs_panel *gs_panel);
+
+	/**
+	 * @get_te_usec
+	 *
+	 * This callback is used to get current TE pulse time.
+	 *
+	 * TODO(b/279521893): implementation
+	 */
+	unsigned int (*get_te_usec)(struct gs_panel *gs_panel, const struct gs_panel_mode *pmode);
 
 	/**
 	 * @run_normal_mode_work
