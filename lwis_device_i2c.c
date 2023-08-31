@@ -119,19 +119,19 @@ static int lwis_i2c_device_disable(struct lwis_device *lwis_dev)
 		return ret;
 	}
 #endif
-
+	mutex_lock(i2c_dev->group_i2c_lock);
 	if (!lwis_i2c_dev_is_in_use(lwis_dev)) {
 		/* Disable the I2C bus */
-		mutex_lock(i2c_dev->group_i2c_lock);
 		LWIS_ATRACE_FUNC_BEGIN(lwis_dev, "lwis_i2c_device_disable");
 		ret = lwis_i2c_set_state(i2c_dev, I2C_OFF_STRING);
-		mutex_unlock(i2c_dev->group_i2c_lock);
 		LWIS_ATRACE_FUNC_END(lwis_dev, "lwis_i2c_device_disable");
 		if (ret) {
 			dev_err(lwis_dev->dev, "Error disabling i2c bus (%d)\n", ret);
+			mutex_unlock(i2c_dev->group_i2c_lock);
 			return ret;
 		}
 	}
+	mutex_unlock(i2c_dev->group_i2c_lock);
 
 	return 0;
 }

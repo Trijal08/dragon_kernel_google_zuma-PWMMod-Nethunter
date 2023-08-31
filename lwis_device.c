@@ -1398,7 +1398,6 @@ bool lwis_i2c_dev_is_in_use(struct lwis_device *lwis_dev)
 	}
 
 	i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
-	mutex_lock(&core.lock);
 	list_for_each_entry (lwis_dev_it, &core.lwis_dev_list, dev_list) {
 		if (lwis_dev_it->type == DEVICE_TYPE_I2C) {
 			struct lwis_i2c_device *i2c_dev_it =
@@ -1406,12 +1405,10 @@ bool lwis_i2c_dev_is_in_use(struct lwis_device *lwis_dev)
 			/* Look up if i2c bus are still in use by other device*/
 			if ((i2c_dev_it->state_pinctrl == i2c_dev->state_pinctrl) &&
 			    (i2c_dev_it != i2c_dev) && lwis_dev_it->enabled) {
-				mutex_unlock(&core.lock);
 				return true;
 			}
 		}
 	}
-	mutex_unlock(&core.lock);
 	return false;
 }
 
