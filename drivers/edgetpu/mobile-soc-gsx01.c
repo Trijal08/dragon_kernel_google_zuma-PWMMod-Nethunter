@@ -235,7 +235,6 @@ static void gsx01_deactivate_bts_scenario(struct edgetpu_dev *etdev)
 		return;
 	mutex_lock(&soc_data->scenario_lock);
 	if (!soc_data->scenario_count) {
-		etdev_warn(etdev, "Unbalanced bts deactivate\n");
 		mutex_unlock(&soc_data->scenario_lock);
 		return;
 	}
