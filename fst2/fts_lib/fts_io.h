@@ -19,11 +19,6 @@
 #ifndef _LINUX_FTS_IO_H_
 #define _LINUX_FTS_IO_H_
 
-#ifdef pr_fmt
-#undef pr_fmt
-#define pr_fmt(fmt) "[ FTS ] " fmt
-#endif
-
 /*#define I2C_INTERFACE*/
 #ifdef I2C_INTERFACE
 #define I2C_SAD				0x49	/* /< slave address of the IC */
