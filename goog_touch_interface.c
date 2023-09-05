@@ -437,6 +437,10 @@ static ssize_t fw_palm_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t fw_ver_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t gesture_config_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+static ssize_t gesture_config_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t irq_enabled_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t irq_enabled_store(struct device *dev,
@@ -491,6 +495,7 @@ static DEVICE_ATTR_RW(fw_grip);
 static DEVICE_ATTR_RO(fw_name);
 static DEVICE_ATTR_RW(fw_palm);
 static DEVICE_ATTR_RO(fw_ver);
+static DEVICE_ATTR_RW(gesture_config);
 static DEVICE_ATTR_RW(irq_enabled);
 static DEVICE_ATTR_RW(mf_mode);
 static DEVICE_ATTR_RW(offload_enabled);
@@ -514,6 +519,7 @@ static struct attribute *goog_attributes[] = {
 	&dev_attr_fw_name.attr,
 	&dev_attr_fw_palm.attr,
 	&dev_attr_fw_ver.attr,
+	&dev_attr_gesture_config.attr,
 	&dev_attr_irq_enabled.attr,
 	&dev_attr_mf_mode.attr,
 	&dev_attr_offload_enabled.attr,
@@ -822,6 +828,78 @@ static ssize_t fw_ver_show(struct device *dev,
 	GOOG_LOGI(gti, "%s", buf);
 
 	return buf_idx;
+}
+
+static ssize_t gesture_config_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t buf_idx = 0;
+	int i = 0;
+	struct goog_touch_interface *gti = dev_get_drvdata(dev);
+
+	for (i = 0; i < GTI_GESTURE_PARAMS_MAX; i++) {
+		buf_idx += sysfs_emit_at(buf, buf_idx, "%s %u\n",
+				gesture_params_list[i],
+				gti->cmd.gesture_config_cmd.params[i]);
+	}
+
+	return buf_idx;
+}
+static ssize_t gesture_config_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	char *p, *temp_buf, *token;
+	u16 config = 0;
+	int retval = 0;
+	int i = 0;
+	struct goog_touch_interface *gti = dev_get_drvdata(dev);
+
+	temp_buf = kstrdup(buf, GFP_KERNEL);
+	if (!temp_buf)
+		return -ENOMEM;
+
+	goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS, false);
+
+	p = temp_buf;
+
+	token = strsep(&p, " ");
+
+	if (!token || *token == '\0' || !p) {
+		retval = -EINVAL;
+		goto exit;
+	}
+
+	if (kstrtou16(p, 10, &config)) {
+		retval = -EINVAL;
+		goto exit;
+	}
+
+	memset(gti->cmd.gesture_config_cmd.updating_params, 0, GTI_GESTURE_PARAMS_MAX);
+
+	/* Set gesture parameters */
+	for (i = 0; i < GTI_GESTURE_PARAMS_MAX; i++) {
+		if (!strncmp(token, gesture_params_list[i], strlen(gesture_params_list[i]))) {
+			gti->cmd.gesture_config_cmd.params[i] = config;
+			gti->cmd.gesture_config_cmd.updating_params[i] = 1;
+			retval = goog_process_vendor_cmd(gti, GTI_CMD_SET_GESTURE_CONFIG);
+			if (retval) {
+				GOOG_ERR(gti, "failed to set param %s, ret = %d!\n",
+						gesture_params_list[i], retval);
+				retval = -EBADRQC;
+				goto exit;
+			}
+			gti->gesture_config_enabled = true;
+			retval = size;
+		}
+	}
+
+	if (retval == 0)
+		retval = -EINVAL;
+
+exit:
+	goog_pm_wake_unlock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS);
+	kfree(temp_buf);
+	return retval;
 }
 
 static ssize_t irq_enabled_show(struct device *dev,
@@ -1905,6 +1983,9 @@ int goog_process_vendor_cmd(struct goog_touch_interface *gti, enum gti_cmd_type 
 		ret = gti->options.set_coord_filter_enabled(private_data,
 				&gti->cmd.coord_filter_cmd);
 		break;
+	case GTI_CMD_SET_GESTURE_CONFIG:
+		ret = gti->options.set_gesture_config(private_data, &gti->cmd.gesture_config_cmd);
+		break;
 	case GTI_CMD_SET_GRIP_MODE:
 		GOOG_INFO(gti, "Set firmware grip %s",
 				gti->cmd.grip_cmd.setting == GTI_GRIP_ENABLE ?
@@ -2331,6 +2412,7 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 {
 	int error;
 	int ret = 0;
+	int i = 0;
 	bool enabled = false;
 
 	error = goog_pm_wake_lock_nosync(gti, GTI_PM_WAKELOCK_TYPE_FW_SETTINGS, true);
@@ -2402,6 +2484,18 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_REPORT_RATE);
 		if (ret != 0)
 			GOOG_ERR(gti, "Failed to set report rate!\n");
+	}
+
+	/* Update LPTW gesture configs. */
+	if (gti->gesture_config_enabled) {
+		gti->cmd.gesture_config_cmd.params[GTI_GESTURE_TYPE] = GTI_GESTURE_DISABLE;
+
+		for (i = GTI_LPTW_MIN_X; i < GTI_GESTURE_PARAMS_MAX; i++)
+			gti->cmd.gesture_config_cmd.updating_params[i] = 1;
+
+		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_GESTURE_CONFIG);
+		if (ret != 0)
+			GOOG_ERR(gti, "Failed to set gesture configs!\n");
 	}
 
 	error = goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_FW_SETTINGS);
@@ -3210,6 +3304,12 @@ static int goog_set_coord_filter_enabled_nop(
 	return -ESRCH;
 }
 
+static int goog_set_gesture_config_nop(
+		void *private_data, struct gti_gesture_config_cmd *cmd)
+{
+	return -ESRCH;
+}
+
 static int goog_set_grip_mode_nop(
 		void *private_data, struct gti_grip_cmd *cmd)
 {
@@ -3363,6 +3463,7 @@ void goog_init_options(struct goog_touch_interface *gti,
 	gti->options.selftest = goog_selftest_nop;
 	gti->options.set_continuous_report = goog_set_continuous_report_nop;
 	gti->options.set_coord_filter_enabled = goog_set_coord_filter_enabled_nop;
+	gti->options.set_gesture_config = goog_set_gesture_config_nop;
 	gti->options.set_grip_mode = goog_set_grip_mode_nop;
 	gti->options.set_heatmap_enabled = goog_set_heatmap_enabled_nop;
 	gti->options.set_irq_mode = goog_set_irq_mode_nop;
@@ -3414,6 +3515,8 @@ void goog_init_options(struct goog_touch_interface *gti,
 			gti->options.set_continuous_report = options->set_continuous_report;
 		if (options->set_coord_filter_enabled)
 			gti->options.set_coord_filter_enabled = options->set_coord_filter_enabled;
+		if (options->set_gesture_config)
+			gti->options.set_gesture_config = options->set_gesture_config;
 		if (options->set_grip_mode)
 			gti->options.set_grip_mode = options->set_grip_mode;
 		if (options->set_heatmap_enabled)

@@ -79,6 +79,7 @@ enum gti_cmd_type : u32 {
 	GTI_CMD_SET_OPS_START = 0x400,
 	GTI_CMD_SET_CONTINUOUS_REPORT,
 	GTI_CMD_SET_COORD_FILTER_ENABLED,
+	GTI_CMD_SET_GESTURE_CONFIG,
 	GTI_CMD_SET_GRIP_MODE,
 	GTI_CMD_SET_HEATMAP_ENABLED,
 	GTI_CMD_SET_IRQ_MODE,
@@ -264,11 +265,85 @@ enum gti_fw_status : u32 {
 	GTI_FW_STATUS_NOISE_MODE,
 };
 
+enum gti_gesture_params : u8 {
+	GTI_STTW_MIN_X = 0,
+	GTI_STTW_MAX_X,
+	GTI_STTW_MIN_Y,
+	GTI_STTW_MAX_Y,
+	GTI_STTW_MIN_FRAME,
+	GTI_STTW_MAX_FRAME,
+	GTI_STTW_JITTER,
+	GTI_STTW_MAX_TOUCH_SIZE,
+
+	GTI_LPTW_MIN_X,
+	GTI_LPTW_MAX_X,
+	GTI_LPTW_MIN_Y,
+	GTI_LPTW_MAX_Y,
+	GTI_LPTW_MIN_FRAME,
+	GTI_LPTW_JITTER,
+	GTI_LPTW_MAX_TOUCH_SIZE,
+	GTI_LPTW_MARGINAL_MIN_X,
+	GTI_LPTW_MARGINAL_MAX_X,
+	GTI_LPTW_MARGINAL_MIN_Y,
+	GTI_LPTW_MARGINAL_MAX_Y,
+	GTI_LPTW_MONITOR_CH_MIN_TX,
+	GTI_LPTW_MONITOR_CH_MAX_TX,
+	GTI_LPTW_MONITOR_CH_MIN_RX,
+	GTI_LPTW_MONITOR_CH_MAX_RX,
+	GTI_LPTW_NODE_COUNT_MIN,
+	GTI_LPTW_MOTION_BOUNDARY,
+
+	GTI_GESTURE_TYPE,
+
+	GTI_GESTURE_PARAMS_MAX,
+};
+
+enum gti_gesture_type : u8 {
+	GTI_GESTURE_DISABLE = 0,
+	GTI_GESTURE_STTW,
+	GTI_GESTURE_LPTW,
+	GTI_GESTURE_STTW_AND_LPTW,
+	GTI_GESTURE_TYPE_MAX,
+};
+
 enum gti_noise_mode_level : u8 {
 	GTI_NOISE_MODE_EXIT = 0,
 	GTI_NOISE_MODE_LEVEL1,
 	GTI_NOISE_MODE_LEVEL2,
 	GTI_NOISE_MODE_LEVEL3,
+};
+
+/*-----------------------------------------------------------------------------
+ * const char.
+ */
+
+const static char *gesture_params_list[GTI_GESTURE_PARAMS_MAX] = {
+	"sttw_min_x",
+	"sttw_max_x",
+	"sttw_min_y",
+	"sttw_max_y",
+	"sttw_min_frame",
+	"sttw_max_frame",
+	"sttw_jitter",
+	"sttw_max_touch_size",
+	"lptw_min_x",
+	"lptw_max_x",
+	"lptw_min_y",
+	"lptw_max_y",
+	"lptw_min_frame",
+	"lptw_jitter",
+	"lptw_max_touch_size",
+	"lptw_marginal_min_x",
+	"lptw_marginal_max_x",
+	"lptw_marginal_min_y",
+	"lptw_marginal_max_y",
+	"lptw_monitor_ch_min_tx",
+	"lptw_monitor_ch_max_tx",
+	"lptw_monitor_ch_min_rx",
+	"lptw_monitor_ch_max_rx",
+	"lptw_node_count_min",
+	"lptw_motion_boundary",
+	"gesture_type",
 };
 
 /*-----------------------------------------------------------------------------
@@ -357,6 +432,11 @@ struct gti_fw_version_cmd {
 	char buffer[0x200];
 };
 
+struct gti_gesture_config_cmd {
+	u8 updating_params[GTI_GESTURE_PARAMS_MAX];
+	u16 params[GTI_GESTURE_PARAMS_MAX];
+};
+
 struct gti_grip_cmd {
 	enum gti_grip_setting setting;
 };
@@ -439,6 +519,7 @@ struct gti_union_cmd_data {
 	struct gti_display_state_cmd display_state_cmd;
 	struct gti_display_vrefresh_cmd display_vrefresh_cmd;
 	struct gti_fw_version_cmd fw_version_cmd;
+	struct gti_gesture_config_cmd gesture_config_cmd;
 	struct gti_grip_cmd grip_cmd;
 	struct gti_heatmap_cmd heatmap_cmd;
 	struct gti_irq_cmd irq_cmd;
@@ -519,6 +600,7 @@ struct gti_optional_configuration {
 	int (*selftest)(void *private_data, struct gti_selftest_cmd *cmd);
 	int (*set_continuous_report)(void *private_data, struct gti_continuous_report_cmd *cmd);
 	int (*set_coord_filter_enabled)(void *private_data, struct gti_coord_filter_cmd *cmd);
+	int (*set_gesture_config)(void *private_data, struct gti_gesture_config_cmd *cmd);
 	int (*set_grip_mode)(void *private_data, struct gti_grip_cmd *cmd);
 	int (*set_heatmap_enabled)(void *private_data, struct gti_heatmap_cmd *cmd);
 	int (*set_irq_mode)(void *private_data, struct gti_irq_cmd *cmd);
@@ -705,6 +787,7 @@ struct goog_touch_interface {
 	bool default_coord_filter_enabled;
 	bool lptw_triggered;
 	bool ignore_force_active;
+	bool gesture_config_enabled;
 	union {
 		u8 offload_id_byte[4];
 		u32 offload_id;
