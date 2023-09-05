@@ -518,10 +518,8 @@ int gs_panel_first_enable(struct gs_panel *ctx)
 	struct device *dev = ctx->dev;
 	int ret = 0;
 
-	if (ctx->initialized) {
-		dev_info(dev, "%s called but ctx not initialized\n", __func__);
+	if (ctx->initialized)
 		return 0;
-	}
 
 	ret = gs_panel_read_extinfo(ctx);
 	if (!ret)
