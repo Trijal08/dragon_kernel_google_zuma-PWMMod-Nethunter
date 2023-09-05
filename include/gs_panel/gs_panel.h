@@ -703,6 +703,20 @@ static inline bool gs_is_panel_enabled(const struct gs_panel *ctx)
 	}
 }
 
+/**
+ * is_panel_initialized - indicates whether the display has been initialized at least once
+ * @ctx: panel struct
+ *
+ * Indicates whether thepanel has been initialized at least once. Certain data such as panel
+ * revision is only accurate after display initialization.
+ */
+static inline bool gs_is_panel_initialized(const struct gs_panel *ctx)
+{
+	return ctx->panel_state != GPANEL_STATE_UNINITIALIZED &&
+	       ctx->panel_state != GPANEL_STATE_HANDOFF &&
+	       ctx->panel_state != GPANEL_STATE_HANDOFF_MODESET;
+}
+
 static inline bool gs_is_local_hbm_post_enabling_supported(struct gs_panel *ctx)
 {
 	return false;
@@ -857,6 +871,7 @@ static inline void te2_state_changed(struct backlight_device *bl)
 #define GS_HBM_FLAG_BL_UPDATE BIT(1)
 #define GS_HBM_FLAG_LHBM_UPDATE BIT(2)
 #define GS_HBM_FLAG_DIMMING_UPDATE BIT(3)
+#define GS_HBM_FLAG_OP_RATE_UPDATE BIT(4)
 
 #define GS_IS_HBM_ON(mode) ((mode) >= GS_HBM_ON_IRC_ON && (mode) < GS_HBM_STATE_MAX)
 #define GS_IS_HBM_ON_IRC_OFF(mode) (((mode) == GS_HBM_ON_IRC_OFF))

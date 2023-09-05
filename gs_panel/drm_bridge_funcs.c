@@ -387,20 +387,16 @@ static int gs_panel_bridge_atomic_check(struct drm_bridge *bridge,
 {
 	struct gs_panel *ctx = bridge_to_gs_panel(bridge);
 	struct drm_atomic_state *state = new_crtc_state->state;
-	/* TODO(tknelms)
-	const struct gs_panel_funcs *funcs = ctx->desc->gs_panel_func;
-	*/
+	int ret;
 
 	if (unlikely(!new_crtc_state))
 		return 0;
 
-	/*TODO(tknelms)
-	if (funcs && funcs->atomic_check) {
-		ret = funcs->atomic_check(ctx, state);
+	if (gs_panel_has_func(ctx, atomic_check)) {
+		ret = ctx->desc->gs_panel_func->atomic_check(ctx, state);
 		if (ret)
 			return ret;
 	}
-	*/
 
 	if (!drm_atomic_crtc_needs_modeset(new_crtc_state))
 		return 0;

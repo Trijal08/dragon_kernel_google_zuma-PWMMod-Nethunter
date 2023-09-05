@@ -285,10 +285,45 @@ static const struct gs_drm_connector_funcs gs_drm_connector_funcs = {
 
 /* gs_drm_connector_helper_funcs */
 
+static int gs_panel_set_op_hz(struct gs_panel *ctx, unsigned int hz)
+{
+	struct device *dev = ctx->dev;
+	const struct gs_panel_funcs *funcs = ctx->desc->gs_panel_func;
+	int ret = 0;
+
+	if (!gs_is_panel_initialized(ctx))
+		return -EAGAIN;
+
+	if (!gs_panel_has_func(ctx, set_op_hz))
+		return -ENOTSUPP;
+
+	/*TODO(tknelms) DPU_ATRACE_BEGIN("set_op_hz");*/
+	dev_dbg(dev, "%s: set op_hz to %d\n", __func__, hz);
+
+	/*TODO(b/267170999): MODE*/
+	mutex_lock(&ctx->mode_lock);
+	if (ctx->op_hz != hz) {
+		ret = funcs->set_op_hz(ctx, hz);
+		if (ret)
+			dev_err(dev, "failed to set op rate: %u Hz\n", hz);
+		else
+			sysfs_notify(&dev->kobj, NULL, "op_hz");
+	} else {
+		dev_dbg(dev, "%s: skip the same op rate: %u Hz\n", __func__, hz);
+	}
+	/*TODO(b/267170999): MODE*/
+	mutex_unlock(&ctx->mode_lock);
+
+	/*TODO(tknelms) DPU_ATRACE_END("set_op_hz");*/
+
+	return ret;
+}
+
 static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 					   struct gs_drm_connector_state *conn_state)
 {
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
+	const struct gs_panel_funcs *gs_panel_func = ctx->desc->gs_panel_func;
 	bool mipi_sync;
 	bool ghbm_updated = false;
 
@@ -316,6 +351,53 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 		dev_info(ctx->dev, "%s missing mipi_sync\n", __func__);
 		gs_dsi_dcs_write_buffer_force_batch_begin(dsi);
 	}
+
+	if ((conn_state->pending_update_flags & GS_HBM_FLAG_GHBM_UPDATE) &&
+	    gs_panel_has_func(ctx, set_hbm_mode) &&
+	    (ctx->hbm_mode != conn_state->global_hbm_mode)) {
+		/*TODO(tknelms) DPU_ATRACE_BEGIN("set_hbm");*/
+		/*TODO(b/267170999): MODE*/
+		mutex_lock(&ctx->mode_lock);
+		gs_panel_func->set_hbm_mode(ctx, conn_state->global_hbm_mode);
+		backlight_state_changed(ctx->bl);
+		/*TODO(b/267170999): MODE*/
+		mutex_unlock(&ctx->mode_lock);
+		/*TODO(tknelms) DPU_ATRACE_END("set_hbm");*/
+		ghbm_updated = true;
+	}
+
+	if ((conn_state->pending_update_flags & GS_HBM_FLAG_BL_UPDATE) &&
+	    (ctx->bl->props.brightness != conn_state->brightness_level)) {
+		/*TODO(tknelms) DPU_ATRACE_BEGIN("set_bl");*/
+		ctx->bl->props.brightness = conn_state->brightness_level;
+		backlight_update_status(ctx->bl);
+		/*TODO(tknelms) DPU_ATRACE_END("set_bl");*/
+	}
+
+	/* TODO(b/279521693)
+	if ((conn_state->pending_update_flags & GS_HBM_FLAG_LHBM_UPDATE) &&
+		gs_panel_has_func(ctx, set_local_hbm_mode)){
+		TODO(tknelms) DPU_ATRACE_BEGIN("set_lhbm");
+		dev_info(dev, "%s: set LHBM to %d\n", __func__,
+			conn_state->local_hbm_on);
+		mutex_lock(&ctx->mode_lock);
+		ctx->hbm.local_hbm.requested_state = conn_state->local_hbm_on ? GLOCAL_HBM_ENABLED :
+										GLOCAL_HBM_DISABLED;
+		panel_update_local_hbm_locked(ctx);
+		mutex_unlock(&ctx->mode_lock);
+		TODO(tknelms) DPU_ATRACE_END("set_lhbm");
+	}
+	*/
+
+	if ((conn_state->pending_update_flags & GS_HBM_FLAG_DIMMING_UPDATE) &&
+	    gs_panel_has_func(ctx, set_dimming) && (ctx->dimming_on != conn_state->dimming_on)) {
+		/*TODO(tknelms) DPU_ATRACE_BEGIN("set_dimming");*/
+		gs_panel_func->set_dimming(ctx, conn_state->dimming_on);
+		/*TODO(tknelms) DPU_ATRACE_END("set_dimming");*/
+	}
+
+	if (conn_state->pending_update_flags & GS_HBM_FLAG_OP_RATE_UPDATE)
+		gs_panel_set_op_hz(ctx, conn_state->operation_rate);
 
 	if (mipi_sync)
 		gs_dsi_dcs_write_buffer_force_batch_end(dsi);
@@ -355,7 +437,22 @@ static void gs_panel_connector_atomic_commit(struct gs_drm_connector *gs_connect
 					     struct gs_drm_connector_state *gs_old_state,
 					     struct gs_drm_connector_state *gs_new_state)
 {
-	/*TODO(tknelms): replicate atomic commit behavior */
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+
+	/*TODO(b/267170999): MODE*/
+	mutex_lock(&ctx->mode_lock);
+	if (gs_panel_has_func(ctx, commit_done))
+		ctx->desc->gs_panel_func->commit_done(ctx);
+	/*TODO(b/267170999): MODE*/
+	mutex_unlock(&ctx->mode_lock);
+
+	ctx->timestamps.last_commit_ts = ktime_get();
+
+	/*
+	 * TODO: Identify other kinds of errors and ensure detection is debounced
+	 *	 correctly
+	 */
+
 	return;
 }
 
