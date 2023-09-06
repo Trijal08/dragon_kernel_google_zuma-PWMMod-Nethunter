@@ -502,7 +502,7 @@ int gs_panel_set_power_helper(struct gs_panel *ctx, bool on)
 }
 EXPORT_SYMBOL(gs_panel_set_power_helper);
 
-static void _gs_panel_set_vddd_voltage(struct gs_panel *ctx, bool is_lp)
+void gs_panel_set_vddd_voltage(struct gs_panel *ctx, bool is_lp)
 {
 	u32 uv = is_lp ? ctx->regulator.vddd_lp_uV : ctx->regulator.vddd_normal_uV;
 	if (!uv || !ctx->regulator.vddd)
@@ -574,7 +574,7 @@ static void gs_panel_post_power_on(struct gs_panel *ctx)
 static void gs_panel_handoff(struct gs_panel *ctx)
 {
 	bool enabled = gpiod_get_raw_value(ctx->gpio.reset_gpio) > 0;
-	_gs_panel_set_vddd_voltage(ctx, false);
+	gs_panel_set_vddd_voltage(ctx, false);
 	if (enabled) {
 		dev_info(ctx->dev, "panel enabled at boot\n");
 		ctx->panel_state = GPANEL_STATE_HANDOFF;

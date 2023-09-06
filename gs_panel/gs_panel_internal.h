@@ -73,6 +73,13 @@ ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *da
 int gs_panel_first_enable(struct gs_panel *ctx);
 
 /**
+ * gs_panel_set_vddd_voltage() - Sets appropriate voltage on vddd
+ * @ctx: Pointer to gs_panel
+ * @is_lp: whether we're setting voltage for an lp mode
+ */
+void gs_panel_set_vddd_voltage(struct gs_panel *ctx, bool is_lp);
+
+/**
  * get_gs_drm_connector_parent - gets the connector that is panel's parent
  * @ctx: Pointer to panel
  *

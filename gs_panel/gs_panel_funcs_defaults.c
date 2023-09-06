@@ -6,6 +6,7 @@
  * license that can be found in the LICENSE file or at
  * https://opensource.org/licenses/MIT.
  */
+#include <drm/drm_modes.h>
 
 #include <linux/delay.h>
 
@@ -100,3 +101,12 @@ int gs_panel_read_id(struct gs_panel *ctx)
 	return 0;
 }
 EXPORT_SYMBOL(gs_panel_read_id);
+
+bool gs_panel_is_mode_seamless_helper(const struct gs_panel *ctx, const struct gs_panel_mode *pmode)
+{
+	const struct drm_display_mode *current_mode = &ctx->current_mode->mode;
+	const struct drm_display_mode *new_mode = &pmode->mode;
+
+	return drm_mode_equal_no_clocks(current_mode, new_mode);
+}
+EXPORT_SYMBOL(gs_panel_is_mode_seamless_helper);

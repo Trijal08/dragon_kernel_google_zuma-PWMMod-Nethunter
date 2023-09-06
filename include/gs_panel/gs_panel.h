@@ -207,6 +207,16 @@ struct gs_panel_funcs {
 	void (*set_nolp_mode)(struct gs_panel *gs_panel, const struct gs_panel_mode *mode);
 
 	/**
+	 * @set_post_lp_mode:
+	 *
+	 * This callback is used to handle additional operations after set_lp_mode and
+	 * first set_binned_lp are called.
+	 *
+	 * TODO(b/279521692): implementation
+	 */
+	void (*set_post_lp_mode)(struct gs_panel *gs_panel);
+
+	/**
 	 * @set_hbm_mode:
 	 *
 	 * This callback is used to implement panel specific logic for high brightness
@@ -593,6 +603,7 @@ struct gs_panel_timestamps {
 	ktime_t last_self_refresh_active_ts;
 	ktime_t last_panel_idle_set_ts;
 	ktime_t last_rr_switch_ts;
+	ktime_t last_lp_exit_ts;
 };
 
 /**
@@ -625,6 +636,7 @@ struct gs_panel {
 	struct mutex mode_lock;
 	struct mutex bl_state_lock;
 	struct mutex lp_state_lock;
+	const struct gs_binned_lp *current_binned_lp;
 	struct drm_property_blob *lp_mode_blob;
 	char panel_id[PANEL_ID_MAX];
 	char panel_extinfo[PANEL_EXTINFO_MAX];
@@ -665,6 +677,7 @@ struct gs_panel {
 			u32 frame_index;
 			ktime_t last_vblank_ts;
 			bool post_work_disabled;
+			u64 last_lp_vblank_cnt;
 		} local_hbm;
 
 		struct workqueue_struct *wq;

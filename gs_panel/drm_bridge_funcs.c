@@ -193,11 +193,107 @@ static void gs_panel_bridge_enable(struct drm_bridge *bridge,
 		*/
 		dev_info(ctx->dev, "missing update_te2 functions in %s\n", __func__);
 	}
+
+	if (is_lp_mode && gs_panel_has_func(ctx, set_post_lp_mode))
+		ctx->desc->gs_panel_func->set_post_lp_mode(ctx);
+
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
 	if (need_update_backlight && ctx->bl) {
 		backlight_update_status(ctx->bl);
 	}
+}
+
+static void gs_panel_check_mipi_sync_timing(struct drm_crtc *crtc,
+					    const struct gs_panel_mode *current_mode,
+					    struct gs_panel *ctx)
+{
+	/*TODO(b/279519827): implement mipi sync timing*/
+}
+
+static void bridge_mode_set_enter_lp_mode(struct gs_panel *ctx, const struct gs_panel_mode *pmode,
+					  bool is_active)
+{
+	if (!gs_panel_has_func(ctx, set_lp_mode))
+		return;
+	if (is_active) {
+		/*TODO(b/279521693) _gs_panel_disable_normal_feat_locked(ctx);*/
+		ctx->desc->gs_panel_func->set_lp_mode(ctx, pmode);
+		ctx->panel_state = GPANEL_STATE_LP;
+	}
+	gs_panel_set_vddd_voltage(ctx, true);
+}
+
+static void bridge_mode_set_leave_lp_mode(struct gs_panel *ctx, const struct gs_panel_mode *pmode,
+					  bool is_active)
+{
+	gs_panel_set_vddd_voltage(ctx, false);
+	if (is_active && gs_panel_has_func(ctx, set_nolp_mode)) {
+		ctx->desc->gs_panel_func->set_nolp_mode(ctx, pmode);
+		ctx->panel_state = GPANEL_STATE_NORMAL;
+		/*TODO(b/279521693): lhbm_on_delay_frames*/
+	}
+	ctx->current_binned_lp = NULL;
+
+	gs_panel_set_backlight_state(ctx, is_active ? GPANEL_STATE_NORMAL :
+						      GPANEL_STATE_OFF);
+}
+
+static void bridge_mode_set_normal(struct gs_panel *ctx, const struct gs_panel_mode *pmode,
+				 const struct gs_panel_mode *old_mode)
+{
+	struct drm_connector_state *connector_state = ctx->gs_connector->base.state;
+	struct drm_crtc *crtc = connector_state->crtc;
+	struct gs_drm_connector_state *gs_connector_state = to_gs_connector_state(connector_state);
+	const bool is_active = gs_is_panel_active(ctx);
+	const bool was_lp_mode = old_mode && old_mode->gs_mode.is_lp_mode;
+
+	if ((GS_MIPI_CMD_SYNC_REFRESH_RATE & gs_connector_state->mipi_sync) && old_mode)
+		gs_panel_check_mipi_sync_timing(crtc, old_mode, ctx);
+	if (!gs_is_local_hbm_disabled(ctx) && ctx->desc->lhbm_desc &&
+	    !ctx->desc->lhbm_desc->no_lhbm_rr_constraints)
+		dev_warn(ctx->dev, "do mode change (`%s`) unexpectedly when LHBM is ON\n",
+			 pmode->mode.name);
+	ctx->desc->gs_panel_func->mode_set(ctx, pmode);
+
+	if (was_lp_mode)
+		gs_panel_set_backlight_state(ctx, is_active ? GPANEL_STATE_NORMAL :
+							      GPANEL_STATE_OFF);
+	else if (ctx->bl)
+		backlight_state_changed(ctx->bl);
+}
+
+static void bridge_mode_set_update_timestamps(struct gs_panel *ctx,
+					      const struct gs_panel_mode *pmode,
+					      const struct gs_panel_mode *old_mode,
+					      bool come_out_lp_mode)
+{
+	struct drm_connector_state *connector_state = ctx->gs_connector->base.state;
+	struct drm_crtc *crtc = connector_state->crtc;
+	struct gs_drm_connector_state *gs_connector_state = to_gs_connector_state(connector_state);
+
+	if (!old_mode)
+		return;
+	if (drm_mode_vrefresh(&pmode->mode) == drm_mode_vrefresh(&old_mode->mode))
+		return;
+
+	/* save the context in order to predict TE width in
+	 * gs_panel_check_mipi_sync_timing
+	 */
+	ctx->timestamps.last_rr_switch_ts = ktime_get();
+	ctx->te2.last_rr = drm_mode_vrefresh(&old_mode->mode);
+	ctx->te2.last_rr_te_gpio_value = gpio_get_value(gs_connector_state->te_gpio);
+	ctx->te2.last_rr_te_counter = drm_crtc_vblank_count(crtc);
+	/* TODO(tknelms)
+	if (funcs && funcs->base && funcs->base->get_te_usec)
+		ctx->te2.last_rr_te_usec =
+			funcs->base->get_te_usec(ctx, old_mode);
+	else
+		ctx->te2.last_rr_te_usec = old_mode->gs_mode.te_usec;
+	*/
+	if (come_out_lp_mode)
+		ctx->timestamps.last_lp_exit_ts = ctx->timestamps.last_rr_switch_ts;
+	sysfs_notify(&ctx->dev->kobj, NULL, "refresh_rate");
 }
 
 static void gs_panel_bridge_mode_set(struct drm_bridge *bridge, const struct drm_display_mode *mode,
@@ -206,12 +302,11 @@ static void gs_panel_bridge_mode_set(struct drm_bridge *bridge, const struct drm
 	struct gs_panel *ctx = bridge_to_gs_panel(bridge);
 	struct device *dev = ctx->dev;
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
-	struct drm_connector_state *connector_state = ctx->gs_connector->base.state;
-	struct drm_crtc *crtc = connector_state->crtc;
-	struct gs_drm_connector_state *gs_connector_state = to_gs_connector_state(connector_state);
 	const struct gs_panel_mode *pmode = gs_panel_get_mode(ctx, mode);
+	const struct gs_panel_funcs *funcs = ctx->desc->gs_panel_func;
 	const struct gs_panel_mode *old_mode;
 	bool need_update_backlight = false;
+	bool come_out_lp_mode = false;
 
 	if (WARN_ON(!pmode))
 		return;
@@ -235,35 +330,54 @@ static void gs_panel_bridge_mode_set(struct drm_bridge *bridge, const struct drm
 	dsi->mode_flags = pmode->gs_mode.mode_flags;
 	ctx->timestamps.last_mode_set_ts = ktime_get();
 
-	ctx->current_mode = pmode;
+	/* TODO(tknelms) DPU_ATRACE_BEGIN(__func__); */
+	if (funcs) {
+		const bool is_active = gs_is_panel_active(ctx);
+		const bool was_lp_mode = old_mode && old_mode->gs_mode.is_lp_mode;
+		const bool is_lp_mode = pmode->gs_mode.is_lp_mode;
+		bool state_changed = false;
 
-	if (old_mode && drm_mode_vrefresh(&pmode->mode) != drm_mode_vrefresh(&old_mode->mode)) {
-		/* save the context in order to predict TE width in
-		 * gs_panel_check_mipi_sync_timing
-		 */
-		ctx->timestamps.last_rr_switch_ts = ktime_get();
-		ctx->te2.last_rr = drm_mode_vrefresh(&old_mode->mode);
-		ctx->te2.last_rr_te_gpio_value = gpio_get_value(gs_connector_state->te_gpio);
-		ctx->te2.last_rr_te_counter = drm_crtc_vblank_count(crtc);
-		/* TODO(tknelms)
-		if (funcs && funcs->base && funcs->base->get_te_usec)
-			ctx->te2.last_rr_te_usec =
-				funcs->base->get_te_usec(ctx, old_mode);
-		else
-			ctx->te2.last_rr_te_usec = old_mode->gs_mode.te_usec;
-		*/
-		sysfs_notify(&dev->kobj, NULL, "refresh_rate");
+		if (is_lp_mode) {
+			bridge_mode_set_enter_lp_mode(ctx, pmode, is_active);
+			if (is_active)
+				need_update_backlight = true;
+		} else if (was_lp_mode && !is_lp_mode) {
+			bridge_mode_set_leave_lp_mode(ctx, pmode, is_active);
+			if (is_active) {
+				state_changed = true;
+				need_update_backlight = true;
+				come_out_lp_mode = true;
+			}
+		} else if (gs_panel_has_func(ctx, mode_set)) {
+			if (is_active) {
+				bridge_mode_set_normal(ctx, pmode, old_mode);
+				state_changed = true;
+			} else
+				dev_warn(
+					ctx->dev,
+					"don't do mode change (`%s`) when panel isn't in interactive mode\n",
+					pmode->mode.name);
+		}
+		ctx->current_mode = pmode;
+		if (state_changed) {
+			/*TODO(b/279521893)
+			 * if (!is_lp_mode)
+			 * 	gs_panel_update_te2(ctx);
+			 */
+		}
+	} else {
+		ctx->current_mode = pmode;
 	}
+
+	bridge_mode_set_update_timestamps(ctx, pmode, old_mode, come_out_lp_mode);
+
+	if (pmode->gs_mode.is_lp_mode && gs_panel_has_func(ctx, set_post_lp_mode))
+		funcs->set_post_lp_mode(ctx);
 
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
 	if (need_update_backlight && ctx->bl)
 		backlight_update_status(ctx->bl);
-
-	/*TODO(tknelms)
-	if (pmode->gs_mode.is_lp_mode && funcs->set_post_lp_mode)
-		funcs->set_post_lp_mode(ctx);
-	*/
 
 	/* TODO(tknelms)
 	DPU_ATRACE_INT("panel_fps", drm_mode_vrefresh(mode));
@@ -350,6 +464,26 @@ static void gs_panel_set_partial(struct gs_display_partial *partial,
 	}
 }
 
+/**
+ * gs_panel_is_mode_seamless() - check if mode transition can be done seamlessly
+ * @ctx: Reference to panel data
+ * @mode: Proposed display mode
+ *
+ * Checks whether the panel can transition to the new mode seamlessly without
+ * having to turn the display off before the mode change.
+ *
+ * In most cases, this is only possible if only the clocks and refresh rates are
+ * changing.
+ *
+ * Return: true if seamless transition possible, false otherwise
+ */
+static bool gs_panel_is_mode_seamless(const struct gs_panel *ctx, const struct gs_panel_mode *mode)
+{
+	if (!gs_panel_has_func(ctx, is_mode_seamless))
+		return false;
+	return ctx->desc->gs_panel_func->is_mode_seamless(ctx, mode);
+}
+
 static int gs_drm_connector_check_mode(struct gs_panel *ctx,
 				       struct drm_connector_state *connector_state,
 				       struct drm_crtc_state *crtc_state)
@@ -364,11 +498,8 @@ static int gs_drm_connector_check_mode(struct gs_panel *ctx,
 
 	if (crtc_state->connectors_changed || !gs_is_panel_active(ctx))
 		gs_connector_state->seamless_possible = false;
-	/*TODO(tknelms)
 	else
-		gs_connector_state->seamless_possible =
-			gs_panel_is_mode_seamless(ctx, pmode);
-	*/
+		gs_connector_state->seamless_possible = gs_panel_is_mode_seamless(ctx, pmode);
 
 	gs_connector_state->gs_mode = pmode->gs_mode;
 	gs_panel_set_partial(&gs_connector_state->partial, pmode, ctx->desc->is_partial);

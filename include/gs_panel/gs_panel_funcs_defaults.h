@@ -12,6 +12,7 @@
 #include <linux/types.h>
 
 struct gs_panel;
+struct gs_panel_mode;
 
 /*
  * DOC: gs_panel_funcs_defaults theory
@@ -66,5 +67,21 @@ int gs_panel_read_slsi_ddic_id(struct gs_panel *ctx);
  * Return: 0 on success, negative value on error.
  */
 int gs_panel_read_id(struct gs_panel *ctx);
+
+/**
+ * gs_panel_is_mode_seamless_helper() - Default implementation for checking
+ *                                      seamless transition.
+ * @ctx: Reference to panel data
+ * @mode: Proposed display mode
+ *
+ * Checks whether the panel can transition to the new mode seamlessly without
+ * having to turn the display off before the mode change.
+ *
+ * This implementation checks if resolution/timings and flags are the same.
+ *
+ * Return: true if seamless transition possible, false otherwise
+ */
+bool gs_panel_is_mode_seamless_helper(const struct gs_panel *ctx,
+				      const struct gs_panel_mode *pmode);
 
 #endif // _GS_PANEL_FUNCS_DEFAULTS_H_
