@@ -406,7 +406,7 @@ static int gs_panel_connector_attach_properties(struct gs_panel *ctx)
 	drm_object_attach_property(obj, p->is_partial, desc->is_partial);
 	drm_object_attach_property(obj, p->panel_idle_support, desc->is_idle_supported);
 	drm_object_attach_property(obj, p->panel_orientation, ctx->orientation);
-	drm_object_attach_property(obj, p->vrr_switch_duration, desc->vrr_switch_duration);
+	drm_object_attach_property(obj, p->rr_switch_duration, desc->rr_switch_duration);
 
 	if (desc->brightness_desc->brt_capability) {
 		ret = gs_panel_attach_brightness_capability(ctx->gs_connector,

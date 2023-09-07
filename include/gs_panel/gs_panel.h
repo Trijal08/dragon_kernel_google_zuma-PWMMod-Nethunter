@@ -492,7 +492,7 @@ struct gs_panel_desc {
 	const struct gs_panel_brightness_desc *brightness_desc;
 	const struct gs_panel_lhbm_desc *lhbm_desc;
 	const unsigned int delay_dsc_reg_init_us;
-	u32 vrr_switch_duration;
+	u32 rr_switch_duration;
 	bool dbv_extra_frame;
 	bool is_partial;
 	bool is_idle_supported;
