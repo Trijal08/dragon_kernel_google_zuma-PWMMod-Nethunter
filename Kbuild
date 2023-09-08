@@ -2,6 +2,7 @@
 
 ccflags-y	+= -I$(srctree)/$(src)/include
 ccflags-y	+= -I$(srctree)/../private/google-modules/display
+ccflags-y	+= -I$(srctree)/../private/google-modules/display/common/include
 ccflags-y += -I$(srctree)/../private/google-modules/display/samsung/include/uapi
 ccflags-y += -I$(srctree)/../private/google-modules/aoc
 
