@@ -292,6 +292,87 @@ const struct gs_panel_mode *gs_panel_get_mode(struct gs_panel *ctx,
 	return NULL;
 }
 
+/* IDLE MODE */
+
+unsigned int gs_panel_get_idle_time_delta(struct gs_panel *ctx)
+{
+	const ktime_t now = ktime_get();
+	const enum gs_panel_idle_mode idle_mode =
+		(ctx->current_mode) ? ctx->current_mode->idle_mode : GIDLE_MODE_UNSUPPORTED;
+	unsigned int delta_ms = UINT_MAX;
+
+	if (idle_mode == GIDLE_MODE_ON_INACTIVITY) {
+		delta_ms = ktime_ms_delta(now, ctx->timestamps.last_mode_set_ts);
+	} else if (idle_mode == GIDLE_MODE_ON_SELF_REFRESH) {
+		const struct gs_panel_timestamps *stamps = &ctx->timestamps;
+		const ktime_t ts = max3(stamps->last_self_refresh_active_ts,
+					stamps->last_mode_set_ts, stamps->last_panel_idle_set_ts);
+
+		delta_ms = ktime_ms_delta(now, ts);
+	} else {
+		dev_dbg(ctx->dev, "%s: unsupported idle mode %d", __func__, idle_mode);
+	}
+
+	return delta_ms;
+}
+EXPORT_SYMBOL(gs_panel_get_idle_time_delta);
+
+static bool panel_idle_queue_delayed_work(struct gs_panel *ctx)
+{
+	const unsigned int delta_ms = gs_panel_get_idle_time_delta(ctx);
+
+	if (delta_ms < ctx->idle_data.idle_delay_ms) {
+		struct gs_panel_idle_data *idle_data = &ctx->idle_data;
+		const unsigned int delay_ms = idle_data->idle_delay_ms - delta_ms;
+
+		dev_dbg(ctx->dev, "%s: last mode %ums ago, schedule idle in %ums\n", __func__,
+			delta_ms, delay_ms);
+
+		mod_delayed_work(system_highpri_wq, &idle_data->idle_work,
+				 msecs_to_jiffies(delay_ms));
+		return true;
+	}
+
+	return false;
+}
+
+void panel_update_idle_mode_locked(struct gs_panel *ctx)
+{
+	const struct gs_panel_funcs *funcs = ctx->desc->gs_panel_func;
+	struct gs_panel_idle_data *idle_data = &ctx->idle_data;
+
+	lockdep_assert_held(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+
+	if (unlikely(!ctx->current_mode) || !gs_is_panel_active(ctx))
+		return;
+
+	if (!gs_panel_has_func(ctx, set_self_refresh))
+		return;
+
+	if (idle_data->idle_delay_ms && idle_data->self_refresh_active)
+		if (panel_idle_queue_delayed_work(ctx))
+			return;
+
+	if (delayed_work_pending(&idle_data->idle_work)) {
+		dev_dbg(ctx->dev, "%s: cancelling delayed idle work\n", __func__);
+		cancel_delayed_work(&idle_data->idle_work);
+	}
+
+	if (funcs->set_self_refresh(ctx, idle_data->self_refresh_active)) {
+		/*TODO(b/279521893) gs_panel_update_te2(ctx);*/
+		ctx->timestamps.last_self_refresh_active_ts = ktime_get();
+	}
+}
+
+static void panel_idle_work(struct work_struct *work)
+{
+	struct gs_panel *ctx = container_of(work, struct gs_panel, idle_data.idle_work.work);
+
+	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+	panel_update_idle_mode_locked(ctx);
+	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+}
+
 /* BACKLIGHT */
 
 static int gs_get_brightness(struct backlight_device *bl)
@@ -687,8 +768,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	}
 
 	/* Idle work */
-	/* TODO(tknelms): idle work */
-	ctx->idle_data.panel_idle_enabled = false;
+	ctx->idle_data.panel_idle_enabled = gs_panel_has_func(ctx, set_self_refresh);
+	INIT_DELAYED_WORK(&ctx->idle_data.idle_work, panel_idle_work);
 
 	/* Initialize mutexes */
 	/*TODO(b/267170999): all*/

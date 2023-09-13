@@ -315,8 +315,6 @@ struct gs_panel_funcs {
 	 *
 	 * Returns true if underlying mode was updated to reflect new self refresh state,
 	 * otherwise returns false if no action was taken.
-	 *
-	 * TODO(b/279519827): implementation
 	 */
 	bool (*set_self_refresh)(struct gs_panel *gs_panel, bool enable);
 
@@ -566,6 +564,7 @@ struct gs_panel_idle_data {
 	bool self_refresh_active;
 	u32 panel_idle_vrefresh;
 	u32 idle_delay_ms;
+	struct delayed_work idle_work;
 };
 
 /**
@@ -645,7 +644,6 @@ struct gs_panel {
 	struct gs_te2_data te2;
 	struct device_node *touch_dev;
 	struct gs_panel_timestamps timestamps;
-	struct delayed_work idle_work;
 
 	/* Automatic Current Limiting(ACL) */
 	enum gs_acl_mode acl_mode;
@@ -867,6 +865,15 @@ void gs_panel_wait_for_vsync_done(struct gs_panel *ctx, u32 te_us, u32 period_us
  * the panel driver's tracing utilities
  */
 void gs_panel_msleep(u32 delay_ms);
+
+/**
+ * gs_panel_get_idle_time_delta() - Gets time since last idle mode or mode set
+ * @ctx: handle for gs_panel
+ *
+ * Return: Time since last mode set or activation of idle mode, in milliseconds,
+ * or UINT_MAX if unsupported.
+ */
+unsigned int gs_panel_get_idle_time_delta(struct gs_panel *ctx);
 
 static inline void backlight_state_changed(struct backlight_device *bl)
 {
