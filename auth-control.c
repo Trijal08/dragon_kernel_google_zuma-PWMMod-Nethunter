@@ -20,6 +20,8 @@
 #include "hdcp-log.h"
 #include "teeif.h"
 
+#define HDCP_SCHEDULE_DELAY_MSEC (5000)
+
 static struct delayed_work hdcp_work;
 
 static enum auth_state state;
@@ -112,7 +114,7 @@ void hdcp_dplink_connect_state(enum dp_state dp_hdcp_state) {
 		return;
 	}
 
-	schedule_delayed_work(&hdcp_work, msecs_to_jiffies(2000));
+	schedule_delayed_work(&hdcp_work, msecs_to_jiffies(HDCP_SCHEDULE_DELAY_MSEC));
 	return;
 }
 EXPORT_SYMBOL_GPL(hdcp_dplink_connect_state);
