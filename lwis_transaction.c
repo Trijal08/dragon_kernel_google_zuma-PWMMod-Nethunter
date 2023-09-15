@@ -529,6 +529,7 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 			spin_unlock_irqrestore(&client->transaction_lock, flags);
 			process_transaction(client, &transaction, &pending_events, &pending_fences,
 					    /*skip_err=*/false, /*check_transaction_limit=*/true);
+			lwis_pending_events_emit(client->lwis_dev, &pending_events);
 			spin_lock_irqsave(&client->transaction_lock, flags);
 
 			/*
@@ -587,7 +588,6 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 		}
 	}
 	spin_unlock_irqrestore(&client->transaction_lock, flags);
-	lwis_pending_events_emit(client->lwis_dev, &pending_events);
 	lwis_fences_pending_signal_emit(client->lwis_dev, &pending_fences);
 }
 
