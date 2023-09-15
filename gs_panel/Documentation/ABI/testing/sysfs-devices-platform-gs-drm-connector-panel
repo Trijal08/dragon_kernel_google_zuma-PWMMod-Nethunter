@@ -29,3 +29,11 @@ Description:
   Some panels may need special handling when exiting idle mode because of clock or
   bandwidth requirements due to the idle mode TE rate. This file exposes the flag
   controlling this behavior to userspace.
+
+What: /sys/devices/platform/gs-drm-connector/panel/min_vrefresh
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client uses this to view or override the minimum value for vrefresh rate
+  that may be entered into without client's involvement, often because of idle mode.
