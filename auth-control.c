@@ -17,12 +17,13 @@
 #include "auth-control.h"
 #include "auth13.h"
 #include "auth22.h"
+#include "hdcp.h"
 #include "hdcp-log.h"
 #include "teeif.h"
 
 #define HDCP_SCHEDULE_DELAY_MSEC (5000)
 
-static struct delayed_work hdcp_work;
+static struct hdcp_device *hdcp_dev;
 
 static enum auth_state state;
 
@@ -49,7 +50,7 @@ static int run_hdcp2_auth(void) {
 			hdcp_tee_enable_enc_22();
 			return 0;
 		} else if (ret != -EAGAIN) {
-			return -EIO;
+			return ret;
 		}
 		hdcp_info("HDCP22 Retry...\n");
 	}
@@ -58,12 +59,22 @@ static int run_hdcp2_auth(void) {
 }
 
 static void hdcp_worker(struct work_struct *work) {
+	int ret;
+	bool hdcp2_capable = false;
+	bool hdcp1_capable = false;
+
+	struct hdcp_device *hdcp_dev =
+		container_of(work, struct hdcp_device, hdcp_work.work);
+
 	if (max_ver >= 2) {
 		hdcp_info("Trying HDCP22...\n");
-		if (run_hdcp2_auth() == 0) {
+		ret = run_hdcp2_auth();
+		if (ret == 0) {
 			hdcp_info("HDCP22 Authentication Success\n");
+			hdcp_dev->hdcp2_success_count++;
 			return;
 		}
+		hdcp2_capable = (ret != -EOPNOTSUPP);
 		hdcp_info("HDCP22 Authentication Failed.\n");
 	} else {
 		hdcp_info("Not trying HDCP22. max_ver is %lu\n", max_ver);
@@ -72,29 +83,37 @@ static void hdcp_worker(struct work_struct *work) {
 	if (max_ver >= 1) {
 		hdcp_info("Trying HDCP13...\n");
 		state = HDCP1_AUTH_PROGRESS;
-		if (hdcp13_dplink_authenticate() == 0) {
+		ret = hdcp13_dplink_authenticate();
+		if (ret == 0) {
 			hdcp_info("HDCP13 Authentication Success\n");
 			state = HDCP1_AUTH_DONE;
+			hdcp_dev->hdcp2_fallback_count += hdcp2_capable;
+			hdcp_dev->hdcp1_success_count += !hdcp2_capable;
 			return;
 		}
 
 		state = HDCP_AUTH_IDLE;
+		hdcp1_capable = (ret != -EOPNOTSUPP);
 		hdcp_info("HDCP13 Authentication Failed.\n");
 	} else {
 		hdcp_info("Not trying HDCP13. max_ver is %lu\n", max_ver);
 	}
+
+	hdcp_dev->hdcp2_fail_count += (hdcp2_capable);
+	hdcp_dev->hdcp1_fail_count += (!hdcp2_capable && hdcp1_capable);
+	hdcp_dev->hdcp0_count += (!hdcp2_capable && !hdcp1_capable);
 }
 
 void hdcp_dplink_handle_irq(void) {
 	if (state == HDCP2_AUTH_PROGRESS || state == HDCP2_AUTH_DONE) {
 		if (hdcp22_dplink_handle_irq() == -EAGAIN)
-			schedule_delayed_work(&hdcp_work, 0);
+			schedule_delayed_work(&hdcp_dev->hdcp_work, 0);
 		return;
 	}
 
 	if (state == HDCP1_AUTH_DONE) {
 		if (hdcp13_dplink_handle_irq() == -EAGAIN)
-			schedule_delayed_work(&hdcp_work, 0);
+			schedule_delayed_work(&hdcp_dev->hdcp_work, 0);
 		return;
 	}
 }
@@ -109,20 +128,31 @@ void hdcp_dplink_connect_state(enum dp_state dp_hdcp_state) {
 		hdcp22_dplink_abort();
 		hdcp_tee_disable_enc();
 		state = HDCP_AUTH_IDLE;
-		if (delayed_work_pending(&hdcp_work))
-			cancel_delayed_work(&hdcp_work);
+		if (delayed_work_pending(&hdcp_dev->hdcp_work))
+			cancel_delayed_work(&hdcp_dev->hdcp_work);
 		return;
 	}
 
-	schedule_delayed_work(&hdcp_work, msecs_to_jiffies(HDCP_SCHEDULE_DELAY_MSEC));
+	schedule_delayed_work(&hdcp_dev->hdcp_work,
+		msecs_to_jiffies(HDCP_SCHEDULE_DELAY_MSEC));
 	return;
 }
 EXPORT_SYMBOL_GPL(hdcp_dplink_connect_state);
 
-void hdcp_auth_worker_init(void) {
-	INIT_DELAYED_WORK(&hdcp_work, hdcp_worker);
+int hdcp_auth_worker_init(struct hdcp_device *dev) {
+	if (hdcp_dev)
+		return -EACCES;
+
+	hdcp_dev = dev;
+	INIT_DELAYED_WORK(&hdcp_dev->hdcp_work, hdcp_worker);
+	return 0;
 }
 
-void hdcp_auth_worker_deinit(void) {
-	cancel_delayed_work_sync(&hdcp_work);
+int hdcp_auth_worker_deinit(struct hdcp_device *dev) {
+	if (hdcp_dev != dev)
+		return -EACCES;
+
+	cancel_delayed_work_sync(&hdcp_dev->hdcp_work);
+	hdcp_dev = NULL;
+	return 0;
 }
