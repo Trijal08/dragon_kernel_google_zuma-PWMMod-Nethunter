@@ -804,6 +804,7 @@ struct goog_touch_interface {
 	char fw_name[64];
 	char config_name[64];
 	char test_limits_name[64];
+	char usb_psy_name[64];
 
 	u8 charger_state;
 	struct notifier_block charger_notifier;

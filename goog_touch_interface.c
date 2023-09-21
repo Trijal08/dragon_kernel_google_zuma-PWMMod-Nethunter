@@ -2836,6 +2836,33 @@ void goog_offload_input_report(void *handle,
 	ATRACE_END();
 }
 
+static int gti_update_charger_state(struct goog_touch_interface *gti,
+	struct power_supply *psy)
+{
+	union power_supply_propval present_val = { 0 };
+	int ret = 0;
+
+	if (gti == NULL || psy == NULL)
+		return -ENODEV;
+
+	ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
+		&present_val);
+	if (ret < 0) {
+		GOOG_WARN(gti,
+			"Error while getting power supply property: %d!\n", ret);
+	} else if ((u8)present_val.intval != gti->charger_state) {
+		/* Note: the expected values for present_val.intval are
+		 * 0 and 1. Cast to unsigned byte to ensure the
+		 * comparison is handled in the same variable data type.
+		 */
+		GOOG_INFO(gti, "Charger_state changed from %d to %d\n",
+			gti->charger_state, present_val.intval);
+		gti->context_changed.charger_state = 1;
+		gti->charger_state = (u8)present_val.intval;
+	}
+	return ret;
+}
+
 int gti_charger_state_change(struct notifier_block *nb, unsigned long action,
 			     void *data)
 {
@@ -2843,31 +2870,13 @@ int gti_charger_state_change(struct notifier_block *nb, unsigned long action,
 		(struct goog_touch_interface *)container_of(nb,
 			struct goog_touch_interface, charger_notifier);
 	struct power_supply *psy = (struct power_supply *)data;
-	int ret;
 
 	/* Attempt actual status parsing */
-	if (psy && psy->desc->type == POWER_SUPPLY_TYPE_USB) {
-		union power_supply_propval present_val = { 0 };
-
-		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
-						&present_val);
-		if (ret < 0) {
-			GOOG_DBG(gti,
-				 "Error while getting power supply property: %d!\n",
-				 ret);
-		} else if ((u8)present_val.intval != gti->charger_state) {
-			/* Note: the expected values for present_val.intval are
-			 * 0 and 1. Cast to unsigned byte to ensure the
-			 * comparison is handled in the same variable data type.
-			 */
-			GOOG_INFO(gti, "Charger_state changed from %d to %d\n",
-				  gti->charger_state, present_val.intval);
-			gti->context_changed.charger_state = 1;
-			gti->charger_state = (u8)present_val.intval;
-		}
+	if (psy && psy->desc && action == PSY_EVENT_PROP_CHANGED &&
+			!strcmp(psy->desc->name, gti->usb_psy_name)) {
+		gti_update_charger_state(gti, psy);
 	}
-
-	return 0;
+	return NOTIFY_DONE;
 }
 
 int goog_offload_probe(struct goog_touch_interface *gti)
@@ -2881,6 +2890,7 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 	u8 *offload_ids_array;
 	int offload_ids_size;
 	int id_size;
+	const char *usb_psy_name = NULL;
 
 	/*
 	 * TODO(b/201610482): rename DEVICE_NAME in touch_offload.h for more specific.
@@ -3050,6 +3060,11 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 	GOOG_INFO(gti, "v4l2 W/H=(%lu, %lu), v4l2_enabled=%d.\n",
 		gti->v4l2.width, gti->v4l2.height, gti->v4l2_enabled);
 
+	if (!of_property_read_string(np, "goog,usb-psy-name", &usb_psy_name))
+		strlcpy(gti->usb_psy_name, usb_psy_name, sizeof(gti->usb_psy_name));
+	else
+		strlcpy(gti->usb_psy_name, "usb", sizeof(gti->usb_psy_name));
+
 	/* Register for charger plugging status */
 	gti->charger_notifier.notifier_call = gti_charger_state_change;
 	ret = power_supply_reg_notifier(&gti->charger_notifier);
@@ -3057,6 +3072,9 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 		GOOG_ERR(gti, "Failed to register power_supply_reg_notifier!\n");
 		goto err_offload_probe;
 	}
+
+	gti_update_charger_state(gti,
+		power_supply_get_by_name(gti->usb_psy_name));
 
 err_offload_probe:
 	return ret;
