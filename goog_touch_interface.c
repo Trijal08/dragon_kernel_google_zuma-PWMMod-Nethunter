@@ -2899,12 +2899,16 @@ EXPORT_SYMBOL_GPL(goog_input_process);
 
 void goog_input_lock(struct goog_touch_interface *gti)
 {
+	if (!gti)
+		return;
 	mutex_lock(&gti->input_lock);
 }
 EXPORT_SYMBOL_GPL(goog_input_lock);
 
 void goog_input_unlock(struct goog_touch_interface *gti)
 {
+	if (!gti)
+		return;
 	mutex_unlock(&gti->input_lock);
 }
 EXPORT_SYMBOL_GPL(goog_input_unlock);
@@ -2913,6 +2917,10 @@ void goog_input_set_timestamp(
 		struct goog_touch_interface *gti,
 		struct input_dev *dev, ktime_t timestamp)
 {
+	if (!gti) {
+		input_set_timestamp(dev, timestamp);
+		return;
+	}
 	gti->input_timestamp = timestamp;
 	gti->input_timestamp_changed = true;
 }
@@ -2922,6 +2930,11 @@ void goog_input_mt_slot(
 		struct goog_touch_interface *gti,
 		struct input_dev *dev, int slot)
 {
+	if (!gti) {
+		input_mt_slot(dev, slot);
+		return;
+	}
+
 	if (slot < 0 || slot >= MAX_SLOTS) {
 		GOOG_ERR(gti, "Invalid slot: %d\n", slot);
 		return;
@@ -2942,6 +2955,11 @@ void goog_input_mt_report_slot_state(
 		struct goog_touch_interface *gti,
 		struct input_dev *dev, unsigned int tool_type, bool active)
 {
+	if (!gti) {
+		input_mt_report_slot_state(dev, tool_type, active);
+		return;
+	}
+
 	switch (tool_type) {
 	case MT_TOOL_FINGER:
 		if (active) {
@@ -2971,6 +2989,11 @@ void goog_input_report_abs(
 		struct goog_touch_interface *gti,
 		struct input_dev *dev, unsigned int code, int value)
 {
+	if (!gti) {
+		input_report_abs(dev, code, value);
+		return;
+	}
+
 	switch (code) {
 	case ABS_MT_POSITION_X:
 		gti->offload.coords[gti->slot].x = value;
@@ -3008,13 +3031,19 @@ void goog_input_report_key(
 		struct goog_touch_interface *gti,
 		struct input_dev *dev, unsigned int code, int value)
 {
-
+	if (!gti) {
+		input_report_key(dev, code, value);
+		return;
+	}
 }
 EXPORT_SYMBOL_GPL(goog_input_report_key);
 
 void goog_input_sync(struct goog_touch_interface *gti, struct input_dev *dev)
 {
-
+	if (!gti) {
+		input_sync(dev);
+		return;
+	}
 }
 EXPORT_SYMBOL_GPL(goog_input_sync);
 
@@ -3629,6 +3658,9 @@ EXPORT_SYMBOL_GPL(goog_pm_unregister_notification);
 void goog_notify_fw_status_changed(struct goog_touch_interface *gti,
 		enum gti_fw_status status, struct gti_fw_status_data* data)
 {
+	if (!gti)
+		return;
+
 	switch (status) {
 	case GTI_FW_STATUS_RESET:
 		GOOG_INFO(gti, "Firmware has been reset\n");
