@@ -264,14 +264,28 @@ struct gs_panel_funcs {
 	void (*mode_set)(struct gs_panel *gs_panel, const struct gs_panel_mode *mode);
 
 	/**
+	 * @get_te2_edges:
+	 *
+	 * This callback is used to get the rising and falling edges of TE2 signal.
+	 * The input buf is used to store the results in string.
+	 */
+	ssize_t (*get_te2_edges)(struct gs_panel *gs_panel, char *buf, bool lp_mode);
+
+	/**
+	 * @set_te2_edges:
+	 *
+	 * This callback is used to configure the rising and falling edges of TE2
+	 * signal. The input timings include the values we need to configure.
+	 */
+	int (*set_te2_edges)(struct gs_panel *gs_panel, u32 *timings, bool lp_mode);
+
+	/**
 	 * @update_te2:
 	 *
 	 * This callback is used to update the TE2 signal via DCS commands.
 	 * This should be called when the display state is changed between
 	 * normal and LP modes, or the refresh rate and LP brightness are
 	 * changed.
-	 *
-	 * TODO(b/279521893): implementation
 	 */
 	void (*update_te2)(struct gs_panel *gs_panel);
 
@@ -512,6 +526,7 @@ struct gs_panel_desc {
 	const struct gs_dsi_cmdset *lp_cmdset;
 	const struct gs_binned_lp *binned_lp;
 	const size_t num_binned_lp;
+	bool has_off_binned_lp_entry;
 	const struct drm_panel_funcs *panel_func;
 	const struct gs_panel_funcs *gs_panel_func;
 	const u32 reset_timing_ms[PANEL_RESET_TIMING_COUNT];
@@ -728,6 +743,37 @@ static inline bool gs_is_panel_initialized(const struct gs_panel *ctx)
 	       ctx->panel_state != GPANEL_STATE_HANDOFF_MODESET;
 }
 
+/**
+ * gs_get_te2_type_len() - get number of TE2 timings for the mode type
+ * @desc: Panel description pointer
+ * @lp_mode: Whether we're getting the number of lp_mode timings or not
+ *
+ * Note that sometimes the `binned_lp` entries start with an "off" entry.
+ * This function reads the `has_off_binned_lp_entry` to determine whether to
+ * skip that first entry or not.
+ *
+ * Return: number of te2 timings possible for normal or lp modes, or negative if error
+ */
+static inline ssize_t gs_get_te2_type_len(const struct gs_panel_desc *desc, bool lp_mode)
+{
+	if (!desc)
+		return -EINVAL;
+	if (lp_mode) {
+		size_t actual_num_binned_lp = desc->has_off_binned_lp_entry ?
+						      desc->num_binned_lp - 1 :
+						      desc->num_binned_lp;
+
+		if (!desc->lp_modes)
+			return -EINVAL;
+		else
+			return desc->lp_modes->num_modes * actual_num_binned_lp;
+	} else {
+		if (!desc->modes)
+			return -EINVAL;
+		return desc->modes->num_modes;
+	}
+}
+
 static inline bool gs_is_local_hbm_post_enabling_supported(struct gs_panel *ctx)
 {
 	return false;
@@ -762,6 +808,21 @@ const struct gs_panel_mode *gs_panel_get_mode(struct gs_panel *ctx,
 		((ctx) && ((ctx)->desc) && ((ctx)->desc->gs_panel_func)\
 		 && ((ctx)->desc->gs_panel_func->func))
 
+#define for_each_drm_display_mode_in_array(i, mode, mode_array)                  \
+	for (i = 0, mode = mode_array->modes[i].mode; i < mode_array->num_modes; \
+	     i++, mode = mode_array->modes[i].mode)
+
+#define for_each_display_mode(i, mode, ctx) \
+	for_each_drm_display_mode_in_array(i, mode, ctx->desc->modes)
+
+#define for_each_gs_binned_lp(i, binned_lp, ctx)                                        \
+	for (i = 0, binned_lp = &ctx->desc->binned_lp[i]; i < ctx->desc->num_binned_lp; \
+	     i++, binned_lp = &ctx->desc->binned_lp[i])
+
+#define for_each_te2_timing(ctx, lp_mode, data, i)                                         \
+	for (data = ctx->te2.mode_data + (!(lp_mode) ? 0 : (ctx)->desc->modes->num_modes), \
+	    i = gs_get_te2_type_len((ctx->desc), (lp_mode));                               \
+	     i > 0; i--, data++)
 
 u16 gs_panel_get_brightness(struct gs_panel *panel);
 
@@ -874,6 +935,17 @@ void gs_panel_msleep(u32 delay_ms);
  * or UINT_MAX if unsupported.
  */
 unsigned int gs_panel_get_idle_time_delta(struct gs_panel *ctx);
+
+int gs_panel_get_current_mode_te2(struct gs_panel *ctx, struct gs_panel_te2_timing *timing);
+/**
+ * gs_panel_update_te2() - calls panel-specific TE2 update callback
+ * @ctx: handle for gs_panel
+ *
+ * A number of functions will modify panel operation such that we may need to
+ * update te2 configuration; this function is shorthand for executing the
+ * necessary changes in the panel driver.
+ */
+void gs_panel_update_te2(struct gs_panel *ctx);
 
 static inline void backlight_state_changed(struct backlight_device *bl)
 {

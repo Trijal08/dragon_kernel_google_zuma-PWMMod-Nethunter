@@ -74,6 +74,22 @@ int gs_panel_first_enable(struct gs_panel *ctx);
 void panel_update_idle_mode_locked(struct gs_panel *ctx);
 
 /**
+ * gs_set_te2_timing() - handle for setting te2 timings from sysfs node
+ * @ctx: panel struct
+ * @count: size of the input buffer
+ * @buf: input buffer provided to sysfs node
+ * @lp_mode: whether these timings apply to LP modes
+ *
+ * This function is called by both the normal and low-power versions of the
+ * te2_store functions from the sysfs nodes. It consumes the userspace command,
+ * parses it, and passes (valid) parsed data to the appropriate function to
+ * actually modify the te2 timings for the panel modes
+ *
+ * Return: number of bytes consumed by input buffer, or negative value on error
+ */
+ssize_t gs_set_te2_timing(struct gs_panel *ctx, size_t count, const char *buf, bool lp_mode);
+
+/**
  * gs_panel_set_vddd_voltage() - Sets appropriate voltage on vddd
  * @ctx: Pointer to gs_panel
  * @is_lp: whether we're setting voltage for an lp mode

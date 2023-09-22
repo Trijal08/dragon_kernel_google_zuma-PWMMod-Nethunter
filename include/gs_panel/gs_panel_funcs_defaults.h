@@ -84,4 +84,24 @@ int gs_panel_read_id(struct gs_panel *ctx);
 bool gs_panel_is_mode_seamless_helper(const struct gs_panel *ctx,
 				      const struct gs_panel_mode *pmode);
 
+/**
+ * gs_panel_get_te2_edges_helper() - Get rising and falling edges of TE2 signal
+ * @ctx: Reference to panel data
+ * @buf: string buffer to which to write the TE2 timing data
+ * @lp_mode: Whether this should display data about LP or non-LP TE2 timing
+ *
+ * Return: length of string written to buffer, or negative value on error
+ */
+ssize_t gs_panel_get_te2_edges_helper(struct gs_panel *ctx, char *buf, bool lp_mode);
+
+/**
+ * gs_panel_set_te2_edges_helper() - Configure rising/falling te2 edges
+ * @ctx: Reference to panel data
+ * @timings: Array of values to configure into the timings
+ * @lp_mode: Whether we're configuring LP or non-LP timings
+ *
+ * Return: 0 on success, negative value on error.
+ */
+int gs_panel_set_te2_edges_helper(struct gs_panel *ctx, u32 *timings, bool lp_mode);
+
 #endif // _GS_PANEL_FUNCS_DEFAULTS_H_

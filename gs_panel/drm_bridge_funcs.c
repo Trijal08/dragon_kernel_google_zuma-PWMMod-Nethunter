@@ -183,15 +183,11 @@ static void gs_panel_bridge_enable(struct drm_bridge *bridge,
 		dev_dbg(ctx->dev, "self refresh state : %s\n", __func__);
 
 		ctx->idle_data.self_refresh_active = false;
-		/*TODO(tknelms) idle mode
-		panel_update_idle_mode_locked(ctx); */
+		panel_update_idle_mode_locked(ctx);
 	} else {
 		gs_panel_set_backlight_state(ctx, ctx->panel_state);
-		/* TODO(tknelms) gs_panel_update_te2
-		if (ctx->panel_state == PANEL_STATE_NORMAL)
+		if (ctx->panel_state == GPANEL_STATE_NORMAL)
 			gs_panel_update_te2(ctx);
-		*/
-		dev_info(ctx->dev, "missing update_te2 functions in %s\n", __func__);
 	}
 
 	if (is_lp_mode && gs_panel_has_func(ctx, set_post_lp_mode))

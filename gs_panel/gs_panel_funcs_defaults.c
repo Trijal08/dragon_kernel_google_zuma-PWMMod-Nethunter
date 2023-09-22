@@ -110,3 +110,49 @@ bool gs_panel_is_mode_seamless_helper(const struct gs_panel *ctx, const struct g
 	return drm_mode_equal_no_clocks(current_mode, new_mode);
 }
 EXPORT_SYMBOL(gs_panel_is_mode_seamless_helper);
+
+ssize_t gs_panel_get_te2_edges_helper(struct gs_panel *ctx, char *buf, bool lp_mode)
+{
+	struct gs_te2_mode_data *data;
+	size_t len = 0;
+	int i;
+
+	if (!ctx)
+		return -EINVAL;
+
+	for_each_te2_timing(ctx, lp_mode, data, i) {
+		len += scnprintf(buf + len, PAGE_SIZE - len, "%dx%d@%d", data->mode->hdisplay,
+				 data->mode->vdisplay, drm_mode_vrefresh(data->mode));
+
+		if (data->binned_lp)
+			len += scnprintf(buf + len, PAGE_SIZE - len, "-lp_%s",
+					 data->binned_lp->name);
+
+		len += scnprintf(buf + len, PAGE_SIZE - len, " rising %u falling %u\n",
+				 data->timing.rising_edge, data->timing.falling_edge);
+	}
+
+	return len;
+}
+EXPORT_SYMBOL(gs_panel_get_te2_edges_helper);
+
+int gs_panel_set_te2_edges_helper(struct gs_panel *ctx, u32 *timings, bool lp_mode)
+{
+	struct gs_te2_mode_data *data;
+	const u32 *t;
+	int i;
+
+	if (!ctx || !timings)
+		return -EINVAL;
+
+	t = timings;
+
+	for_each_te2_timing(ctx, lp_mode, data, i) {
+		data->timing.rising_edge = t[0];
+		data->timing.falling_edge = t[1];
+		t += 2;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(gs_panel_set_te2_edges_helper);

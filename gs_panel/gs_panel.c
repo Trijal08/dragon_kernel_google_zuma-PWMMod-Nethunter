@@ -291,6 +291,149 @@ const struct gs_panel_mode *gs_panel_get_mode(struct gs_panel *ctx,
 	return NULL;
 }
 
+/* TE2 */
+
+/**
+ * parse_u32_buf() - Parses a user-provided list of ints into a buffer
+ * @src: Source buffer
+ * @src_len: Size of source buffer
+ * @out: Output buffer for parsed u32s
+ * @out_len: Size out output buffer
+ *
+ * This is a convenience function for parsing a user-provided list of unsigned
+ * integers into a buffer. It is meant primarily for handling command-line
+ * input, like for a sysfs node.
+ *
+ * Return: Number of integers parsed
+ */
+static int parse_u32_buf(char *src, size_t src_len, u32 *out, size_t out_len)
+{
+	int rc = 0, cnt = 0;
+	char *str;
+	const char *delim = " ";
+
+	if (!src || !src_len || !out || !out_len)
+		return -EINVAL;
+
+	/* src_len is the length of src including null character '\0' */
+	if (strnlen(src, src_len) == src_len)
+		return -EINVAL;
+
+	for (str = strsep(&src, delim); str != NULL; str = strsep(&src, delim)) {
+		rc = kstrtou32(str, 0, out + cnt);
+		if (rc)
+			return -EINVAL;
+
+		cnt++;
+		if (out_len == cnt)
+			break;
+	}
+	return cnt;
+}
+
+int gs_panel_get_current_mode_te2(struct gs_panel *ctx, struct gs_panel_te2_timing *timing)
+{
+	struct gs_te2_mode_data *data;
+	const struct drm_display_mode *mode;
+	u32 bl_th = 0;
+	bool is_lp_mode;
+	int i;
+
+	if (!ctx)
+		return -EINVAL;
+
+	if (!ctx->current_mode)
+		return -EAGAIN;
+
+	mode = &ctx->current_mode->mode;
+	is_lp_mode = ctx->current_mode->gs_mode.is_lp_mode;
+
+	if (is_lp_mode && !ctx->desc->lp_modes->num_modes) {
+		dev_warn(ctx->dev, "Missing LP mode command set\n");
+		return -EINVAL;
+	}
+
+	if (is_lp_mode && !ctx->current_binned_lp)
+		return -EAGAIN;
+
+	if (ctx->current_binned_lp)
+		bl_th = ctx->current_binned_lp->bl_threshold;
+
+	for_each_te2_timing(ctx, is_lp_mode, data, i) {
+		if (data->mode != mode)
+			continue;
+
+		if (data->binned_lp && data->binned_lp->bl_threshold != bl_th)
+			continue;
+
+		timing->rising_edge = data->timing.rising_edge;
+		timing->falling_edge = data->timing.falling_edge;
+
+		dev_dbg(ctx->dev, "found TE2 timing %s at %dHz: rising %u falling %u\n",
+			!is_lp_mode ? "normal" : "LP", drm_mode_vrefresh(mode), timing->rising_edge,
+			timing->falling_edge);
+
+		return 0;
+	}
+
+	dev_warn(ctx->dev, "failed to find %s TE2 timing at %dHz\n", !is_lp_mode ? "normal" : "LP",
+		 drm_mode_vrefresh(mode));
+
+	return -EINVAL;
+}
+EXPORT_SYMBOL(gs_panel_get_current_mode_te2);
+
+void gs_panel_update_te2(struct gs_panel *ctx)
+{
+	if (!gs_panel_has_func(ctx, update_te2))
+		return;
+
+	ctx->desc->gs_panel_func->update_te2(ctx);
+
+	if (ctx->bl)
+		te2_state_changed(ctx->bl);
+}
+EXPORT_SYMBOL(gs_panel_update_te2);
+
+ssize_t gs_set_te2_timing(struct gs_panel *ctx, size_t count, const char *buf, bool is_lp_mode)
+{
+	char *buf_dup;
+	ssize_t type_len, data_len;
+	u32 timing[MAX_TE2_TYPE * 2] = { 0 };
+
+	if (!gs_is_panel_active(ctx))
+		return -EPERM;
+
+	if (!count || !gs_panel_has_func(ctx, update_te2) || !gs_panel_has_func(ctx, set_te2_edges))
+		return -EINVAL;
+
+	buf_dup = kstrndup(buf, count, GFP_KERNEL);
+	if (!buf_dup)
+		return -ENOMEM;
+
+	type_len = gs_get_te2_type_len(ctx->desc, is_lp_mode);
+	if (type_len < 0) {
+		kfree(buf_dup);
+		return type_len;
+	}
+	data_len = parse_u32_buf(buf_dup, count + 1, timing, type_len * 2);
+	if (data_len != type_len * 2) {
+		dev_warn(ctx->dev, "invalid number of TE2 %s timing: expected %ld but actual %ld\n",
+			 is_lp_mode ? "LP" : "normal", type_len * 2, data_len);
+		kfree(buf_dup);
+		return -EINVAL;
+	}
+
+	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+	ctx->desc->gs_panel_func->set_te2_edges(ctx, timing, is_lp_mode);
+	gs_panel_update_te2(ctx);
+	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+
+	kfree(buf_dup);
+
+	return count;
+}
+
 /* IDLE MODE */
 
 unsigned int gs_panel_get_idle_time_delta(struct gs_panel *ctx)
@@ -358,7 +501,7 @@ void panel_update_idle_mode_locked(struct gs_panel *ctx)
 	}
 
 	if (funcs->set_self_refresh(ctx, idle_data->self_refresh_active)) {
-		/*TODO(b/279521893) gs_panel_update_te2(ctx);*/
+		gs_panel_update_te2(ctx);
 		ctx->timestamps.last_self_refresh_active_ts = ktime_get();
 	}
 }
@@ -706,6 +849,67 @@ static int gs_panel_init_backlight(struct gs_panel *ctx)
 	return 0;
 }
 
+static void gs_panel_init_te2(struct gs_panel *ctx)
+{
+	struct gs_te2_mode_data *data;
+	const struct gs_binned_lp *binned_lp;
+	int i, j;
+	int lp_mode_count = ctx->desc->lp_modes->num_modes ?: 1;
+	int mode_count, actual_num_binned_lp;
+
+	if (ctx->desc->has_off_binned_lp_entry)
+		actual_num_binned_lp = ctx->desc->num_binned_lp - 1;
+	else
+		actual_num_binned_lp = ctx->desc->num_binned_lp;
+	mode_count = ctx->desc->modes->num_modes + lp_mode_count * actual_num_binned_lp;
+
+	if (!gs_panel_has_func(ctx, get_te2_edges) || !gs_panel_has_func(ctx, set_te2_edges) ||
+	    !gs_panel_has_func(ctx, update_te2))
+		return;
+
+	/* TE2 for non-LP modes */
+	for (i = 0; i < ctx->desc->modes->num_modes; i++) {
+		const struct gs_panel_mode *pmode = &ctx->desc->modes->modes[i];
+
+		data = &ctx->te2.mode_data[i];
+		data->mode = &pmode->mode;
+		data->timing.rising_edge = pmode->te2_timing.rising_edge;
+		data->timing.falling_edge = pmode->te2_timing.falling_edge;
+	}
+
+	/* TE2 for LP modes */
+	for (i = 0; i < lp_mode_count; i++) {
+		int lp_idx = ctx->desc->modes->num_modes;
+		int lp_mode_offset = lp_idx + i * actual_num_binned_lp;
+
+		for_each_gs_binned_lp(j, binned_lp, ctx) {
+			int idx;
+
+			/* ignore off binned lp entry, if any */
+			if (ctx->desc->has_off_binned_lp_entry && j == 0)
+				continue;
+
+			if (ctx->desc->has_off_binned_lp_entry)
+				idx = lp_mode_offset + j - 1;
+			else
+				idx = lp_mode_offset + j;
+			if (idx >= mode_count) {
+				dev_warn(ctx->dev, "idx %d exceeds mode size %d\n", idx,
+					 mode_count);
+				return;
+			}
+
+			data = &ctx->te2.mode_data[idx];
+			data->mode = &ctx->desc->lp_modes->modes[i].mode;
+			data->binned_lp = binned_lp;
+			data->timing.rising_edge = binned_lp->te2_timing.rising_edge;
+			data->timing.falling_edge = binned_lp->te2_timing.falling_edge;
+		}
+	}
+
+	ctx->te2.option = GTE2_OPT_CHANGEABLE;
+}
+
 int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 {
 	struct device *dev = &dsi->dev;
@@ -751,6 +955,9 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	ret = gs_panel_init_backlight(ctx);
 	if (ret)
 		return ret;
+
+	/* TE2 */
+	gs_panel_init_te2(ctx);
 
 	/* HBM */
 	/*TODO(tknelms): hbm*/

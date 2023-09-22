@@ -181,6 +181,94 @@ static ssize_t min_vrefresh_show(struct device *dev, struct device_attribute *at
 	return sysfs_emit(buf, "%d\n", ctx->min_vrefresh);
 }
 
+/**
+ * gs_get_te2_timing() - Outputs te2 timingss to sysfs
+ * @ctx: panel struct
+ * @buf: output buffer for human-readable te2 data
+ * @lp_mode: whether these timings apply to LP modes
+ *
+ * Return: number of bytes written to buffer
+ */
+static ssize_t gs_get_te2_timing(struct gs_panel *ctx, char *buf, bool lp_mode)
+{
+	size_t len;
+
+	if (!gs_panel_has_func(ctx, get_te2_edges))
+		return -EPERM;
+
+	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+	len = ctx->desc->gs_panel_func->get_te2_edges(ctx, buf, lp_mode);
+	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+
+	return len;
+}
+
+static ssize_t te2_timing_store(struct device *dev, struct device_attribute *attr, const char *buf,
+				size_t count)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	ssize_t ret;
+
+	if (!gs_is_panel_initialized(ctx))
+		return -EAGAIN;
+
+	ret = gs_set_te2_timing(ctx, count, buf, false);
+	if (ret < 0)
+		dev_err(ctx->dev, "failed to set normal mode TE2 timing: ret %ld\n", ret);
+
+	return ret;
+}
+
+static ssize_t te2_timing_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	ssize_t ret;
+
+	if (!gs_is_panel_initialized(ctx))
+		return -EAGAIN;
+
+	ret = gs_get_te2_timing(ctx, buf, false);
+	if (ret < 0)
+		dev_err(ctx->dev, "failed to get normal mode TE2 timing: ret %ld\n", ret);
+
+	return ret;
+}
+
+static ssize_t te2_lp_timing_store(struct device *dev, struct device_attribute *attr,
+				   const char *buf, size_t count)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	ssize_t ret;
+
+	if (!gs_is_panel_initialized(ctx))
+		return -EAGAIN;
+
+	ret = gs_set_te2_timing(ctx, count, buf, true);
+	if (ret < 0)
+		dev_err(ctx->dev, "failed to set LP mode TE2 timing: ret %ld\n", ret);
+
+	return ret;
+}
+
+static ssize_t te2_lp_timing_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	ssize_t ret;
+
+	if (!gs_is_panel_initialized(ctx))
+		return -EAGAIN;
+
+	ret = gs_get_te2_timing(ctx, buf, true);
+	if (ret < 0)
+		dev_err(ctx->dev, "failed to get LP mode TE2 timing: ret %ld\n", ret);
+
+	return ret;
+}
+
 static DEVICE_ATTR_RO(serial_number);
 static DEVICE_ATTR_RO(panel_extinfo);
 static DEVICE_ATTR_RO(panel_name);
@@ -188,11 +276,11 @@ static DEVICE_ATTR_RW(panel_idle);
 static DEVICE_ATTR_RW(panel_need_handle_idle_exit);
 static DEVICE_ATTR_RW(idle_delay_ms);
 static DEVICE_ATTR_RW(min_vrefresh);
+static DEVICE_ATTR_RW(te2_timing);
+static DEVICE_ATTR_RW(te2_lp_timing);
 /* TODO(tknelms): re-implement below */
 #if 0
 static DEVICE_ATTR_WO(gamma);
-static DEVICE_ATTR_RW(te2_timing);
-static DEVICE_ATTR_RW(te2_lp_timing);
 static DEVICE_ATTR_RW(force_power_on);
 static DEVICE_ATTR_RW(osc2_clk_khz);
 static DEVICE_ATTR_RO(available_osc2_clk_khz);
@@ -207,11 +295,11 @@ static const struct attribute *panel_attrs[] = {
 	&dev_attr_panel_need_handle_idle_exit.attr,
 	&dev_attr_idle_delay_ms.attr,
 	&dev_attr_min_vrefresh.attr,
+	&dev_attr_te2_timing.attr,
+	&dev_attr_te2_lp_timing.attr,
 /* TODO(tknelms): re-implement below */
 #if 0
 	&dev_attr_gamma.attr,
-	&dev_attr_te2_timing.attr,
-	&dev_attr_te2_lp_timing.attr,
 	&dev_attr_force_power_on.attr,
 	&dev_attr_osc2_clk_khz.attr,
 	&dev_attr_available_osc2_clk_khz.attr,
