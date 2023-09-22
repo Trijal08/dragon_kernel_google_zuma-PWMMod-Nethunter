@@ -1,4 +1,28 @@
 # SPDX-License-Identifier: GPL-2.0-only
+What: /sys/devices/platform/gs-drm-connector/panel/serial_number
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client can use to view serial number of panel.
+  This value should be unique to each panel device.
+
+What: /sys/devices/platform/gs-drm-connector/panel/panel_extinfo
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client can use to view build information of the panel.
+  The format of this data is module-dependent, but should
+  be able to identify build revision, manufacturer, and other related data.
+
+What: /sys/devices/platform/gs-drm-connector/panel/panel_name
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client can use to view the name of the panel.
+
 What: /sys/devices/platform/gs-drm-connector/panel/panel_idle
 Date: September 2023
 KernelVersion: 6.1
