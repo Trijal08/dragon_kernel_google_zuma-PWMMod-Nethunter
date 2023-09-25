@@ -480,6 +480,7 @@ static void cancel_transaction(struct lwis_device *lwis_dev, struct lwis_transac
 void lwis_process_transactions_in_queue(struct lwis_client *client)
 {
 	unsigned long flags;
+	unsigned long flush_flags;
 	struct list_head *it_tran, *it_tran_tmp;
 	struct list_head pending_events;
 	struct list_head pending_fences;
@@ -504,7 +505,7 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 					 "Client is not ready to process transactions");
 			}
 			spin_unlock_irqrestore(&client->transaction_lock, flags);
-			spin_lock_irqsave(&client->flush_lock, flags);
+			spin_lock_irqsave(&client->flush_lock, flush_flags);
 			if (client->flush_state == NOT_FLUSHING) {
 				if (i2c_bus_manager) {
 					kthread_queue_work(&i2c_bus_manager->i2c_bus_worker,
@@ -514,7 +515,7 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 							   &client->transaction_work);
 				}
 			}
-			spin_unlock_irqrestore(&client->flush_lock, flags);
+			spin_unlock_irqrestore(&client->flush_lock, flush_flags);
 			return;
 		}
 
@@ -554,7 +555,7 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 				 * If the client is flushing, cancel the remaining transaction
 				 * and delete from the process queue node.
 				 */
-				spin_lock_irqsave(&client->flush_lock, flags);
+				spin_lock_irqsave(&client->flush_lock, flush_flags);
 				if (client->flush_state == NOT_FLUSHING) {
 					if (lwis_transaction_debug) {
 						dev_info(
@@ -580,7 +581,7 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 					   transaction->resp->error_code, &pending_events,
 					   &pending_fences, false);
 				}
-				spin_unlock_irqrestore(&client->flush_lock, flags);
+				spin_unlock_irqrestore(&client->flush_lock, flush_flags);
 				break;
 			}
 		}
