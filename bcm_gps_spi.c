@@ -34,6 +34,7 @@
 #include <asm/irq.h>
 #include <linux/kernel_stat.h>
 #include <linux/pm_runtime.h>
+#include <linux/platform_device.h>
 
 #include "bbd.h"
 #include "bcm_gps_spi.h"
@@ -49,10 +50,57 @@
  * Just for startup info notification.
  */
 #define BCM_BITRATE 12000
+#define DEVICE_NAME "gnss"
 
 static void bcm_on_packet_received(
 		void *_priv, unsigned char *data, unsigned int size);
 
+static void sscd_release(struct device *dev) {
+	(void)dev;
+}
+
+static ssize_t coredump_store(struct device *dev, struct device_attribute *attr, const char *buf,
+				size_t count)
+{
+	char *next;
+	int length;
+	char *reason;
+	static time64_t last_trigger_time;
+	struct sscd_segment seg;
+	time64_t trigger_time = ktime_get_seconds();
+	struct spi_device *spi = to_spi_device(dev);
+	struct bcm_spi_priv *priv = spi_get_drvdata(spi);
+	struct sscd_platform_data *pdata = dev_get_platdata(&priv->sscd_dev.dev);
+
+	if (pdata->sscd_report)
+		return -EPIPE;
+
+	/* Ignore the trigger time less than 30 seconds */
+	if (trigger_time - last_trigger_time < 30)
+		return -EBUSY;
+	last_trigger_time = trigger_time;
+
+	/* ; separate the crash reason and coredump value */
+	next = strchr(buf, ';');
+	if (!next)
+		return -EINVAL;
+
+	length = (int)(next - buf);
+	reason = kstrndup(buf, length + 1, GFP_KERNEL);
+	if (!reason)
+		return -ENOMEM;
+	reason[length] = '\0';
+
+	length = strlen(next + 1);
+	seg.addr = next + 1;
+	seg.size = length;
+	pdata->sscd_report(&priv->sscd_dev, &seg, 1, 0, reason);
+
+	kfree(reason);
+
+	return count;
+}
+static DEVICE_ATTR_WO(coredump);
 
 static ssize_t nstandby_show(
 		struct device *dev, struct device_attribute *attr, char *buf)
@@ -1429,6 +1477,22 @@ static int bcm_spi_probe(struct spi_device *spi)
 	/* Set driver data */
 	spi_set_drvdata(spi, priv);
 
+	/* Register ssrdump platform */
+	priv->sscd_dev = (struct platform_device){
+		.name            = DEVICE_NAME,
+		.driver_override = SSCD_NAME,
+		.id              = -1,
+		.dev             = {
+			.platform_data = &priv->sscd_pdata,
+			.release       = sscd_release,
+			},
+	};
+
+	platform_device_register(&priv->sscd_dev);
+
+	if (device_create_file(&spi->dev, &dev_attr_coredump))
+		dev_err(&spi->dev, "Unable to create sysfs coredump entry");
+
 	/* Init - miscdev stuff */
 	init_waitqueue_head(&priv->poll_wait);
 	priv->read_buf.buf = priv->_read_buf;
@@ -1509,8 +1573,13 @@ static int bcm_spi_remove(struct spi_device *spi)
 	/* Free everything */
 	bbd_exit(&spi->dev);
 
+	/* Clean ssr dump driver */
+	platform_device_unregister(&priv->sscd_dev);
+
 	device_remove_file(&priv->spi->dev, &dev_attr_nstandby);
 	device_remove_file(&priv->spi->dev, &dev_attr_sspmcureq);
+	device_remove_file(&priv->spi->dev, &dev_attr_coredump);
+
 	return 0;
 }
 
