@@ -17,5 +17,6 @@ kernel_module(
     visibility = [
         "//private/devices/google:__subpackages__",
         "//private/google-modules/display:__subpackages__",
+        "//private/google-modules/touch:__subpackages__",
     ],
 )

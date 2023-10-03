@@ -310,10 +310,10 @@ int gs_drm_connector_create_properties(struct drm_connector *connector)
 	if (IS_ERR(p->panel_idle_support))
 		return PTR_ERR(p->panel_idle_support);
 
-	p->vrr_switch_duration = drm_property_create_range(drm_dev, DRM_MODE_PROP_IMMUTABLE,
-							   "vrr_switch_duration", 0, UINT_MAX);
-	if (IS_ERR(p->vrr_switch_duration))
-		return PTR_ERR(p->vrr_switch_duration);
+	p->rr_switch_duration = drm_property_create_range(drm_dev, DRM_MODE_PROP_IMMUTABLE,
+							  "rr_switch_duration", 0, UINT_MAX);
+	if (IS_ERR(p->rr_switch_duration))
+		return PTR_ERR(p->rr_switch_duration);
 
 	p->refresh_on_lp =
 		drm_property_create_bool(drm_dev, DRM_MODE_PROP_IMMUTABLE, "refresh_on_lp");

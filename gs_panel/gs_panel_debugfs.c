@@ -232,6 +232,20 @@ static int debugfs_add_panel_folder(struct gs_panel_debugfs_entries *entries, st
 }
 
 /**
+ * debugfs_add_driver_specific_entries() - call driver-specific debugfs_init
+ * @ctx: Reference to panel data
+ * @parent: debugfs entry for parent (likely the connector)
+ *
+ * This short function calls any driver-specific function to add to the debugfs
+ * system, based on the function in the panel's struct drm_panel_funcs.
+ */
+static void debugfs_add_driver_specific_entries(struct gs_panel *ctx, struct dentry *parent)
+{
+	if (ctx->desc->panel_func && ctx->desc->panel_func->debugfs_init)
+		ctx->desc->panel_func->debugfs_init(&ctx->base, parent);
+}
+
+/**
  * debugfs_add_dsi_folder - Adds debugfs folder for direct dsi operations
  * @dsi: DSI device pointer for panel
  * @entries: Reference to debugfs entries for panel
@@ -356,6 +370,7 @@ int gs_panel_create_debugfs_entries(struct gs_panel *ctx, struct dentry *parent)
 	ret = debugfs_add_misc_panel_entries(ctx, ctx->debugfs_entries.panel);
 	if (ret)
 		return ret;
+	debugfs_add_driver_specific_entries(ctx, parent);
 
 	return 0;
 }

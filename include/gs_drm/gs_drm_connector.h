@@ -50,8 +50,8 @@ struct gs_drm_connector_properties {
 	struct drm_property *panel_idle_support;
 	struct drm_property *mipi_sync;
 	struct drm_property *panel_orientation;
-	struct drm_property *vrr_switch_duration;
 	struct drm_property *refresh_on_lp;
+	struct drm_property *rr_switch_duration;
 };
 
 struct gs_display_partial {

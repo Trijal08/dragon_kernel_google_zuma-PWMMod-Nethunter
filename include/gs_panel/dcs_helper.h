@@ -268,13 +268,19 @@ static inline int gs_dcs_write_dsc_config(struct device *dev, const struct drm_d
 }
 #endif
 
-/* Arrays */
+/*
+ * Arrays
+ *
+ * These macros execute dcs writes on an array of data.
+ * Optionally, flags or a delay-after time may be specified.
+ */
 
 #define GS_DCS_WRITE_DELAY_FLAGS_CMDLIST(dev, delay_ms, flags, cmdlist)            \
 	do {                                                                       \
 		struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);             \
 		gs_dsi_dcs_write_buffer(dsi, cmdlist, ARRAY_SIZE(cmdlist), flags); \
-		usleep_range(delay_ms * 1000, delay_ms * 1000 + 10);               \
+		if (delay_ms > 0)                                                  \
+			usleep_range(delay_ms * 1000, delay_ms * 1000 + 10);       \
 	} while (0)
 #define GS_DCS_WRITE_DELAY_CMDLIST(dev, delay_ms, cmdlist) \
 	GS_DCS_WRITE_DELAY_FLAGS_CMDLIST(dev, delay_ms, 0, cmdlist)
@@ -283,7 +289,13 @@ static inline int gs_dcs_write_dsc_config(struct device *dev, const struct drm_d
 #define GS_DCS_WRITE_CMDLIST(dev, cmdlist) \
 	GS_DCS_WRITE_DELAY_FLAGS_CMDLIST(dev, 0, 0, cmdlist)
 
-/* Variadic */
+/*
+ * Variadic
+ *
+ * These macros execute dcs writes on data arranged as variadic arguments
+ * (that is, providing the data as a series of arguments to the function)
+ * Optionally, flags or a delay-after time may be specified
+ */
 
 #define GS_DCS_WRITE_DELAY_FLAGS_CMD(dev, delay_ms, flags, seq...)         \
 	do {                                                               \
@@ -297,14 +309,25 @@ static inline int gs_dcs_write_dsc_config(struct device *dev, const struct drm_d
 #define GS_DCS_WRITE_CMD(dev, seq...) \
 	GS_DCS_WRITE_DELAY_FLAGS_CMD(dev, 0, 0, seq)
 
-/* Buffered Writes (Arrays) */
+/*
+ * Buffered Writes (Arrays)
+ *
+ * These macros add arrays of data to a write buffer to be output to the panel
+ * Optionally, that buffer may be flushed immediately after.
+ */
 
 #define GS_DCS_BUF_ADD_CMDLIST(dev, cmdlist) \
 	GS_DCS_WRITE_FLAGS_CMDLIST(dev, GS_DSI_MSG_QUEUE, cmdlist)
 #define GS_DCS_BUF_ADD_CMDLIST_AND_FLUSH(dev, cmdlist) \
 	GS_DCS_WRITE_FLAGS_CMDLIST(dev, GS_DSI_MSG_IGNORE_VBLANK, cmdlist)
 
-/* Buffered Writes (Variadic) */
+/*
+ * Buffered Writes (Variadic)
+ *
+ * These macros add data to a write buffer to be output to the panel from
+ * variadic input (that is, added as a list of arguments to the function)
+ * Optionally, that buffer may be flushed immediately after.
+ */
 
 #define GS_DCS_BUF_ADD_CMD(dev, seq...) \
 	GS_DCS_WRITE_FLAGS_CMD(dev, GS_DSI_MSG_QUEUE, seq)

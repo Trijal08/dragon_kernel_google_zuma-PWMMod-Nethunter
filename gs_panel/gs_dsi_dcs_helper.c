@@ -21,15 +21,15 @@
 
 #include "gs_panel_internal.h"
 
-void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmd_set,
-			       u32 panel_rev, u32 flags)
+void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmdset,
+			      u32 panel_rev, u32 flags)
 {
 	const struct gs_dsi_cmd *c;
 	const struct gs_dsi_cmd *last_cmd = NULL;
 	const u32 async_mask = GS_PANEL_CMD_SET_BATCH | GS_PANEL_CMD_SET_QUEUE;
 	u16 dsi_flags = 0;
 
-	if (!cmd_set || !cmd_set->num_cmd)
+	if (!cmdset || !cmdset->num_cmd)
 		return;
 
 	/* shouldn't have both queue and batch set together */
@@ -42,11 +42,11 @@ void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_c
 	if (flags & async_mask)
 		dsi_flags |= GS_DSI_MSG_QUEUE;
 
-	c = &cmd_set->cmds[cmd_set->num_cmd - 1];
+	c = &cmdset->cmds[cmdset->num_cmd - 1];
 	if (!c->panel_rev) {
 		last_cmd = c;
 	} else {
-		for (; c >= cmd_set->cmds; c--) {
+		for (; c >= cmdset->cmds; c--) {
 			if (c->panel_rev & panel_rev) {
 				last_cmd = c;
 				break;
@@ -58,7 +58,7 @@ void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_c
 	if (!last_cmd)
 		return;
 
-	for (c = cmd_set->cmds; c <= last_cmd; c++) {
+	for (c = cmdset->cmds; c <= last_cmd; c++) {
 		u32 delay_ms = c->delay_ms;
 
 		if (panel_rev && !(c->panel_rev & panel_rev))
@@ -74,10 +74,10 @@ void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_c
 }
 EXPORT_SYMBOL(gs_dsi_send_cmdset_flags);
 
-void gs_dsi_send_cmdset(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmd_set,
-			 u32 panel_rev)
+void gs_dsi_send_cmdset(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmdset,
+			u32 panel_rev)
 {
-	gs_dsi_send_cmdset_flags(dsi, cmd_set, panel_rev, 0);
+	gs_dsi_send_cmdset_flags(dsi, cmdset, panel_rev, 0);
 }
 EXPORT_SYMBOL(gs_dsi_send_cmdset);
 

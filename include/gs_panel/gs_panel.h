@@ -103,6 +103,12 @@ enum gs_panel_idle_mode {
 	GIDLE_MODE_ON_SELF_REFRESH,
 };
 
+enum gs_acl_mode {
+	ACL_OFF = 0,
+	ACL_NORMAL,
+	ACL_ENHANCED,
+};
+
 /**
  * enum gs_panel_te2_opt - option of TE2 frequency
  * TODO: reword, rethink, refactor (code style for enums relevant)
@@ -125,6 +131,21 @@ enum gs_local_hbm_enable_state {
 	GLOCAL_HBM_DISABLED = 0,
 	GLOCAL_HBM_ENABLED,
 	GLOCAL_HBM_ENABLING,
+};
+
+/**
+ * enum mode_progress_type - the type while mode switch is in progress
+ * @MODE_DONE: mode switch is done
+ * @MODE_RES_IN_PROGRESS: mode switch is in progress, only resolution is changed
+ * @MODE_RR_IN_PROGRESS: mode switch is in progress, only refresh rate is changed
+ * @MODE_RES_AND_RR_IN_PROGRESS: mode switch is in progress, both resolution and
+ *                               refresh rate are changed
+ */
+enum mode_progress_type {
+	MODE_DONE = 0,
+	MODE_RES_IN_PROGRESS,
+	MODE_RR_IN_PROGRESS,
+	MODE_RES_AND_RR_IN_PROGRESS,
 };
 
 struct gs_panel;
@@ -163,10 +184,23 @@ struct gs_panel_funcs {
 	int (*set_brightness)(struct gs_panel *gs_panel, u16 br);
 
 	/**
+	 * @set_lp_mode:
+	 *
+	 * This callback is used to handle command sequences to enter low power modes.
+	 *
+	 * mode: LP mode to which to switch
+	 *
+	 * TODO(b/279521692): implementation
+	 */
+	void (*set_lp_mode)(struct gs_panel *gs_panel, const struct gs_panel_mode *mode);
+
+	/**
 	 * @set_nolp_mode:
 	 *
 	 * This callback is used to handle command sequences to exit from low power
 	 * modes.
+	 *
+	 * mode: mode to which to switch
 	 *
 	 * TODO(b/279521692): implementation
 	 */
@@ -182,6 +216,19 @@ struct gs_panel_funcs {
 	 * TODO(b/279521612): implementation
 	 */
 	void (*set_hbm_mode)(struct gs_panel *gs_panel, enum gs_hbm_mode mode);
+
+	/**
+	 * @set_dimming:
+	 *
+	 * This callback is used to implement panel specific logic for dimming mode
+	 * enablement. If this is not defined, it means that panel does not support
+	 * dimming.
+	 *
+	 * dimming_on: true for dimming enabled, false for dimming disabled
+	 *
+	 * TODO(b/279520614): implementation
+	 */
+	void (*set_dimming)(struct gs_panel *gs_panel, bool dimming_on);
 
 	/**
 	 * @set_local_hbm_mode:
@@ -207,6 +254,18 @@ struct gs_panel_funcs {
 	void (*mode_set)(struct gs_panel *gs_panel, const struct gs_panel_mode *mode);
 
 	/**
+	 * @update_te2:
+	 *
+	 * This callback is used to update the TE2 signal via DCS commands.
+	 * This should be called when the display state is changed between
+	 * normal and LP modes, or the refresh rate and LP brightness are
+	 * changed.
+	 *
+	 * TODO(b/279521893): implementation
+	 */
+	void (*update_te2)(struct gs_panel *gs_panel);
+
+	/**
 	 * @atomic_check
 	 *
 	 * This optional callback happens in atomic check phase, it gives a chance to panel driver
@@ -217,6 +276,15 @@ struct gs_panel_funcs {
 	 * TODO(b/279520499): implementation
 	 */
 	int (*atomic_check)(struct gs_panel *gs_panel, struct drm_atomic_state *state);
+
+	/**
+	 * @commit_done
+	 *
+	 * Called after atomic commit flush has completed but transfer may not have started yet
+	 *
+	 * TODO(b/279520499): implementation
+	 */
+	void (*commit_done)(struct gs_panel *gs_panel);
 
 	/**
 	 * @is_mode_seamless:
@@ -264,6 +332,25 @@ struct gs_panel_funcs {
 	void (*get_panel_rev)(struct gs_panel *gs_panel, u32 id);
 
 	/**
+	 * @read_id:
+	 *
+	 * This callback is used to read the panel's id. The id is unique for
+	 * each panel.
+	 */
+	int (*read_id)(struct gs_panel *gs_panel);
+
+	/**
+	 * @set_acl_mode:
+	 *
+	 * This callback is used to implement panel specific logic for acl mode
+	 * enablement. If this is not defined, it means that panel does not
+	 * support acl.
+	 *
+	 * TODO(tknelms): implement default version
+	 */
+	void (*set_acl_mode)(struct gs_panel *gs_panel, enum gs_acl_mode mode);
+
+	/**
 	 * @panel_config:
 	 *
 	 * This callback is used to do one time panel configuration before the
@@ -278,6 +365,23 @@ struct gs_panel_funcs {
 	 * specific functions.
 	 */
 	void (*panel_init)(struct gs_panel *gs_panel);
+
+	/**
+	 * @get_te_usec
+	 *
+	 * This callback is used to get current TE pulse time.
+	 *
+	 * TODO(b/279521893): implementation
+	 */
+	unsigned int (*get_te_usec)(struct gs_panel *gs_panel, const struct gs_panel_mode *pmode);
+
+	/**
+	 * @run_normal_mode_work
+	 *
+	 * This callback is used to run the periodic work for each panel in
+	 * normal mode.
+	 */
+	void (*run_normal_mode_work)(struct gs_panel *gs_panel);
 };
 
 /* PANEL DESC */
@@ -388,7 +492,7 @@ struct gs_panel_desc {
 	const struct gs_panel_brightness_desc *brightness_desc;
 	const struct gs_panel_lhbm_desc *lhbm_desc;
 	const unsigned int delay_dsc_reg_init_us;
-	u32 vrr_switch_duration;
+	u32 rr_switch_duration;
 	bool dbv_extra_frame;
 	bool is_partial;
 	bool is_idle_supported;
@@ -531,6 +635,12 @@ struct gs_panel {
 	struct gs_panel_timestamps timestamps;
 	struct delayed_work idle_work;
 
+	/* Automatic Current Limiting(ACL) */
+	enum gs_acl_mode acl_mode;
+
+	/* current type of mode switch */
+	enum mode_progress_type mode_in_progress;
+
 	/* GHBM (maybe reevaluate */
 	enum gs_hbm_mode hbm_mode;
 	/* HBM struct */
@@ -633,14 +743,14 @@ u16 gs_panel_get_brightness(struct gs_panel *panel);
 /** Command Functions with specific purposes **/
 
 static inline void gs_panel_send_cmdset_flags(struct gs_panel *ctx,
-					       const struct gs_dsi_cmdset *cmd_set, u32 flags)
+					      const struct gs_dsi_cmdset *cmdset, u32 flags)
 {
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
-	gs_dsi_send_cmdset_flags(dsi, cmd_set, ctx->panel_rev, flags);
+	gs_dsi_send_cmdset_flags(dsi, cmdset, ctx->panel_rev, flags);
 }
-static inline void gs_panel_send_cmdset(struct gs_panel *ctx, const struct gs_dsi_cmdset *cmd_set)
+static inline void gs_panel_send_cmdset(struct gs_panel *ctx, const struct gs_dsi_cmdset *cmdset)
 {
-	gs_panel_send_cmdset_flags(ctx, cmd_set, 0);
+	gs_panel_send_cmdset_flags(ctx, cmdset, 0);
 }
 static inline int gs_dcs_set_brightness(struct gs_panel *ctx, u16 br)
 {
