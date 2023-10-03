@@ -375,6 +375,7 @@ enum {
 /** @}*/
 /* bit2 and bit3 are for major data so skip it. */
 #define GET_EVENT_TYPE(event_data)	(event_data & 0xF3)
+#define VALID_EVENT_TYPE(event_data)    ((event_data & 0x03) == 0x03)
 /* EVENT ID */
 /** @defgroup events_group	 FW Event IDs and Types
   * Event IDs and Types pushed by the FW into the FIFO

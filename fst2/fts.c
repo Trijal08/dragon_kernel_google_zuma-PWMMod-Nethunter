@@ -53,6 +53,11 @@
 #include <samsung/exynos_drm_connector.h>
 #include <samsung/panel/panel-samsung-drv.h>
 
+#if IS_ENABLED(CONFIG_GS_DRM_PANEL_UNIFIED)
+#include <gs_drm/gs_drm_connector.h>
+#include <gs_panel/gs_panel.h>
+#endif
+
 #include "fts.h"
 #include "fts_lib/fts_flash.h"
 #include "fts_lib/fts_test.h"
@@ -705,9 +710,18 @@ struct drm_connector *get_bridge_connector(struct drm_bridge *bridge)
 static bool bridge_is_lp_mode(struct drm_connector *connector)
 {
 	if (connector && connector->state) {
-		struct exynos_drm_connector_state *s =
-			to_exynos_connector_state(connector->state);
-		return s->exynos_mode.is_lp_mode;
+		if (is_exynos_drm_connector(connector) {
+			struct exynos_drm_connector_state *s =
+				to_exynos_connector_state(connector->state);
+			return s->exynos_mode.is_lp_mode;
+		}
+#if IS_ENABLED(CONFIG_GS_DRM_PANEL_UNIFIED)
+		else if (is_gs_drm_connector(connector)) {
+			struct gs_drm_connector_state *s =
+				to_gs_connector_state(connector->state);
+			return s->gs_mode.is_lp_mode;
+		}
+#endif
 	}
 	return false;
 }
@@ -873,10 +887,18 @@ static int fts_chip_init(struct fts_ts_info *info)
 
 	/* Align the touch and display status during boot. */
 	if (!IS_ERR_OR_NULL(info->board->panel)) {
-		struct exynos_panel *ctx = container_of(info->board->panel,
-							struct exynos_panel,
-							panel);
-		if (ctx->enabled)
+		bool is_active = false;
+
+		if (info->panel_bridge && info->panel_bridge->encoder &&
+		    info->panel_bridge->encoder->crtc) {
+			const struct drm_crtc_state *crtc_state =
+					info->panel_bridge->encoder->crtc->state;
+
+			is_active = crtc_state &&
+					drm_atomic_crtc_effectively_active(crtc_state);
+		}
+
+		if (is_active)
 			queue_work(info->event_wq, &info->resume_work);
 		else
 			queue_work(info->event_wq, &info->suspend_work);
