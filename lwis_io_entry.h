@@ -18,6 +18,8 @@
 #define MIN_WAIT_TIME 10
 /* Maximum value of sleep time */
 #define MAX_WAIT_TIME 20000
+/* Default value of polling timeout */
+#define DEFAULT_POLLING_TIMEOUT_MS 5
 
 /*
  * lwis_io_entry_poll:
