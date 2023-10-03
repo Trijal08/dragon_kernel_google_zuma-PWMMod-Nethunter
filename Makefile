@@ -5,6 +5,7 @@ M ?= $(shell pwd)
 
 EXTRA_CFLAGS	+= -DDYNAMIC_DEBUG_MODULE
 EXTRA_SYMBOLS	+= $(OUT_DIR)/../private/google-modules/aoc/Module.symvers
+EXTRA_SYMBOLS	+= $(OUT_DIR)/../private/google-modules/display/samsung/Module.symvers
 
 include $(KERNEL_SRC)/../private/google-modules/soc/gs/Makefile.include
 
