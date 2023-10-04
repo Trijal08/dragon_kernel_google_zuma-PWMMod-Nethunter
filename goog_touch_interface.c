@@ -1753,7 +1753,7 @@ int goog_get_panel_id(struct device_node *node)
 		if (IS_ERR_OR_NULL(panel))
 			continue;
 
-		id = index;
+		id = panelmap.args[0];
 		break;
 	}
 
