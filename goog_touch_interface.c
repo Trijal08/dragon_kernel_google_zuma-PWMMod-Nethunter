@@ -2589,6 +2589,15 @@ void goog_offload_input_report(void *handle,
 			clear_bit(i, &slot_bit_active);
 			input_mt_slot(gti->vendor_input_dev, i);
 			input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE, 0);
+			/*
+			 * Force to cancel the active figner(s) by MT_TOOL_PALM during screen-off.
+			 */
+			if (gti->display_state == GTI_DISPLAY_STATE_OFF &&
+				gti->vendor_input_dev->mt &&
+				input_mt_is_active(&gti->vendor_input_dev->mt->slots[i])) {
+				input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_PALM, 1);
+				input_sync(gti->vendor_input_dev);
+			}
 			input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_FINGER, 0);
 		}
 	}
