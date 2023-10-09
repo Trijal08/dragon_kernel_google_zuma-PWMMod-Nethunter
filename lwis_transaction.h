@@ -58,6 +58,8 @@ struct lwis_transaction {
 	   will be referred to correctly point to the read buffer for the run.
 	*/
 	uint8_t *starting_read_buf;
+	/* The timestamp of the transaction trigger event */
+	int64_t triggered_event_timestamp;
 };
 
 /* For debugging purposes, keeps track of the transaction information, as
@@ -86,7 +88,8 @@ int lwis_transaction_client_flush(struct lwis_client *client);
 int lwis_transaction_client_cleanup(struct lwis_client *client);
 
 int lwis_transaction_event_trigger(struct lwis_client *client, int64_t event_id,
-				   int64_t event_counter, struct list_head *pending_events);
+				   int64_t event_counter, int64_t event_timestamp,
+				   struct list_head *pending_events);
 void lwis_transaction_fence_trigger(struct lwis_client *client, struct lwis_fence *fence,
 				    struct list_head *transaction_list);
 
