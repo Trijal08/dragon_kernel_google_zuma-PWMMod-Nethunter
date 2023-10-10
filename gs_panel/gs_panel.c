@@ -26,7 +26,6 @@
 #include "gs_panel_internal.h"
 #include "gs_panel/gs_panel_funcs_defaults.h"
 
-#define CREATE_TRACE_POINTS
 #include <trace/panel_trace.h>
 
 /* CONSTANTS */

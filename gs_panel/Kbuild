@@ -10,6 +10,7 @@ gs-panel-y += drm_bridge_funcs.o
 gs-panel-y += drm_panel_funcs_defaults.o
 gs-panel-y += gs_panel_connector_funcs.o
 gs-panel-y += gs_panel_sysfs.o
+gs-panel-y += gs_panel_trace.o
 gs-panel-y += gs_panel_funcs_defaults.o
 gs-panel-$(CONFIG_DEBUG_FS) += gs_panel_debugfs.o
 

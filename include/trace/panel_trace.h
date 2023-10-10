@@ -90,6 +90,27 @@ TRACE_EVENT(dsi_label_scope,
 #define PANEL_SEQ_LABEL_BEGIN(name) trace_dsi_label_scope(name, true)
 #define PANEL_SEQ_LABEL_END(name) trace_dsi_label_scope(name, false)
 
+TRACE_EVENT(te2_update_settings,
+	TP_PROTO(int rising_us, int falling_us, bool is_changeable, bool is_idle),
+	TP_ARGS(rising_us, falling_us, is_changeable, is_idle),
+	TP_STRUCT__entry(
+			__field(int, rising_us)
+			__field(int, falling_us)
+			__field(bool, is_changeable)
+			__field(bool, is_idle)
+		),
+	TP_fast_assign(
+			__entry->rising_us = rising_us;
+			__entry->falling_us = falling_us;
+			__entry->is_changeable = is_changeable;
+			__entry->is_idle = is_idle;
+		),
+	TP_printk("TE2 updated: rising %dus falling %dus, option %s, idle %s",
+		  __entry->rising_us, __entry->falling_us,
+		  __entry->is_changeable ? "changeable" : "fixed",
+		  __entry->is_idle ? "active" : "inactive")
+);
+
 #endif /* _PANEL_TRACE_H_ */
 
 #undef TRACE_INCLUDE_PATH
