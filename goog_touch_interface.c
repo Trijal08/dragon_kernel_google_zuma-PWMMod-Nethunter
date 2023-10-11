@@ -269,7 +269,7 @@ static int goog_proc_ms_base_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_process_lock);
+	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
 	if (ret) {
 		seq_puts(m, "error: has been interrupted!\n");
 		GOOG_WARN(gti, "error: has been interrupted!\n");
@@ -279,7 +279,7 @@ static int goog_proc_ms_base_show(struct seq_file *m, void *v)
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_MS_BASELINE);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_process_lock);
+	mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -289,7 +289,7 @@ static int goog_proc_ms_diff_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_process_lock);
+	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
 	if (ret) {
 		seq_puts(m, "error: has been interrupted!\n");
 		GOOG_WARN(gti, "error: has been interrupted!\n");
@@ -298,7 +298,7 @@ static int goog_proc_ms_diff_show(struct seq_file *m, void *v)
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_MS_DIFF);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_process_lock);
+	mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -308,7 +308,7 @@ static int goog_proc_ms_raw_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_process_lock);
+	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
 	if (ret) {
 		seq_puts(m, "error: has been interrupted!\n");
 		GOOG_WARN(gti, "error: has been interrupted!\n");
@@ -318,7 +318,7 @@ static int goog_proc_ms_raw_show(struct seq_file *m, void *v)
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_MS_RAW);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_process_lock);
+	mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -328,7 +328,7 @@ static int goog_proc_ss_base_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_process_lock);
+	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
 	if (ret) {
 		seq_puts(m, "error: has been interrupted!\n");
 		GOOG_WARN(gti, "error: has been interrupted!\n");
@@ -338,7 +338,7 @@ static int goog_proc_ss_base_show(struct seq_file *m, void *v)
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_SS_BASELINE);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_process_lock);
+	mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -348,7 +348,7 @@ static int goog_proc_ss_diff_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_process_lock);
+	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
 	if (ret) {
 		seq_puts(m, "error: has been interrupted!\n");
 		GOOG_WARN(gti, "error: has been interrupted!\n");
@@ -358,7 +358,7 @@ static int goog_proc_ss_diff_show(struct seq_file *m, void *v)
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_SS_DIFF);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_process_lock);
+	mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -368,7 +368,7 @@ static int goog_proc_ss_raw_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_process_lock);
+	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
 	if (ret) {
 		seq_puts(m, "error: has been interrupted!\n");
 		GOOG_WARN(gti, "error: has been interrupted!\n");
@@ -378,7 +378,7 @@ static int goog_proc_ss_raw_show(struct seq_file *m, void *v)
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_SS_RAW);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_process_lock);
+	mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -483,6 +483,10 @@ static ssize_t vrr_enabled_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t vrr_enabled_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t interactive_calibrate_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+static ssize_t interactive_calibrate_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
 
 static DEVICE_ATTR_RO(config_name);
 static DEVICE_ATTR_RW(force_active);
@@ -505,6 +509,7 @@ static DEVICE_ATTR_RW(sensing_enabled);
 static DEVICE_ATTR_RO(test_limits_name);
 static DEVICE_ATTR_RW(v4l2_enabled);
 static DEVICE_ATTR_RW(vrr_enabled);
+static DEVICE_ATTR_RW(interactive_calibrate);
 
 static struct attribute *goog_attributes[] = {
 	&dev_attr_config_name.attr,
@@ -528,6 +533,7 @@ static struct attribute *goog_attributes[] = {
 	&dev_attr_test_limits_name.attr,
 	&dev_attr_v4l2_enabled.attr,
 	&dev_attr_vrr_enabled.attr,
+	&dev_attr_interactive_calibrate.attr,
 	NULL,
 };
 
@@ -1318,6 +1324,316 @@ static ssize_t vrr_enabled_store(struct device *dev,
 	return size;
 }
 
+/* -----------------------------------------------------------------------
+ * Interactive calibration states
+ *
+ * State "IDLE"/ 0 - idle, no calibration underway => return to this state after
+ * an error and after certain timeouts have elapsed
+ *
+ * State "INIT_X" / 101 / 201 - calibration or test is beginning. The client
+ * has displayed warnings and will begin transitioning itself to the
+ * "screen off" / "do not touch" state
+ *
+ * State "RUN_X" / 102 / 202 - screen is off and nothing is touching the
+ * screen. Calibration can begin immediately when this state is entered
+ *
+ * State "END_X" / 103 / 203 - the client has waited the designated time and
+ * will assume calibration/test is complete, will read the status of this state
+ * as the final calibration status. Transition back to the IDLE state will
+ * occur automatically.
+ */
+bool ical_state_idle(struct goog_touch_interface *gti, u32 next_state,
+			 u64 elapsed)
+{
+	/* Valid next-states are 'INIT_CAL', 'INIT_TEST', or 'IDLE' */
+	if (next_state == ICAL_STATE_IDLE) {
+		gti->ical_result = ICAL_RES_SUCCESS;
+		gti->ical_func_result = 0;
+		/* Do not update the ical timestamp */
+		return false;
+	} else if ((next_state == ICAL_STATE_INIT_CAL ||
+		    next_state == ICAL_STATE_INIT_TEST) &&
+		   elapsed > MIN_DELAY_IDLE) {
+		gti->ical_state = next_state;
+		gti->ical_result = ICAL_RES_SUCCESS;
+	} else {
+		GOOG_ERR(gti,
+			 "ical - error: invalid transition or time! %u => %u, min=%lluns, t=%lluns\n",
+			 gti->ical_state, next_state, MIN_DELAY_IDLE,
+			 elapsed);
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_FAIL;
+	}
+	return true;
+}
+
+void ical_state_init_cal(struct goog_touch_interface *gti, u32 next_state,
+			 u64 elapsed)
+{
+	u32 ret;
+
+	/* only valid next-state is 'RUN_CAL', as long as time elapsed
+	 * is within range. When 'RUN_CAL' is received calibration begins.
+	 */
+	if (next_state == ICAL_STATE_RUN_CAL &&
+	    elapsed > MIN_DELAY_INIT_CAL && elapsed < MAX_DELAY_INIT_CAL) {
+		/* Begin calibration */
+
+		gti->cmd.calibrate_cmd.result = GTI_CALIBRATE_RESULT_NA;
+		memset(gti->cmd.calibrate_cmd.buffer, 0,
+		       sizeof(gti->cmd.calibrate_cmd.buffer));
+		ret = goog_process_vendor_cmd(gti, GTI_CMD_CALIBRATE);
+		if (ret == 0) {
+			if (gti->cmd.calibrate_cmd.result == GTI_CALIBRATE_RESULT_DONE) {
+				gti->ical_func_result = gti->cmd.calibrate_cmd.result;
+				GOOG_INFO(gti,
+					 "ical - CALIBRATE_RESULT_DONE - [%s]\n",
+					 gti->cmd.calibrate_cmd.buffer);
+			} else {
+				gti->ical_func_result = ICAL_RES_FAIL;
+				GOOG_ERR(gti,
+					 "ical - calibrate result other/fail - N/A or [%s]\n",
+					 gti->cmd.calibrate_cmd.buffer);
+			}
+
+			gti->ical_state = ICAL_STATE_RUN_CAL;
+			gti->ical_result = ICAL_RES_SUCCESS;
+		} else {
+			gti->ical_state = ICAL_STATE_IDLE;
+			gti->ical_result = ICAL_RES_FAIL;
+		}
+	} else {
+		GOOG_ERR(gti,
+			 "ical - error: invalid transition or time! %u => %u, min=%lluns, t=%lluns, max=%lluns\n",
+			 gti->ical_state, next_state,
+			 MIN_DELAY_INIT_CAL, elapsed,
+			 MAX_DELAY_INIT_CAL);
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_FAIL;
+	}
+}
+
+void ical_state_run_cal(struct goog_touch_interface *gti, u32 next_state,
+			 u64 elapsed)
+{
+	/* only valid next-state is 'END_CAL', as long as time elapsed
+	 * is within ranged.
+	 */
+	if (next_state == ICAL_STATE_END_CAL &&
+	    elapsed > MIN_DELAY_RUN_CAL && elapsed < MAX_DELAY_RUN_CAL) {
+		GOOG_INFO(gti,
+			 "ical - Calibration complete after %lluns\n",
+			 elapsed);
+
+		gti->ical_state = ICAL_STATE_END_CAL;
+		gti->ical_result = ICAL_RES_SUCCESS;
+
+	} else {
+		GOOG_ERR(gti,
+			 "ical - error: invalid transition or time! %u => %u, min=%lluns, t=%lluns, max=%lluns\n",
+			 gti->ical_state, next_state,
+			 MIN_DELAY_RUN_CAL, elapsed,
+			 MAX_DELAY_RUN_CAL);
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_FAIL;
+	}
+}
+
+void ical_state_end_cal(struct goog_touch_interface *gti, u32 next_state,
+			 u64 elapsed)
+{
+	/* Nothing to do but accept a transition back to IDLE.
+	 * Necessary because the interface only executes when called
+	 */
+	if (next_state == ICAL_STATE_IDLE &&
+	    elapsed > MIN_DELAY_END_CAL && elapsed < MAX_DELAY_END_CAL) {
+		gti->ical_result = ICAL_RES_SUCCESS;
+	} else {
+		GOOG_ERR(gti,
+			 "ical - error: invalid transition or time! %u => %u, min=%lluns, t=%lluns, max=%lluns\n",
+			 gti->ical_state, next_state,
+			 MIN_DELAY_END_CAL, elapsed,
+			 MAX_DELAY_END_CAL);
+		gti->ical_result = ICAL_RES_FAIL;
+	}
+	gti->ical_state = ICAL_STATE_IDLE;
+}
+
+void ical_state_init_test(struct goog_touch_interface *gti, u32 next_state,
+			  u64 elapsed)
+{
+	u32 ret;
+
+	/* only valid next-state is 'RUN_TEST', as long as time elapsed
+	 * is within range. When '202' is received calibration begins.
+	 */
+	if (next_state == ICAL_STATE_RUN_TEST &&
+	    elapsed > MIN_DELAY_INIT_TEST && elapsed < MAX_DELAY_INIT_TEST) {
+		/* Begin selftest */
+
+		gti->cmd.selftest_cmd.result = GTI_SELFTEST_RESULT_NA;
+		memset(gti->cmd.selftest_cmd.buffer, 0,
+		       sizeof(gti->cmd.selftest_cmd.buffer));
+		ret = goog_process_vendor_cmd(gti, GTI_CMD_SELFTEST);
+		if (ret == 0) {
+			if (gti->cmd.selftest_cmd.result ==
+					GTI_SELFTEST_RESULT_DONE) {
+				gti->ical_func_result = gti->cmd.selftest_cmd.result;
+
+				GOOG_INFO(gti,
+					 "ical - SELFTEST_RESULT_DONE - [%s]\n",
+					 gti->cmd.selftest_cmd.buffer);
+			} else if (gti->cmd.selftest_cmd.result ==
+					GTI_SELFTEST_RESULT_SHELL_CMDS_REDIRECT) {
+				gti->ical_func_result = ICAL_RES_SUCCESS;
+
+				GOOG_ERR(gti,
+					 "ical - SELFTEST_RESULT_SHELL_CMDS_REDIRECT - [%s]\n",
+					 gti->cmd.selftest_cmd.buffer);
+			} else {
+				gti->ical_func_result = ICAL_RES_FAIL;
+
+				GOOG_ERR(gti,
+					 "ical - selftest result other/fail - N/A or [%s]\n",
+					 gti->cmd.selftest_cmd.buffer);
+			}
+
+			gti->ical_state = ICAL_STATE_RUN_TEST;
+			gti->ical_result = ICAL_RES_SUCCESS;
+		} else  {
+			gti->ical_state = ICAL_STATE_IDLE;
+			gti->ical_result = ICAL_RES_FAIL;
+		}
+	} else {
+		GOOG_ERR(gti,
+			 "ical - error: invalid transition or time! %u => %u, min=%lluns, t=%lluns, max=%lluns\n",
+			 gti->ical_state, next_state,
+			 MIN_DELAY_INIT_TEST, elapsed,
+			 MAX_DELAY_INIT_TEST);
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_FAIL;
+	}
+}
+
+void ical_state_run_test(struct goog_touch_interface *gti, u32 next_state,
+			  u64 elapsed)
+{
+	/* only valid next-state is 'END_TEST', as long as time elapsed
+	 * is within ranged.
+	 */
+	if (next_state == ICAL_STATE_END_TEST &&
+	    elapsed > MIN_DELAY_RUN_TEST && elapsed < MAX_DELAY_RUN_TEST) {
+		/* Check and evaluate self-test here */
+		gti->ical_state = ICAL_STATE_END_TEST;
+		gti->ical_result = ICAL_RES_SUCCESS;
+
+	} else {
+		GOOG_ERR(gti,
+			 "ical - error: invalid transition or time! %u => %u, min=%lluns, t=%lluns, max=%lluns\n",
+			 gti->ical_state, next_state,
+			 MIN_DELAY_RUN_TEST, elapsed,
+			 MAX_DELAY_RUN_TEST);
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_FAIL;
+	}
+}
+
+void ical_state_end_test(struct goog_touch_interface *gti, u32 next_state,
+			  u64 elapsed)
+{
+	/* Nothing to do but accept a transition back to IDLE.
+	 * Necessary because the interface only executes when called
+	 */
+	if (next_state == ICAL_STATE_IDLE &&
+	    elapsed > MIN_DELAY_END_TEST && elapsed < MAX_DELAY_END_TEST) {
+		gti->ical_result = ICAL_RES_SUCCESS;
+	} else {
+		GOOG_ERR(gti,
+			 "ical - error: invalid transition or time! %u => %u, min=%lluns, t=%lluns, max=%lluns\n",
+			 gti->ical_state, next_state,
+			 MIN_DELAY_END_TEST, elapsed,
+			 MAX_DELAY_END_TEST);
+		gti->ical_result = ICAL_RES_FAIL;
+	}
+	gti->ical_state = ICAL_STATE_IDLE;
+}
+
+/* Advance the interactive calibration state machine */
+static ssize_t interactive_calibrate_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct goog_touch_interface *gti = dev_get_drvdata(dev);
+
+	u32 next_state = 0;
+	u64 entry_time = ktime_get_ns();
+	u64 elapsed = entry_time - gti->ical_timestamp_ns;
+
+	if (kstrtou32(buf, 10, &next_state)) {
+		GOOG_ERR(gti, "error: invalid input!\n");
+		return size;
+	}
+
+	switch (gti->ical_state) {
+	case ICAL_STATE_IDLE:
+		if (ical_state_idle(gti, next_state, elapsed))
+			gti->ical_timestamp_ns = entry_time;
+		break;
+
+	case ICAL_STATE_INIT_CAL:
+		ical_state_init_cal(gti, next_state, elapsed);
+		gti->ical_timestamp_ns = entry_time;
+		break;
+
+	case ICAL_STATE_RUN_CAL:
+		ical_state_run_cal(gti, next_state, elapsed);
+		gti->ical_timestamp_ns = entry_time;
+		break;
+
+	case ICAL_STATE_END_CAL:
+		ical_state_end_cal(gti, next_state, elapsed);
+		gti->ical_timestamp_ns = entry_time;
+		break;
+
+	case ICAL_STATE_INIT_TEST:
+		ical_state_init_test(gti, next_state, elapsed);
+		gti->ical_timestamp_ns = entry_time;
+		break;
+
+	case ICAL_STATE_RUN_TEST:
+		ical_state_run_test(gti, next_state, elapsed);
+		gti->ical_timestamp_ns = entry_time;
+		break;
+
+	case ICAL_STATE_END_TEST:
+		ical_state_end_test(gti, next_state, elapsed);
+		gti->ical_timestamp_ns = entry_time;
+		break;
+
+	default:
+		GOOG_ERR(gti, "ical - unknown/invalid current state = %u, but will go back to 0.\n",
+			 gti->ical_state);
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_SUCCESS;
+		break;
+	}
+
+	return size;
+}
+
+/* Show result/status of the calibrate state machine */
+static ssize_t interactive_calibrate_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t buf_idx = 0;
+	struct goog_touch_interface *gti = dev_get_drvdata(dev);
+
+	buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE,
+		"%d - %d\n", gti->ical_result, gti->ical_func_result);
+	GOOG_INFO(gti, "%s", buf);
+
+	return buf_idx;
+}
+
 /*-----------------------------------------------------------------------------
  * Debug: functions.
  */
@@ -1830,6 +2146,9 @@ int goog_process_vendor_cmd(struct goog_touch_interface *gti, enum gti_cmd_type 
 
 	/* Use optional vendor operation if available. */
 	switch (cmd_type) {
+	case GTI_CMD_CALIBRATE:
+		ret = gti->options.calibrate(private_data, &gti->cmd.calibrate_cmd);
+		break;
 	case GTI_CMD_PING:
 		ret = gti->options.ping(private_data, &gti->cmd.ping_cmd);
 		break;
@@ -2532,6 +2851,33 @@ void goog_offload_input_report(void *handle,
 	ATRACE_END();
 }
 
+static int gti_update_charger_state(struct goog_touch_interface *gti,
+	struct power_supply *psy)
+{
+	union power_supply_propval present_val = { 0 };
+	int ret = 0;
+
+	if (gti == NULL || psy == NULL)
+		return -ENODEV;
+
+	ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
+		&present_val);
+	if (ret < 0) {
+		GOOG_WARN(gti,
+			"Error while getting power supply property: %d!\n", ret);
+	} else if ((u8)present_val.intval != gti->charger_state) {
+		/* Note: the expected values for present_val.intval are
+		 * 0 and 1. Cast to unsigned byte to ensure the
+		 * comparison is handled in the same variable data type.
+		 */
+		GOOG_INFO(gti, "Charger_state changed from %d to %d\n",
+			gti->charger_state, present_val.intval);
+		gti->context_changed.charger_state = 1;
+		gti->charger_state = (u8)present_val.intval;
+	}
+	return ret;
+}
+
 int gti_charger_state_change(struct notifier_block *nb, unsigned long action,
 			     void *data)
 {
@@ -2539,31 +2885,13 @@ int gti_charger_state_change(struct notifier_block *nb, unsigned long action,
 		(struct goog_touch_interface *)container_of(nb,
 			struct goog_touch_interface, charger_notifier);
 	struct power_supply *psy = (struct power_supply *)data;
-	int ret;
 
 	/* Attempt actual status parsing */
-	if (psy && psy->desc->type == POWER_SUPPLY_TYPE_USB) {
-		union power_supply_propval present_val = { 0 };
-
-		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
-						&present_val);
-		if (ret < 0) {
-			GOOG_DBG(gti,
-				 "Error while getting power supply property: %d!\n",
-				 ret);
-		} else if ((u8)present_val.intval != gti->charger_state) {
-			/* Note: the expected values for present_val.intval are
-			 * 0 and 1. Cast to unsigned byte to ensure the
-			 * comparison is handled in the same variable data type.
-			 */
-			GOOG_INFO(gti, "Charger_state changed from %d to %d\n",
-				  gti->charger_state, present_val.intval);
-			gti->context_changed.charger_state = 1;
-			gti->charger_state = (u8)present_val.intval;
-		}
+	if (psy && psy->desc && action == PSY_EVENT_PROP_CHANGED &&
+			!strcmp(psy->desc->name, gti->usb_psy_name)) {
+		gti_update_charger_state(gti, psy);
 	}
-
-	return 0;
+	return NOTIFY_DONE;
 }
 
 int goog_offload_probe(struct goog_touch_interface *gti)
@@ -2577,6 +2905,7 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 	u8 *offload_ids_array;
 	int offload_ids_size;
 	int id_size;
+	const char *usb_psy_name = NULL;
 
 	/*
 	 * TODO(b/201610482): rename DEVICE_NAME in touch_offload.h for more specific.
@@ -2746,6 +3075,11 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 	GOOG_INFO(gti, "v4l2 W/H=(%lu, %lu), v4l2_enabled=%d.\n",
 		gti->v4l2.width, gti->v4l2.height, gti->v4l2_enabled);
 
+	if (!of_property_read_string(np, "goog,usb-psy-name", &usb_psy_name))
+		strlcpy(gti->usb_psy_name, usb_psy_name, sizeof(gti->usb_psy_name));
+	else
+		strlcpy(gti->usb_psy_name, "usb", sizeof(gti->usb_psy_name));
+
 	/* Register for charger plugging status */
 	gti->charger_notifier.notifier_call = gti_charger_state_change;
 	ret = power_supply_reg_notifier(&gti->charger_notifier);
@@ -2753,6 +3087,9 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 		GOOG_ERR(gti, "Failed to register power_supply_reg_notifier!\n");
 		goto err_offload_probe;
 	}
+
+	gti_update_charger_state(gti,
+		power_supply_get_by_name(gti->usb_psy_name));
 
 err_offload_probe:
 	return ret;
@@ -2838,6 +3175,8 @@ int goog_input_process(struct goog_touch_interface *gti, bool reset_data)
 		!gti->slot_bit_changed && !reset_data)
 		return -EPERM;
 
+	mutex_lock(&gti->input_process_lock);
+
 	/*
 	 * Increase the input index when any slot bit changed which
 	 * means the finger is down or up.
@@ -2902,6 +3241,8 @@ int goog_input_process(struct goog_touch_interface *gti, bool reset_data)
 	gti_debug_input_update(gti);
 	gti->input_timestamp_changed = false;
 	gti->slot_bit_in_use = 0;
+
+	mutex_unlock(&gti->input_process_lock);
 
 	return ret;
 }
@@ -3061,6 +3402,12 @@ void goog_register_tbn(struct goog_touch_interface *gti)
 			GOOG_INFO(gti, "tbn_register_mask = %#x.\n", gti->tbn_register_mask);
 		}
 	}
+}
+
+static int goog_calibrate_nop(
+		void *private_data, struct gti_calibrate_cmd *cmd)
+{
+	return -ESRCH;
 }
 
 static int goog_get_context_driver_nop(
@@ -3311,6 +3658,7 @@ void goog_init_options(struct goog_touch_interface *gti,
 	}
 
 	/* Initialize default functions. */
+	gti->options.calibrate = goog_calibrate_nop;
 	gti->options.get_context_driver = goog_get_context_driver_nop;
 	gti->options.get_context_stylus = goog_get_context_stylus_nop;
 	gti->options.get_coord_filter_enabled = goog_get_coord_filter_enabled_nop;
@@ -3341,6 +3689,8 @@ void goog_init_options(struct goog_touch_interface *gti,
 
 	/* Set optional operation if available. */
 	if (options) {
+		if (options->calibrate)
+			gti->options.calibrate = options->calibrate;
 		if (options->get_context_driver)
 			gti->options.get_context_driver = options->get_context_driver;
 		if (options->get_context_stylus)
@@ -3920,11 +4270,11 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 	cpu_latency_qos_update_request(&gti->pm_qos_req, 100 /* usec */);
 
 	/*
-	 * Some vendor drivers read sensor data inside vendor_irq_thread_fn.
-	 * We need to lock input_process_lock before vendor_irq_thread_fn to
-	 * avoid thread safe issue.
+	 * Some vendor drivers read sensor data inside vendor_irq_thread_fn and
+	 * some inside goog_input_process. Use input_heatmap_lock to avoid race that
+	 * heatmap reading between sysfs/procfs and drivers concurrently.
 	 */
-	mutex_lock(&gti->input_process_lock);
+	mutex_lock(&gti->input_heatmap_lock);
 
 	if (gti->vendor_irq_thread_fn != NULL)
 		ret = gti->vendor_irq_thread_fn(irq, gti->vendor_irq_cookie);
@@ -3933,7 +4283,7 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 
 	goog_input_process(gti, false);
 
-	mutex_unlock(&gti->input_process_lock);
+	mutex_unlock(&gti->input_heatmap_lock);
 
 	if (ret == IRQ_HANDLED && gti->vendor_irq_thread_fn != NULL &&
 			gti->options.post_irq_thread_fn != NULL) {
@@ -4022,6 +4372,7 @@ struct goog_touch_interface *goog_touch_interface_probe(
 		gti->vendor_default_handler = default_handler;
 		mutex_init(&gti->input_lock);
 		mutex_init(&gti->input_process_lock);
+		mutex_init(&gti->input_heatmap_lock);
 	}
 
 	if (!gti_class)
