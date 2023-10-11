@@ -924,7 +924,7 @@ static int lwis_device_event_emit_impl(struct lwis_device *lwis_dev, int64_t eve
 
 		/* Trigger transactions, if there's any that matches this event
 		   ID and counter */
-		if (lwis_transaction_event_trigger(lwis_client, event_id, event_counter,
+		if (lwis_transaction_event_trigger(lwis_client, event_id, event_counter, timestamp,
 						   pending_events)) {
 			dev_warn(lwis_dev->dev,
 				 "Failed to process transactions: Event ID: 0x%llx Counter: %lld\n",
@@ -1099,7 +1099,7 @@ void lwis_device_external_event_emit(struct lwis_device *lwis_dev, int64_t event
 			}
 		}
 
-		if (lwis_transaction_event_trigger(lwis_client, event_id, event_counter,
+		if (lwis_transaction_event_trigger(lwis_client, event_id, event_counter, timestamp,
 						   &pending_events))
 			dev_warn(
 				lwis_dev->dev,

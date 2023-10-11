@@ -32,6 +32,9 @@
 #define CREATE_TRACE_POINTS
 #include "lwis_trace.h"
 
+/* Triggered event to actual execution of transaction threshold */
+#define TRIGGRED_EVENT_EXECUTION_THRESHOLD_MS 5
+
 #define EXPLICIT_EVENT_COUNTER(x)                                                                  \
 	((x) != LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE && (x) != LWIS_EVENT_COUNTER_EVERY_TIME)
 
@@ -176,6 +179,7 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 	const int reg_value_bytewidth = lwis_dev->native_value_bitwidth / 8;
 	int64_t process_duration_ns = -1;
 	int64_t process_timestamp = -1;
+	int64_t triggered_duration_ns = -1;
 	unsigned long flags;
 
 	int total_number_of_entries = info->num_io_entries;
@@ -210,6 +214,17 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 
 	if (lwis_transaction_debug) {
 		process_timestamp = ktime_to_ns(lwis_get_time());
+	}
+
+	if (transaction->info.trigger_event_id != LWIS_EVENT_ID_NONE &&
+	    transaction->triggered_event_timestamp != 0) {
+		triggered_duration_ns =
+			ktime_to_ns(lwis_get_time()) - transaction->triggered_event_timestamp;
+		if (ktime_to_ms(triggered_duration_ns) >= TRIGGRED_EVENT_EXECUTION_THRESHOLD_MS)
+			dev_warn(client->lwis_dev->dev,
+				 "Triggered event id %lld transaction id %llu, %lldms",
+				 transaction->info.trigger_event_id, transaction->info.id,
+				 ktime_to_ms(triggered_duration_ns));
 	}
 
 	resp_size = sizeof(struct lwis_transaction_response_header) + resp->results_size_bytes;
@@ -480,6 +495,7 @@ static void cancel_transaction(struct lwis_device *lwis_dev, struct lwis_transac
 void lwis_process_transactions_in_queue(struct lwis_client *client)
 {
 	unsigned long flags;
+	unsigned long flush_flags;
 	struct list_head *it_tran, *it_tran_tmp;
 	struct list_head pending_events;
 	struct list_head pending_fences;
@@ -504,7 +520,7 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 					 "Client is not ready to process transactions");
 			}
 			spin_unlock_irqrestore(&client->transaction_lock, flags);
-			spin_lock_irqsave(&client->flush_lock, flags);
+			spin_lock_irqsave(&client->flush_lock, flush_flags);
 			if (client->flush_state == NOT_FLUSHING) {
 				if (i2c_bus_manager) {
 					kthread_queue_work(&i2c_bus_manager->i2c_bus_worker,
@@ -514,7 +530,7 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 							   &client->transaction_work);
 				}
 			}
-			spin_unlock_irqrestore(&client->flush_lock, flags);
+			spin_unlock_irqrestore(&client->flush_lock, flush_flags);
 			return;
 		}
 
@@ -528,6 +544,7 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 			spin_unlock_irqrestore(&client->transaction_lock, flags);
 			process_transaction(client, &transaction, &pending_events, &pending_fences,
 					    /*skip_err=*/false, /*check_transaction_limit=*/true);
+			lwis_pending_events_emit(client->lwis_dev, &pending_events);
 			spin_lock_irqsave(&client->transaction_lock, flags);
 
 			/*
@@ -554,7 +571,7 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 				 * If the client is flushing, cancel the remaining transaction
 				 * and delete from the process queue node.
 				 */
-				spin_lock_irqsave(&client->flush_lock, flags);
+				spin_lock_irqsave(&client->flush_lock, flush_flags);
 				if (client->flush_state == NOT_FLUSHING) {
 					if (lwis_transaction_debug) {
 						dev_info(
@@ -580,13 +597,12 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 					   transaction->resp->error_code, &pending_events,
 					   &pending_fences, false);
 				}
-				spin_unlock_irqrestore(&client->flush_lock, flags);
+				spin_unlock_irqrestore(&client->flush_lock, flush_flags);
 				break;
 			}
 		}
 	}
 	spin_unlock_irqrestore(&client->transaction_lock, flags);
-	lwis_pending_events_emit(client->lwis_dev, &pending_events);
 	lwis_fences_pending_signal_emit(client->lwis_dev, &pending_fences);
 }
 
@@ -1035,7 +1051,8 @@ static void defer_transaction_locked(struct lwis_client *client,
 }
 
 int lwis_transaction_event_trigger(struct lwis_client *client, int64_t event_id,
-				   int64_t event_counter, struct list_head *pending_events)
+				   int64_t event_counter, int64_t event_timestamp,
+				   struct list_head *pending_events)
 {
 	unsigned long flags;
 	struct lwis_transaction_event_list *event_list;
@@ -1064,6 +1081,8 @@ int lwis_transaction_event_trigger(struct lwis_client *client, int64_t event_id,
 	/* Go through all transactions under the chosen event list. */
 	list_for_each_safe (it_tran, it_tran_tmp, &event_list->list) {
 		transaction = list_entry(it_tran, struct lwis_transaction, event_list_node);
+		// The trigger event of the transaction happens
+		transaction->triggered_event_timestamp = event_timestamp;
 		if (transaction->is_weak_transaction) {
 			weak_transaction = transaction;
 			transaction = pending_transaction_peek(client, weak_transaction->id);
