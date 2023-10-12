@@ -104,4 +104,14 @@ ssize_t gs_panel_get_te2_edges_helper(struct gs_panel *ctx, char *buf, bool lp_m
  */
 int gs_panel_set_te2_edges_helper(struct gs_panel *ctx, u32 *timings, bool lp_mode);
 
+/**
+ * gs_panel_set_binned_lp_helper() - Execute command sequences for LP modes
+ * @ctx: Reference to panel data
+ * @brightness: Brightness value to which the panel is being set
+ *
+ * This executes the correct commands for setting LP modes based on the binned
+ * brightness value.
+ */
+void gs_panel_set_binned_lp_helper(struct gs_panel *ctx, const u16 brightness);
+
 #endif // _GS_PANEL_FUNCS_DEFAULTS_H_

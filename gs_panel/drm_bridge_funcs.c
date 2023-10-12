@@ -49,7 +49,7 @@ static unsigned long get_backlight_state_from_panel(struct backlight_device *bl,
 	return state;
 }
 
-static void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state panel_state)
+void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state panel_state)
 {
 	struct backlight_device *bl = ctx->bl;
 	unsigned long state;

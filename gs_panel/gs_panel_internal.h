@@ -17,6 +17,7 @@ struct gs_panel;
 struct gs_drm_connector;
 struct dentry;
 struct mipi_dsi_device;
+enum gs_panel_state;
 
 /* gs_panel_connector_funcs.c */
 int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *drm_dev,
@@ -24,6 +25,16 @@ int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *dr
 
 /* drm_bridge_funcs.c */
 const struct drm_bridge_funcs *get_panel_drm_bridge_funcs(void);
+/**
+ * gs_panel_set_backlight_state() - sets the state for the backlight
+ * @ctx: Pointer to gs_panel
+ * @panel_state: New state for the panel backlight
+ *
+ * Called when modifying the panel state in such a way that the backlight state
+ * may also need to change. Handles notifying backlight state changes and other
+ * bookkeeping regarding drm properties.
+ */
+void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state panel_state);
 
 /* gs_panel_sysfs.c */
 int gs_panel_sysfs_create_files(struct device *dev);

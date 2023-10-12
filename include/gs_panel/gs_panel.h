@@ -207,6 +207,14 @@ struct gs_panel_funcs {
 	void (*set_nolp_mode)(struct gs_panel *gs_panel, const struct gs_panel_mode *mode);
 
 	/**
+	 * @set_binned_lp:
+	 *
+	 * This callback is used to handle additional command sequences for low
+	 * power modes based on different brightness thresholds.
+	 */
+	void (*set_binned_lp)(struct gs_panel *gs_panel, u16 br);
+
+	/**
 	 * @set_post_lp_mode:
 	 *
 	 * This callback is used to handle additional operations after set_lp_mode and

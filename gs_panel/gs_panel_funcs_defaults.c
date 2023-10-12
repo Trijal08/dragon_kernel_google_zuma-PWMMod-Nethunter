@@ -12,6 +12,7 @@
 
 #include "gs_panel/gs_panel_funcs_defaults.h"
 #include "gs_panel/gs_panel.h"
+#include "gs_panel_internal.h"
 
 #define PANEL_ID_REG_DEFAULT 0xA1
 #define PANEL_ID_LEN 7
@@ -156,3 +157,54 @@ int gs_panel_set_te2_edges_helper(struct gs_panel *ctx, u32 *timings, bool lp_mo
 	return 0;
 }
 EXPORT_SYMBOL(gs_panel_set_te2_edges_helper);
+
+static inline bool is_backlight_lp_state(const struct backlight_device *bl)
+{
+	return (bl->props.state & BL_STATE_LP) != 0;
+}
+
+void gs_panel_set_binned_lp_helper(struct gs_panel *ctx, const u16 brightness)
+{
+	int i;
+	const struct gs_binned_lp *binned_lp;
+	struct backlight_device *bl = ctx->bl;
+	bool is_lp_state;
+	enum gs_panel_state panel_state;
+
+	for (i = 0; i < ctx->desc->num_binned_lp; i++) {
+		binned_lp = &ctx->desc->binned_lp[i];
+		if (brightness <= binned_lp->bl_threshold)
+			break;
+	}
+	if (i == ctx->desc->num_binned_lp)
+		return;
+
+	mutex_lock(&ctx->bl_state_lock); /*TODO(b/267170999): BL*/
+	is_lp_state = is_backlight_lp_state(bl);
+	mutex_unlock(&ctx->bl_state_lock); /*TODO(b/267170999): BL*/
+
+	mutex_lock(&ctx->lp_state_lock); /*TODO(b/267170999): LP*/
+
+	if (is_lp_state && ctx->current_binned_lp &&
+	    binned_lp->bl_threshold == ctx->current_binned_lp->bl_threshold) {
+		mutex_unlock(&ctx->lp_state_lock); /*TODO(b/267170999): LP*/
+		return;
+	}
+
+	gs_panel_send_cmdset(ctx, &binned_lp->cmdset);
+
+	ctx->current_binned_lp = binned_lp;
+	dev_dbg(ctx->dev, "enter lp_%s\n", ctx->current_binned_lp->name);
+
+	mutex_unlock(&ctx->lp_state_lock); /*TODO(b/267170999): LP*/
+
+	panel_state = !binned_lp->bl_threshold ? GPANEL_STATE_BLANK : GPANEL_STATE_LP;
+	gs_panel_set_backlight_state(ctx, panel_state);
+
+	if (bl)
+		sysfs_notify(&bl->dev.kobj, NULL, "lp_state");
+
+	if (panel_state == GPANEL_STATE_LP)
+		gs_panel_update_te2(ctx);
+}
+EXPORT_SYMBOL(gs_panel_set_binned_lp_helper);
