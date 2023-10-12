@@ -12,6 +12,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-spi: " fmt
 
 #include "lwis_spi.h"
+#include "lwis_trace.h"
 #include "lwis_util.h"
 
 #include <linux/bits.h>
@@ -48,6 +49,7 @@ static int lwis_spi_read(struct lwis_spi_device *spi_dev, uint64_t offset, uint6
 	struct spi_message msg;
 	struct spi_transfer tx;
 	struct spi_transfer rx;
+	char trace_name[LWIS_MAX_NAME_STRING_LEN];
 
 	if (!spi_dev || !spi_dev->spi) {
 		pr_err("Cannot find SPI instance\n");
@@ -87,9 +89,12 @@ static int lwis_spi_read(struct lwis_spi_device *spi_dev, uint64_t offset, uint6
 	rx.rx_buf = &rbuf;
 	spi_message_add_tail(&rx, &msg);
 
+	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "spi_read_%s", spi_dev->base_dev.name);
+	LWIS_ATRACE_FUNC_BEGIN(&spi_dev->base_dev, trace_name);
 	mutex_lock(&spi_dev->spi_lock);
 	ret = spi_sync(spi_dev->spi, &msg);
 	mutex_unlock(&spi_dev->spi_lock);
+	LWIS_ATRACE_FUNC_END(&spi_dev->base_dev, trace_name);
 	if (ret < 0) {
 		dev_err(spi_dev->base_dev.dev, "spi_sync() error:%d\n", ret);
 		return ret;
@@ -113,6 +118,7 @@ static int lwis_spi_write(struct lwis_spi_device *spi_dev, uint64_t offset, uint
 	uint8_t *wbuf;
 	struct spi_message msg;
 	struct spi_transfer tx;
+	char trace_name[LWIS_MAX_NAME_STRING_LEN];
 
 	if (!spi_dev || !spi_dev->spi) {
 		pr_err("Cannot find SPI instance\n");
@@ -161,9 +167,12 @@ static int lwis_spi_write(struct lwis_spi_device *spi_dev, uint64_t offset, uint
 	tx.tx_buf = wbuf;
 	spi_message_add_tail(&tx, &msg);
 
+	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "spi_write_%s", spi_dev->base_dev.name);
+	LWIS_ATRACE_FUNC_BEGIN(&spi_dev->base_dev, trace_name);
 	mutex_lock(&spi_dev->spi_lock);
 	ret = spi_sync(spi_dev->spi, &msg);
 	mutex_unlock(&spi_dev->spi_lock);
+	LWIS_ATRACE_FUNC_END(&spi_dev->base_dev, trace_name);
 	if (ret < 0) {
 		dev_err(spi_dev->base_dev.dev, "spi_sync() error:%d\n", ret);
 	}
@@ -182,6 +191,7 @@ static int lwis_spi_read_batch(struct lwis_spi_device *spi_dev, uint64_t offset,
 	struct spi_message msg;
 	struct spi_transfer tx;
 	struct spi_transfer rx;
+	char trace_name[LWIS_MAX_NAME_STRING_LEN];
 
 	if (!spi_dev || !spi_dev->spi) {
 		pr_err("Cannot find SPI instance\n");
@@ -214,9 +224,13 @@ static int lwis_spi_read_batch(struct lwis_spi_device *spi_dev, uint64_t offset,
 	rx.rx_buf = read_buf;
 	spi_message_add_tail(&rx, &msg);
 
+	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "spi_read_batch_%s",
+		  spi_dev->base_dev.name);
+	LWIS_ATRACE_FUNC_BEGIN(&spi_dev->base_dev, trace_name);
 	mutex_lock(&spi_dev->spi_lock);
 	ret = spi_sync(spi_dev->spi, &msg);
 	mutex_unlock(&spi_dev->spi_lock);
+	LWIS_ATRACE_FUNC_END(&spi_dev->base_dev, trace_name);
 	if (ret < 0) {
 		dev_err(spi_dev->base_dev.dev, "spi_sync() error:%d\n", ret);
 		return ret;
@@ -236,6 +250,7 @@ static int lwis_spi_write_batch(struct lwis_spi_device *spi_dev, uint64_t offset
 	int msg_bytes;
 	struct spi_message msg;
 	struct spi_transfer tx;
+	char trace_name[LWIS_MAX_NAME_STRING_LEN];
 
 	if (!spi_dev || !spi_dev->spi) {
 		pr_err("Cannot find SPI instance\n");
@@ -276,9 +291,13 @@ static int lwis_spi_write_batch(struct lwis_spi_device *spi_dev, uint64_t offset
 	tx.tx_buf = buf;
 	spi_message_add_tail(&tx, &msg);
 
+	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "spi_write_batch_%s",
+		  spi_dev->base_dev.name);
+	LWIS_ATRACE_FUNC_BEGIN(&spi_dev->base_dev, trace_name);
 	mutex_lock(&spi_dev->spi_lock);
 	ret = spi_sync(spi_dev->spi, &msg);
 	mutex_unlock(&spi_dev->spi_lock);
+	LWIS_ATRACE_FUNC_END(&spi_dev->base_dev, trace_name);
 	if (ret < 0) {
 		dev_err(spi_dev->base_dev.dev, "spi_sync() error:%d\n", ret);
 	}
