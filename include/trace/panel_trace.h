@@ -111,6 +111,23 @@ TRACE_EVENT(te2_update_settings,
 		  __entry->is_idle ? "active" : "inactive")
 );
 
+TRACE_EVENT(panel_int_value,
+	TP_PROTO(const char *name, int pid, int value),
+	TP_ARGS(name, pid, value),
+	TP_STRUCT__entry(
+		__string(name, name)
+		__field(int, pid)
+		__field(int, value)
+	),
+	TP_fast_assign(
+		__assign_str(name, name);
+		__entry->pid = pid;
+		__entry->value = value;
+	),
+	TP_printk("C|%d|%s|%d", __entry->pid, __get_str(name), __entry->value)
+);
+#define PANEL_ATRACE_INT(name, value) trace_panel_int_value(name, current->tgid, value)
+
 #endif /* _PANEL_TRACE_H_ */
 
 #undef TRACE_INCLUDE_PATH

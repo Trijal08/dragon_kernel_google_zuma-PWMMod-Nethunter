@@ -19,6 +19,7 @@
 
 #include "gs_drm/gs_drm_connector.h"
 #include "gs_panel/gs_panel.h"
+#include "trace/panel_trace.h"
 
 #define bridge_to_gs_panel(b) container_of((b), struct gs_panel, bridge)
 
@@ -375,8 +376,8 @@ static void gs_panel_bridge_mode_set(struct drm_bridge *bridge, const struct drm
 	if (need_update_backlight && ctx->bl)
 		backlight_update_status(ctx->bl);
 
+	PANEL_ATRACE_INT("panel_fps", drm_mode_vrefresh(mode));
 	/* TODO(tknelms)
-	DPU_ATRACE_INT("panel_fps", drm_mode_vrefresh(mode));
 	DPU_ATRACE_END(__func__);
 	*/
 }
