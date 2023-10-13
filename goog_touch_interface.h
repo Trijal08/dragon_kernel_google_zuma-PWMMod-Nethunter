@@ -47,12 +47,56 @@
 #define GTI_DEBUG_INPUT_LOGS_LEN 4
 
 /*-----------------------------------------------------------------------------
+ * Interactive calibration minimum and maximum state times.
+ */
+
+/* Must wait at least 5s before beginning any operation */
+#define MIN_DELAY_IDLE		(5 * 1e9)
+
+/* Must wait at least 1s between screen-turning-off and calibration start, and
+ * cannot stay in this state longer than 15s.
+ */
+#define MIN_DELAY_INIT_CAL	(1 * 1e9)
+#define MAX_DELAY_INIT_CAL	(15 * 1e9)
+
+/* Must wait at least 3s for calibration to complete and cannot stay in this
+ * state longer than 15s.
+ */
+#define MIN_DELAY_RUN_CAL	(3 * 1e9)
+#define MAX_DELAY_RUN_CAL	(15 * 1e9)
+
+/* Must wait at least 1s before final return to idle and cannot stay in this
+ * state longer than 15s.
+ */
+#define MIN_DELAY_END_CAL	(1 * 1e9)
+#define MAX_DELAY_END_CAL	(15 * 1e9)
+
+/* Must wait at least 1s between screen-turning-off and self-test start, and
+ * cannot state in this state longer than 15s.
+ */
+#define MIN_DELAY_INIT_TEST	(1 * 1e9)
+#define MAX_DELAY_INIT_TEST	(15 * 1e9)
+
+/* Must wait at least 3s for self-test to complete and cannot stay in this state
+ * longer than 15s.
+ */
+#define MIN_DELAY_RUN_TEST	(3 * 1e9)
+#define MAX_DELAY_RUN_TEST	(15 * 1e9)
+
+/* Must wait at least 1s before final return to idle and cannot stay in this
+ * state longer than 15s.
+ */
+#define MIN_DELAY_END_TEST	(1 * 1e9)
+#define MAX_DELAY_END_TEST	(15 * 1e9)
+
+/*-----------------------------------------------------------------------------
  * enums.
  */
 
 enum gti_cmd_type : u32 {
 	/* GTI_CMD operations. */
 	GTI_CMD_OPS_START = 0x100,
+	GTI_CMD_CALIBRATE,
 	GTI_CMD_PING,
 	GTI_CMD_RESET,
 	GTI_CMD_SELFTEST,
@@ -89,6 +133,13 @@ enum gti_cmd_type : u32 {
 	GTI_CMD_SET_SCAN_MODE,
 	GTI_CMD_SET_SCREEN_PROTECTOR_MODE,
 	GTI_CMD_SET_SENSING_MODE,
+};
+
+enum gti_calibrate_result : u32 {
+	GTI_CALIBRATE_RESULT_DONE = 0,
+	GTI_CALIBRATE_RESULT_SHELL_CMDS_REDIRECT,
+	GTI_CALIBRATE_RESULT_FAIL,
+	GTI_CALIBRATE_RESULT_NA = 0xFFFFFFFF,
 };
 
 enum gti_continuous_report_setting : u32 {
@@ -273,9 +324,31 @@ enum gti_noise_mode_level : u8 {
 	GTI_NOISE_MODE_LEVEL3,
 };
 
+enum gti_ical_res : u32 {
+	ICAL_RES_SUCCESS = 0,
+	ICAL_RES_FAIL = 0x80000000,
+	ICAL_RES_NA = 0xFFFFFFFF,
+};
+
+enum gti_ical_state : u32 {
+	ICAL_STATE_IDLE = 0,
+	ICAL_STATE_INIT_CAL = 101,
+	ICAL_STATE_RUN_CAL = 102,
+	ICAL_STATE_END_CAL = 103,
+	ICAL_STATE_INIT_TEST = 201,
+	ICAL_STATE_RUN_TEST = 202,
+	ICAL_STATE_END_TEST = 203,
+	ICAL_STATE_NA = 0xFFFFFFFF,
+};
+
 /*-----------------------------------------------------------------------------
  * Structures.
  */
+
+struct gti_calibrate_cmd {
+	enum gti_calibrate_result result;
+	char buffer[PAGE_SIZE];
+};
 
 struct gti_context_changed {
 	union {
@@ -412,6 +485,7 @@ struct gti_sensor_data_cmd {
 
 /**
  * struct gti_union_cmd_data - GTI commands to vendor driver.
+ * @calibrate_cmd: command to calibrate the touchscreen
  * @context_driver_cmd: command to update touch offload driver context.
  * @context_stylus_cmd: command to update touch offload stylus context.
  * @continuous_report_cmd: command to set continuous reporting.
@@ -434,6 +508,7 @@ struct gti_sensor_data_cmd {
  * @manual_sensor_data_cmd: command to get sensor data manually.
  */
 struct gti_union_cmd_data {
+	struct gti_calibrate_cmd calibrate_cmd;
 	struct gti_context_driver_cmd context_driver_cmd;
 	struct gti_context_stylus_cmd context_stylus_cmd;
 	struct gti_continuous_report_cmd continuous_report_cmd;
@@ -467,6 +542,7 @@ struct gti_fw_status_data {
 
 /**
  * struct gti_optional_configuration - optional configuration by vendor driver.
+ * @calibrate: vendor driver operation to exec calibration
  * @get_context_driver: vendor driver operation to update touch offload driver context.
  * @get_context_stylus: vendor driver operation to update touch offload stylus context.
  * @get_coord_filter_enabled: vendor driver operation to get the coordinate filter enabled.
@@ -501,6 +577,7 @@ struct gti_optional_configuration {
 	 * Vendor command with GTI default NOP handler.
 	 * No need to check before use.
 	 */
+	int (*calibrate)(void *private_data, struct gti_calibrate_cmd *cmd);
 	int (*get_context_driver)(void *private_data, struct gti_context_driver_cmd *cmd);
 	int (*get_context_stylus)(void *private_data, struct gti_context_stylus_cmd *cmd);
 	int (*get_coord_filter_enabled)(void *private_data, struct gti_coord_filter_cmd *cmd);
@@ -632,6 +709,10 @@ struct gti_pm {
  * @panel_id: id of the display panel.
  * @charger_state: indicates a USB charger is connected.
  * @charger_notifier: notifier for power_supply updates.
+ * @ical_state: state of interactive calibration finite state machine.
+ * @ical_timestamp_ns: time of last interactive calibration state transition.
+ * @ical_result: interactive calibration FSM result.
+ * @ical_func_result: result returned from the requested interactive function.
  * @irq_index: irq count that handle by GTI.
  * @input_index: the count of slot bit changed during goog_input_process().
  * @vendor_irq_handler: irq handler that register by vendor driver.
@@ -724,9 +805,15 @@ struct goog_touch_interface {
 	char fw_name[64];
 	char config_name[64];
 	char test_limits_name[64];
+	char usb_psy_name[64];
 
 	u8 charger_state;
 	struct notifier_block charger_notifier;
+
+	u32 ical_state;
+	u64 ical_timestamp_ns;
+	s32 ical_result;
+	s32 ical_func_result;
 
 	u64 irq_index;
 	u64 input_index;
