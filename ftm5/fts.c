@@ -2968,6 +2968,50 @@ static int ping(void *private_data, struct gti_ping_cmd *cmd)
 
 	return 0;
 }
+
+static int calibrate(void *private_data, struct gti_calibrate_cmd *cmd)
+{
+	struct fts_ts_info *info = private_data;
+	int ret = 0;
+
+	ret = production_test_main(info, info->board->limits_name, 1,
+				   SPECIAL_FULL_PANEL_INIT, MP_FLAG_BOOT);
+
+	/* Reset, then sense on */
+	cleanUp(info, true);
+
+	if (ret == 0)
+		cmd->result = GTI_CALIBRATE_RESULT_DONE;
+	else
+		cmd->result = GTI_CALIBRATE_RESULT_FAIL;
+	return ret;
+}
+
+static int selftest(void *private_data, struct gti_selftest_cmd *cmd)
+{
+	struct fts_ts_info *info = private_data;
+	const char *limits_file = info->board->limits_name;
+	MutualSenseFrame frameMS;
+	u16 ito_max_val[2] = {0x00};
+	int ret;
+
+	frameMS.node_data = NULL;
+	ret = production_test_ito(info, limits_file, &frameMS,
+				  ito_max_val);
+
+	/* Free the allocated frame */
+	kfree(frameMS.node_data);
+	frameMS.node_data = NULL;
+
+	/* Reset, then sense on. */
+	cleanUp(info, true);
+
+	if (ret == 0)
+		cmd->result = GTI_SELFTEST_RESULT_DONE;
+	else
+		cmd->result = GTI_SELFTEST_RESULT_NA;
+	return ret;
+}
 #endif
 
 /**
@@ -5859,6 +5903,9 @@ static int fts_probe(struct spi_device *client)
 	options->set_irq_mode = set_irq_mode;
 	options->reset = set_reset;
 	options->ping = ping;
+
+	options->calibrate = calibrate;
+	options->selftest = selftest;
 
 	info->gti = goog_touch_interface_probe(
 		info, info->dev, info->input_dev, gti_default_handler, options);
