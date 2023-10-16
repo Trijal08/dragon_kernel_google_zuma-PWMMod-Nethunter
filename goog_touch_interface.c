@@ -225,7 +225,7 @@ static int goog_proc_dump_show(struct seq_file *m, void *v)
 		time64_utc = div_s64_rem(ktime_to_ns(hc_history[i].irq_time),
 			NSEC_PER_SEC, &remainder);
 		time64_to_tm(time64_utc, 0, &utc);
-		seq_printf(m, "%4d-%02d-%02d %02d:%02d:%02d.%03d %8llu %8llu %#12lx\n",
+		seq_printf(m, "%4ld-%02d-%02d %02d:%02d:%02d.%03ld %8llu %8llu %#12lx\n",
 			utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday,
 			utc.tm_hour, utc.tm_min, utc.tm_sec, remainder/NSEC_PER_MSEC,
 			hc_history[i].irq_index,
@@ -246,7 +246,7 @@ static int goog_proc_dump_show(struct seq_file *m, void *v)
 		time64_utc = div_s64_rem(ktime_to_ns(input_history[i].pressed.time),
 			NSEC_PER_SEC, &remainder);
 		time64_to_tm(time64_utc, 0, &utc);
-		seq_printf(m, "%4d-%02d-%02d %02d:%02d:%02d.%03d %14lld %8d %12d %12d %12d %12d\n",
+		seq_printf(m, "%4ld-%02d-%02d %02d:%02d:%02d.%03ld %14lld %8d %12lld %12lld %12d %12d\n",
 			utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday,
 			utc.tm_hour, utc.tm_min, utc.tm_sec, remainder/NSEC_PER_MSEC,
 			ktime_to_ms(delta_time),
