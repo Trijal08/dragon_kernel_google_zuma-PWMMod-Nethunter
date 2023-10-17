@@ -296,8 +296,7 @@ int gs_drm_connector_create_properties(struct drm_connector *connector)
 
 	dev_dbg(dev, "%s+\n", __func__);
 
-	p->lp_mode = drm_property_create(drm_dev, DRM_MODE_PROP_IMMUTABLE | DRM_MODE_PROP_BLOB,
-					 "lp_mode", 0);
+	p->lp_mode = drm_property_create(drm_dev, DRM_MODE_PROP_BLOB, "lp_mode", 0);
 	if (IS_ERR(p->lp_mode))
 		return PTR_ERR(p->lp_mode);
 

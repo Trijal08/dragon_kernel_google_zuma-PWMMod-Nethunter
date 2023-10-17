@@ -17,6 +17,7 @@ struct gs_panel;
 struct gs_drm_connector;
 struct dentry;
 struct mipi_dsi_device;
+enum gs_panel_state;
 
 /* gs_panel_connector_funcs.c */
 int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *drm_dev,
@@ -24,6 +25,16 @@ int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *dr
 
 /* drm_bridge_funcs.c */
 const struct drm_bridge_funcs *get_panel_drm_bridge_funcs(void);
+/**
+ * gs_panel_set_backlight_state() - sets the state for the backlight
+ * @ctx: Pointer to gs_panel
+ * @panel_state: New state for the panel backlight
+ *
+ * Called when modifying the panel state in such a way that the backlight state
+ * may also need to change. Handles notifying backlight state changes and other
+ * bookkeeping regarding drm properties.
+ */
+void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state panel_state);
 
 /* gs_panel_sysfs.c */
 int gs_panel_sysfs_create_files(struct device *dev);
@@ -71,6 +82,30 @@ ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *da
 
 /* gs_panel.c */
 int gs_panel_first_enable(struct gs_panel *ctx);
+void panel_update_idle_mode_locked(struct gs_panel *ctx);
+
+/**
+ * gs_set_te2_timing() - handle for setting te2 timings from sysfs node
+ * @ctx: panel struct
+ * @count: size of the input buffer
+ * @buf: input buffer provided to sysfs node
+ * @lp_mode: whether these timings apply to LP modes
+ *
+ * This function is called by both the normal and low-power versions of the
+ * te2_store functions from the sysfs nodes. It consumes the userspace command,
+ * parses it, and passes (valid) parsed data to the appropriate function to
+ * actually modify the te2 timings for the panel modes
+ *
+ * Return: number of bytes consumed by input buffer, or negative value on error
+ */
+ssize_t gs_set_te2_timing(struct gs_panel *ctx, size_t count, const char *buf, bool lp_mode);
+
+/**
+ * gs_panel_set_vddd_voltage() - Sets appropriate voltage on vddd
+ * @ctx: Pointer to gs_panel
+ * @is_lp: whether we're setting voltage for an lp mode
+ */
+void gs_panel_set_vddd_voltage(struct gs_panel *ctx, bool is_lp);
 
 /**
  * get_gs_drm_connector_parent - gets the connector that is panel's parent

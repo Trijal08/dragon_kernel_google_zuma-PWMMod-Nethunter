@@ -125,6 +125,9 @@ struct gs_drm_connector_state {
 
 	/** @is_recovering: whether we're doing decon recovery */
 	bool is_recovering;
+
+	/** @operation_rate: panel operation rate */
+	unsigned int operation_rate;
 };
 
 #define to_gs_connector_state(connector_state) \
@@ -190,6 +193,8 @@ struct gs_drm_connector {
 #define to_gs_connector(connector) container_of((connector), struct gs_drm_connector, base)
 
 bool is_gs_drm_connector(const struct drm_connector *connector);
+#define is_gs_drm_connector_state(conn_state) is_gs_drm_connector(conn_state->connector)
+
 int gs_drm_connector_create_properties(struct drm_connector *connector);
 struct gs_drm_connector_properties *
 gs_drm_connector_get_properties(struct gs_drm_connector *gs_conector);

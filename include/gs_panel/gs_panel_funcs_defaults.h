@@ -12,6 +12,7 @@
 #include <linux/types.h>
 
 struct gs_panel;
+struct gs_panel_mode;
 
 /*
  * DOC: gs_panel_funcs_defaults theory
@@ -66,5 +67,51 @@ int gs_panel_read_slsi_ddic_id(struct gs_panel *ctx);
  * Return: 0 on success, negative value on error.
  */
 int gs_panel_read_id(struct gs_panel *ctx);
+
+/**
+ * gs_panel_is_mode_seamless_helper() - Default implementation for checking
+ *                                      seamless transition.
+ * @ctx: Reference to panel data
+ * @mode: Proposed display mode
+ *
+ * Checks whether the panel can transition to the new mode seamlessly without
+ * having to turn the display off before the mode change.
+ *
+ * This implementation checks if resolution/timings and flags are the same.
+ *
+ * Return: true if seamless transition possible, false otherwise
+ */
+bool gs_panel_is_mode_seamless_helper(const struct gs_panel *ctx,
+				      const struct gs_panel_mode *pmode);
+
+/**
+ * gs_panel_get_te2_edges_helper() - Get rising and falling edges of TE2 signal
+ * @ctx: Reference to panel data
+ * @buf: string buffer to which to write the TE2 timing data
+ * @lp_mode: Whether this should display data about LP or non-LP TE2 timing
+ *
+ * Return: length of string written to buffer, or negative value on error
+ */
+ssize_t gs_panel_get_te2_edges_helper(struct gs_panel *ctx, char *buf, bool lp_mode);
+
+/**
+ * gs_panel_set_te2_edges_helper() - Configure rising/falling te2 edges
+ * @ctx: Reference to panel data
+ * @timings: Array of values to configure into the timings
+ * @lp_mode: Whether we're configuring LP or non-LP timings
+ *
+ * Return: 0 on success, negative value on error.
+ */
+int gs_panel_set_te2_edges_helper(struct gs_panel *ctx, u32 *timings, bool lp_mode);
+
+/**
+ * gs_panel_set_binned_lp_helper() - Execute command sequences for LP modes
+ * @ctx: Reference to panel data
+ * @brightness: Brightness value to which the panel is being set
+ *
+ * This executes the correct commands for setting LP modes based on the binned
+ * brightness value.
+ */
+void gs_panel_set_binned_lp_helper(struct gs_panel *ctx, const u16 brightness);
 
 #endif // _GS_PANEL_FUNCS_DEFAULTS_H_

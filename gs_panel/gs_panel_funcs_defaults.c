@@ -6,11 +6,22 @@
  * license that can be found in the LICENSE file or at
  * https://opensource.org/licenses/MIT.
  */
+#include <drm/drm_modes.h>
+
+#include <linux/delay.h>
 
 #include <linux/delay.h>
 
 #include "gs_panel/gs_panel_funcs_defaults.h"
 #include "gs_panel/gs_panel.h"
+#include "gs_panel_internal.h"
+
+#define PANEL_ID_REG_DEFAULT 0xA1
+#define PANEL_ID_LEN 7
+#define PANEL_ID_OFFSET 6
+#define PANEL_ID_READ_SIZE (PANEL_ID_LEN + PANEL_ID_OFFSET)
+#define PANEL_SLSI_DDIC_ID_REG 0xD6
+#define PANEL_SLSI_DDIC_ID_LEN 5
 
 #define PANEL_ID_REG_DEFAULT 0xA1
 #define PANEL_ID_LEN 7
@@ -100,3 +111,109 @@ int gs_panel_read_id(struct gs_panel *ctx)
 	return 0;
 }
 EXPORT_SYMBOL(gs_panel_read_id);
+
+bool gs_panel_is_mode_seamless_helper(const struct gs_panel *ctx, const struct gs_panel_mode *pmode)
+{
+	const struct drm_display_mode *current_mode = &ctx->current_mode->mode;
+	const struct drm_display_mode *new_mode = &pmode->mode;
+
+	return drm_mode_equal_no_clocks(current_mode, new_mode);
+}
+EXPORT_SYMBOL(gs_panel_is_mode_seamless_helper);
+
+ssize_t gs_panel_get_te2_edges_helper(struct gs_panel *ctx, char *buf, bool lp_mode)
+{
+	struct gs_te2_mode_data *data;
+	size_t len = 0;
+	int i;
+
+	if (!ctx)
+		return -EINVAL;
+
+	for_each_te2_timing(ctx, lp_mode, data, i) {
+		len += scnprintf(buf + len, PAGE_SIZE - len, "%dx%d@%d", data->mode->hdisplay,
+				 data->mode->vdisplay, drm_mode_vrefresh(data->mode));
+
+		if (data->binned_lp)
+			len += scnprintf(buf + len, PAGE_SIZE - len, "-lp_%s",
+					 data->binned_lp->name);
+
+		len += scnprintf(buf + len, PAGE_SIZE - len, " rising %u falling %u\n",
+				 data->timing.rising_edge, data->timing.falling_edge);
+	}
+
+	return len;
+}
+EXPORT_SYMBOL(gs_panel_get_te2_edges_helper);
+
+int gs_panel_set_te2_edges_helper(struct gs_panel *ctx, u32 *timings, bool lp_mode)
+{
+	struct gs_te2_mode_data *data;
+	const u32 *t;
+	int i;
+
+	if (!ctx || !timings)
+		return -EINVAL;
+
+	t = timings;
+
+	for_each_te2_timing(ctx, lp_mode, data, i) {
+		data->timing.rising_edge = t[0];
+		data->timing.falling_edge = t[1];
+		t += 2;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(gs_panel_set_te2_edges_helper);
+
+static inline bool is_backlight_lp_state(const struct backlight_device *bl)
+{
+	return (bl->props.state & BL_STATE_LP) != 0;
+}
+
+void gs_panel_set_binned_lp_helper(struct gs_panel *ctx, const u16 brightness)
+{
+	int i;
+	const struct gs_binned_lp *binned_lp;
+	struct backlight_device *bl = ctx->bl;
+	bool is_lp_state;
+	enum gs_panel_state panel_state;
+
+	for (i = 0; i < ctx->desc->num_binned_lp; i++) {
+		binned_lp = &ctx->desc->binned_lp[i];
+		if (brightness <= binned_lp->bl_threshold)
+			break;
+	}
+	if (i == ctx->desc->num_binned_lp)
+		return;
+
+	mutex_lock(&ctx->bl_state_lock); /*TODO(b/267170999): BL*/
+	is_lp_state = is_backlight_lp_state(bl);
+	mutex_unlock(&ctx->bl_state_lock); /*TODO(b/267170999): BL*/
+
+	mutex_lock(&ctx->lp_state_lock); /*TODO(b/267170999): LP*/
+
+	if (is_lp_state && ctx->current_binned_lp &&
+	    binned_lp->bl_threshold == ctx->current_binned_lp->bl_threshold) {
+		mutex_unlock(&ctx->lp_state_lock); /*TODO(b/267170999): LP*/
+		return;
+	}
+
+	gs_panel_send_cmdset(ctx, &binned_lp->cmdset);
+
+	ctx->current_binned_lp = binned_lp;
+	dev_dbg(ctx->dev, "enter lp_%s\n", ctx->current_binned_lp->name);
+
+	mutex_unlock(&ctx->lp_state_lock); /*TODO(b/267170999): LP*/
+
+	panel_state = !binned_lp->bl_threshold ? GPANEL_STATE_BLANK : GPANEL_STATE_LP;
+	gs_panel_set_backlight_state(ctx, panel_state);
+
+	if (bl)
+		sysfs_notify(&bl->dev.kobj, NULL, "lp_state");
+
+	if (panel_state == GPANEL_STATE_LP)
+		gs_panel_update_te2(ctx);
+}
+EXPORT_SYMBOL(gs_panel_set_binned_lp_helper);

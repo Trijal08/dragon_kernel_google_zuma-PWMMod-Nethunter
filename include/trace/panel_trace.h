@@ -90,6 +90,44 @@ TRACE_EVENT(dsi_label_scope,
 #define PANEL_SEQ_LABEL_BEGIN(name) trace_dsi_label_scope(name, true)
 #define PANEL_SEQ_LABEL_END(name) trace_dsi_label_scope(name, false)
 
+TRACE_EVENT(te2_update_settings,
+	TP_PROTO(int rising_us, int falling_us, bool is_changeable, bool is_idle),
+	TP_ARGS(rising_us, falling_us, is_changeable, is_idle),
+	TP_STRUCT__entry(
+			__field(int, rising_us)
+			__field(int, falling_us)
+			__field(bool, is_changeable)
+			__field(bool, is_idle)
+		),
+	TP_fast_assign(
+			__entry->rising_us = rising_us;
+			__entry->falling_us = falling_us;
+			__entry->is_changeable = is_changeable;
+			__entry->is_idle = is_idle;
+		),
+	TP_printk("TE2 updated: rising %dus falling %dus, option %s, idle %s",
+		  __entry->rising_us, __entry->falling_us,
+		  __entry->is_changeable ? "changeable" : "fixed",
+		  __entry->is_idle ? "active" : "inactive")
+);
+
+TRACE_EVENT(panel_int_value,
+	TP_PROTO(const char *name, int pid, int value),
+	TP_ARGS(name, pid, value),
+	TP_STRUCT__entry(
+		__string(name, name)
+		__field(int, pid)
+		__field(int, value)
+	),
+	TP_fast_assign(
+		__assign_str(name, name);
+		__entry->pid = pid;
+		__entry->value = value;
+	),
+	TP_printk("C|%d|%s|%d", __entry->pid, __get_str(name), __entry->value)
+);
+#define PANEL_ATRACE_INT(name, value) trace_panel_int_value(name, current->tgid, value)
+
 #endif /* _PANEL_TRACE_H_ */
 
 #undef TRACE_INCLUDE_PATH

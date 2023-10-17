@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: GPL-2.0-only
+What: /sys/devices/platform/gs-drm-connector/panel/serial_number
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client can use to view serial number of panel.
+  This value should be unique to each panel device.
+
+What: /sys/devices/platform/gs-drm-connector/panel/panel_extinfo
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client can use to view build information of the panel.
+  The format of this data is module-dependent, but should
+  be able to identify build revision, manufacturer, and other related data.
+
+What: /sys/devices/platform/gs-drm-connector/panel/panel_name
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client can use to view the name of the panel.
+
+What: /sys/devices/platform/gs-drm-connector/panel/panel_idle
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client can use to view or override whether idle mode is
+  possible for the panel.
+  Idle mode allows the panel to aggressively change its internal refresh rate
+  when the panel is expected to be idle for a large length of time.
+  Usually, idle mode becomes active when self-refresh mode is activated.
+
+What: /sys/devices/platform/gs-drm-connector/panel/idle_delay_ms
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client uses this to view or override the time delay between the last
+  refresh rate change and when idle mode is able to be activated. The panel will
+  not enter idle mode until at least this long after the last mode/refresh change.
+
+What: /sys/devices/platform/gs-drm-connector/panel/panel_need_handle_idle_exit
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client uses this to check whether the flag for the panel needing
+  special handling to exit idle mode is on or off, or to override its value.
+  Some panels may need special handling when exiting idle mode because of clock or
+  bandwidth requirements due to the idle mode TE rate. This file exposes the flag
+  controlling this behavior to userspace.
+
+What: /sys/devices/platform/gs-drm-connector/panel/min_vrefresh
+Date: September 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client uses this to view or override the minimum value for vrefresh rate
+  that may be entered into without client's involvement, often because of idle mode.
