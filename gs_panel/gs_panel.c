@@ -478,7 +478,7 @@ static bool panel_idle_queue_delayed_work(struct gs_panel *ctx)
 	return false;
 }
 
-void panel_update_idle_mode_locked(struct gs_panel *ctx)
+void panel_update_idle_mode_locked(struct gs_panel *ctx, bool allow_delay_update)
 {
 	const struct gs_panel_funcs *funcs = ctx->desc->gs_panel_func;
 	struct gs_panel_idle_data *idle_data = &ctx->idle_data;
@@ -495,6 +495,13 @@ void panel_update_idle_mode_locked(struct gs_panel *ctx)
 		if (panel_idle_queue_delayed_work(ctx))
 			return;
 
+	if (!idle_data->self_refresh_active && allow_delay_update) {
+		// delay update idle mode to next commit
+		idle_data->panel_update_idle_mode_pending = true;
+		return;
+	}
+
+	idle_data->panel_update_idle_mode_pending = false;
 	if (delayed_work_pending(&idle_data->idle_work)) {
 		dev_dbg(ctx->dev, "%s: cancelling delayed idle work\n", __func__);
 		cancel_delayed_work(&idle_data->idle_work);
@@ -511,7 +518,7 @@ static void panel_idle_work(struct work_struct *work)
 	struct gs_panel *ctx = container_of(work, struct gs_panel, idle_data.idle_work.work);
 
 	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
-	panel_update_idle_mode_locked(ctx);
+	panel_update_idle_mode_locked(ctx, false);
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 }
 

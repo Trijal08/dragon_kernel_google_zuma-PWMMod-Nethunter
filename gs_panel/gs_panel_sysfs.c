@@ -77,7 +77,7 @@ static ssize_t panel_idle_store(struct device *dev, struct device_attribute *att
 		if (idle_enabled)
 			ctx->timestamps.last_panel_idle_set_ts = ktime_get();
 
-		panel_update_idle_mode_locked(ctx);
+		panel_update_idle_mode_locked(ctx, true);
 	}
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
@@ -137,8 +137,10 @@ static ssize_t idle_delay_ms_store(struct device *dev, struct device_attribute *
 	}
 
 	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
-	ctx->idle_data.idle_delay_ms = idle_delay_ms;
-	panel_update_idle_mode_locked(ctx);
+	if (ctx->idle_data.idle_delay_ms != idle_delay_ms) {
+		ctx->idle_data.idle_delay_ms = idle_delay_ms;
+		panel_update_idle_mode_locked(ctx, true);
+	}
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
 	return count;
@@ -166,8 +168,10 @@ static ssize_t min_vrefresh_store(struct device *dev, struct device_attribute *a
 	}
 
 	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
-	ctx->min_vrefresh = min_vrefresh;
-	panel_update_idle_mode_locked(ctx);
+	if (ctx->min_vrefresh != min_vrefresh) {
+		ctx->min_vrefresh = min_vrefresh;
+		panel_update_idle_mode_locked(ctx, true);
+	}
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
 	return count;

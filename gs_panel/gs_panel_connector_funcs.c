@@ -429,8 +429,14 @@ static void gs_panel_connector_atomic_pre_commit(struct gs_drm_connector *gs_con
 						 struct gs_drm_connector_state *gs_new_state)
 {
 	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+	struct gs_panel_idle_data *idle_data = &ctx->idle_data;
 
 	gs_panel_pre_commit_properties(ctx, gs_new_state);
+
+	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+	if (idle_data->panel_update_idle_mode_pending)
+		panel_update_idle_mode_locked(ctx, false);
+	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 }
 
 static void gs_panel_connector_atomic_commit(struct gs_drm_connector *gs_connector,

@@ -584,6 +584,7 @@ struct gs_panel_regulator {
 struct gs_panel_idle_data {
 	bool panel_idle_enabled;
 	bool panel_need_handle_idle_exit;
+	bool panel_update_idle_mode_pending;
 	bool self_refresh_active;
 	u32 panel_idle_vrefresh;
 	u32 idle_delay_ms;
