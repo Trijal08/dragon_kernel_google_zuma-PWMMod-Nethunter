@@ -37,7 +37,24 @@ const struct drm_bridge_funcs *get_panel_drm_bridge_funcs(void);
 void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state panel_state);
 
 /* gs_panel_sysfs.c */
+/**
+ * gs_panel_sysfs_create_files() - Creates sysfs files for panel
+ * @dev: pointer to panel's device node
+ *
+ * Creates sysfs files for panel itself
+ *
+ * Return: Result of sysfs_create_files function
+ */
 int gs_panel_sysfs_create_files(struct device *dev);
+/**
+ * gs_panel_sysfs_create_bl_files() - Creates sysfs files for panel backlight
+ * @bl_dev: pointer to backlight's device node
+ *
+ * Creates sysfs files for panel backlight
+ *
+ * Return: Result of sysfs_create_files function
+ */
+int gs_panel_sysfs_create_bl_files(struct device *bl_dev);
 
 /* gs_panel_debugfs.c */
 /**

@@ -674,7 +674,7 @@ struct gs_panel {
 	/* current type of mode switch */
 	enum mode_progress_type mode_in_progress;
 
-	/* GHBM (maybe reevaluate */
+	/* GHBM */
 	enum gs_hbm_mode hbm_mode;
 	/* HBM struct */
 	struct {

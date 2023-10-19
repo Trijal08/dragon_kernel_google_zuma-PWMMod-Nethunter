@@ -1002,12 +1002,10 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	/* Create sysfs files */
 	ret = gs_panel_sysfs_create_files(dev);
 	if (ret)
-		dev_warn(dev, "unable to add panel sysfs failes (%d)\n", ret);
-	/* TODO(tknelms): bl_device_groups
-	ret = sysfs_create_groups(&ctx->bl->dev.kobj, bl_device_groups);
+		dev_warn(dev, "unable to add panel sysfs files (%d)\n", ret);
+	ret = gs_panel_sysfs_create_bl_files(&ctx->bl->dev);
 	if (ret)
-		dev_err(dev, "unable to create bl_device_groups groups\n");
-	*/
+		dev_warn(dev, "unable to add panel backlight sysfs files (%d)\n", ret);
 
 	/* TODO(tknelms): cabc_mode
 	if (ctx->desc->gs_panel_func && ctx->desc->gs_panel_func->base &&

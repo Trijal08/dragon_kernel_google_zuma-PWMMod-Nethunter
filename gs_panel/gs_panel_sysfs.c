@@ -312,3 +312,72 @@ int gs_panel_sysfs_create_files(struct device *dev)
 {
 	return sysfs_create_files(&dev->kobj, panel_attrs);
 }
+
+/* Backlight Sysfs Node */
+
+static ssize_t hbm_mode_store(struct device *dev, struct device_attribute *attr, const char *buf,
+			      size_t count)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+	const struct gs_panel_mode *pmode;
+	u32 hbm_mode;
+	int ret;
+
+	if (!gs_panel_has_func(ctx, set_hbm_mode)) {
+		dev_err(ctx->dev, "HBM is not supported\n");
+		return -ENOTSUPP;
+	}
+
+	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+	pmode = ctx->current_mode;
+
+	if (!gs_is_panel_active(ctx) || !pmode) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		ret = -EPERM;
+		goto unlock;
+	}
+
+	if (pmode->gs_mode.is_lp_mode) {
+		dev_dbg(ctx->dev, "hbm unsupported in LP mode\n");
+		ret = -EPERM;
+		goto unlock;
+	}
+
+	ret = kstrtouint(buf, 0, &hbm_mode);
+	if (ret || (hbm_mode >= GS_HBM_STATE_MAX)) {
+		dev_err(ctx->dev, "invalid hbm_mode value\n");
+		goto unlock;
+	}
+
+	if (hbm_mode != ctx->hbm_mode) {
+		ctx->desc->gs_panel_func->set_hbm_mode(ctx, hbm_mode);
+		backlight_state_changed(bd);
+	}
+
+unlock:
+	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+
+	return ret ? ret : count;
+}
+
+static ssize_t hbm_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+
+	return sysfs_emit(buf, "%u\n", ctx->hbm_mode);
+}
+
+static DEVICE_ATTR_RW(hbm_mode);
+
+static struct attribute *bl_device_attrs[] = {
+	&dev_attr_hbm_mode.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(bl_device);
+
+int gs_panel_sysfs_create_bl_files(struct device *bl_dev)
+{
+	return sysfs_create_groups(&bl_dev->kobj, bl_device_groups);
+}
