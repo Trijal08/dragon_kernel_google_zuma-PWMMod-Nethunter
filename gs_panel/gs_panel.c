@@ -917,6 +917,11 @@ static void gs_panel_init_te2(struct gs_panel *ctx)
 	ctx->te2.option = GTE2_OPT_CHANGEABLE;
 }
 
+static void gs_panel_init_lhbm(struct gs_panel *ctx)
+{
+	/*TODO(tknelms): move over functions from `hbm_data_init`*/
+}
+
 int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 {
 	struct device *dev = &dsi->dev;
@@ -966,8 +971,9 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	/* TE2 */
 	gs_panel_init_te2(ctx);
 
-	/* HBM */
-	/*TODO(tknelms): hbm*/
+	/* LHBM */
+	if (gs_panel_has_func(ctx, set_local_hbm_mode))
+		gs_panel_init_lhbm(ctx);
 
 	/* Vrefresh */
 	if (ctx->desc->modes) {
