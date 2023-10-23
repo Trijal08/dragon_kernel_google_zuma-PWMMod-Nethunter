@@ -82,6 +82,7 @@ int hdcp22_dplink_authenticate(void)
 				UPDATE_LINK_STATE(lk_data, LINK_ST_A1_EXCHANGE_MASTER_KEY);
 			} else {
 				UPDATE_LINK_STATE(lk_data, LINK_ST_H1_TX_LOW_VALUE_CONTENT);
+				return -EOPNOTSUPP;
 			}
 			break;
 		case LINK_ST_A1_EXCHANGE_MASTER_KEY:
