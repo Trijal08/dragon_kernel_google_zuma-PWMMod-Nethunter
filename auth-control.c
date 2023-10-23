@@ -21,8 +21,6 @@
 #include "hdcp-log.h"
 #include "teeif.h"
 
-#define HDCP_SCHEDULE_DELAY_MSEC (5000)
-
 static struct hdcp_device *hdcp_dev;
 
 static enum auth_state state;

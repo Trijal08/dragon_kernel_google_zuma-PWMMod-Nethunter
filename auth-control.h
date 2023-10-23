@@ -11,6 +11,8 @@
 #ifndef __EXYNOS_HDCP_AUTH_CONTROL_H__
 #define __EXYNOS_HDCP_AUTH_CONTROL_H__
 
+#define HDCP_SCHEDULE_DELAY_MSEC (5000)
+
 struct hdcp_device;
 
 enum auth_state {
