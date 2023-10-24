@@ -563,7 +563,6 @@ void lwis_process_transactions_in_queue(struct lwis_client *client,
 					bool process_high_priority_transaction)
 {
 	unsigned long flags;
-	unsigned long flush_flags;
 	struct list_head *it_tran, *it_tran_tmp;
 	struct list_head pending_events;
 	struct list_head pending_fences;
@@ -576,22 +575,11 @@ void lwis_process_transactions_in_queue(struct lwis_client *client,
 	spin_lock_irqsave(&client->transaction_lock, flags);
 	list_for_each_safe (it_tran, it_tran_tmp, &client->transaction_process_queue) {
 		if (!client->is_enabled && client->lwis_dev->type != DEVICE_TYPE_TOP) {
-			/*
-			 * If client is not enabled, then we just need to requeue
-			 * the transaction until the client is enabled. This will
-			 * ensure that we don't loose the submitted transactions.
-			 * Top device does not require enabling.
-			 */
 			if (lwis_transaction_debug) {
 				dev_info(client->lwis_dev->dev,
-					 "Client is not ready to process transactions");
+					 "Client is disabled. Please enable client to process transactions.");
 			}
 			spin_unlock_irqrestore(&client->transaction_lock, flags);
-			spin_lock_irqsave(&client->flush_lock, flush_flags);
-			if (client->flush_state == NOT_FLUSHING) {
-				lwis_queue_device_worker(client);
-			}
-			spin_unlock_irqrestore(&client->flush_lock, flush_flags);
 			return;
 		}
 
