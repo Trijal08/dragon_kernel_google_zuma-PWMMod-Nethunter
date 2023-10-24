@@ -269,17 +269,21 @@ static int goog_proc_ms_base_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
-	if (ret) {
-		seq_puts(m, "error: has been interrupted!\n");
-		GOOG_LOGW(gti, "error: has been interrupted!\n");
-		return ret;
+	if (!gti->manual_heatmap_from_irq) {
+		ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
+		if (ret) {
+			seq_puts(m, "error: has been interrupted!\n");
+			GOOG_LOGW(gti, "error: has been interrupted!\n");
+			return ret;
+		}
 	}
 
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_MS_BASELINE);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_heatmap_lock);
+
+	if (!gti->manual_heatmap_from_irq)
+		mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -289,16 +293,21 @@ static int goog_proc_ms_diff_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
-	if (ret) {
-		seq_puts(m, "error: has been interrupted!\n");
-		GOOG_LOGW(gti, "error: has been interrupted!\n");
-		return ret;
+	if (!gti->manual_heatmap_from_irq) {
+		ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
+		if (ret) {
+			seq_puts(m, "error: has been interrupted!\n");
+			GOOG_LOGW(gti, "error: has been interrupted!\n");
+			return ret;
+		}
 	}
+
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_MS_DIFF);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_heatmap_lock);
+
+	if (!gti->manual_heatmap_from_irq)
+		mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -308,17 +317,21 @@ static int goog_proc_ms_raw_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
-	if (ret) {
-		seq_puts(m, "error: has been interrupted!\n");
-		GOOG_LOGW(gti, "error: has been interrupted!\n");
-		return ret;
+	if (!gti->manual_heatmap_from_irq) {
+		ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
+		if (ret) {
+			seq_puts(m, "error: has been interrupted!\n");
+			GOOG_LOGW(gti, "error: has been interrupted!\n");
+			return ret;
+		}
 	}
 
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_MS_RAW);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_heatmap_lock);
+
+	if (!gti->manual_heatmap_from_irq)
+		mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -328,17 +341,21 @@ static int goog_proc_ss_base_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
-	if (ret) {
-		seq_puts(m, "error: has been interrupted!\n");
-		GOOG_LOGW(gti, "error: has been interrupted!\n");
-		return ret;
+	if (!gti->manual_heatmap_from_irq) {
+		ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
+		if (ret) {
+			seq_puts(m, "error: has been interrupted!\n");
+			GOOG_LOGW(gti, "error: has been interrupted!\n");
+			return ret;
+		}
 	}
 
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_SS_BASELINE);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_heatmap_lock);
+
+	if (!gti->manual_heatmap_from_irq)
+		mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -348,17 +365,21 @@ static int goog_proc_ss_diff_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
-	if (ret) {
-		seq_puts(m, "error: has been interrupted!\n");
-		GOOG_LOGW(gti, "error: has been interrupted!\n");
-		return ret;
+	if (!gti->manual_heatmap_from_irq) {
+		ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
+		if (ret) {
+			seq_puts(m, "error: has been interrupted!\n");
+			GOOG_LOGW(gti, "error: has been interrupted!\n");
+			return ret;
+		}
 	}
 
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_SS_DIFF);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_heatmap_lock);
+
+	if (!gti->manual_heatmap_from_irq)
+		mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -368,17 +389,21 @@ static int goog_proc_ss_raw_show(struct seq_file *m, void *v)
 	struct goog_touch_interface *gti = m->private;
 	int ret;
 
-	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
-	if (ret) {
-		seq_puts(m, "error: has been interrupted!\n");
-		GOOG_LOGW(gti, "error: has been interrupted!\n");
-		return ret;
+	if (!gti->manual_heatmap_from_irq) {
+		ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
+		if (ret) {
+			seq_puts(m, "error: has been interrupted!\n");
+			GOOG_LOGW(gti, "error: has been interrupted!\n");
+			return ret;
+		}
 	}
 
 	ret = goog_proc_heatmap_process(m, v, GTI_SENSOR_DATA_TYPE_SS_RAW);
 	if (!ret)
 		goog_proc_heatmap_show(m, v);
-	mutex_unlock(&gti->input_heatmap_lock);
+
+	if (!gti->manual_heatmap_from_irq)
+		mutex_unlock(&gti->input_heatmap_lock);
 
 	return ret;
 }
@@ -3786,6 +3811,8 @@ void goog_init_options(struct goog_touch_interface *gti,
 
 		gti->ignore_force_active = of_property_read_bool(np, "goog,ignore-force-active");
 		gti->coord_filter_enabled = of_property_read_bool(np, "goog,coord-filter-enabled");
+		gti->manual_heatmap_from_irq = of_property_read_bool(np,
+				"goog,manual-heatmap-from-irq");
 		gti->panel_id = goog_get_panel_id(np);
 		if (gti->panel_id >= 0) {
 			goog_get_firmware_name(np, gti->panel_id, gti->fw_name, sizeof(gti->fw_name));

@@ -871,6 +871,7 @@ struct goog_touch_interface {
 	bool lptw_triggered;
 	bool ignore_force_active;
 	bool gesture_config_enabled;
+	bool manual_heatmap_from_irq;
 	union {
 		u8 offload_id_byte[4];
 		u32 offload_id;
