@@ -77,6 +77,28 @@ static int gs_panel_create_debugfs_entries(struct gs_panel *ctx, struct dentry *
 }
 #endif
 
+/* gs_panel_lhbm.c */
+/**
+ * gs_panel_init_lhbm() - Initializes lhbm data, threads, etc.
+ * @ctx: panel struct
+ *
+ * Meant to be called during common_init function. This sets up, based on the
+ * capabilities of the gs_panel_desc (specifically the function capabilities),
+ * the various lhbm-related data, threads, and callbacks for the panel.
+ */
+void gs_panel_init_lhbm(struct gs_panel *ctx);
+/**
+ * panel_update_lhbm() - Updates lhbm state to match requested state
+ * @ctx: panel struct
+ *
+ * Updates lhbm state to match the requested state. This primarily wraps
+ * panel_update_lhbm_notimeout(), except it also handles updating the lhbm
+ * timeout.
+ *
+ * Context: Expects ctx->mode_lock to be locked
+ */
+void panel_update_lhbm(struct gs_panel *ctx);
+
 /* gs_dsi_dcs_helper.c */
 /**
  * gs_dsi_dcs_transfer - Executes a dsi dcs transfer
@@ -100,6 +122,17 @@ ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *da
 /* gs_panel.c */
 int gs_panel_first_enable(struct gs_panel *ctx);
 void panel_update_idle_mode_locked(struct gs_panel *ctx, bool allow_delay_update);
+
+/**
+ * get_gs_panel_connector_crtc() - Get crtc associated with panel
+ * @ctx: panel struct
+ *
+ * Convenience method to retrieve the crtc associated with the panel's connector
+ * Note that it may return NULL if the connector has no state
+ *
+ * Return: crtc attached to panel
+ */
+struct drm_crtc *get_gs_panel_connector_crtc(struct gs_panel *ctx);
 
 /**
  * gs_set_te2_timing() - handle for setting te2 timings from sysfs node

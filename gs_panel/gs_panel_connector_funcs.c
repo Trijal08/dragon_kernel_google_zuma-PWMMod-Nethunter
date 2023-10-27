@@ -374,20 +374,19 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 		/*TODO(tknelms) DPU_ATRACE_END("set_bl");*/
 	}
 
-	/* TODO(b/279521693)
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_LHBM_UPDATE) &&
 		gs_panel_has_func(ctx, set_local_hbm_mode)){
-		TODO(tknelms) DPU_ATRACE_BEGIN("set_lhbm");
-		dev_info(dev, "%s: set LHBM to %d\n", __func__,
-			conn_state->local_hbm_on);
+		/* TODO(b/261073288) PANEL_ATRACE_BEGIN("set_lhbm"); */
+		dev_dbg(ctx->dev, "%s: set LHBM to %d\n", __func__, conn_state->local_hbm_on);
+		/* TODO(b/267170999): MODE */
 		mutex_lock(&ctx->mode_lock);
-		ctx->hbm.local_hbm.requested_state = conn_state->local_hbm_on ? GLOCAL_HBM_ENABLED :
-										GLOCAL_HBM_DISABLED;
-		panel_update_local_hbm_locked(ctx);
+		ctx->lhbm.requested_state = conn_state->local_hbm_on ? GLOCAL_HBM_ENABLED :
+								       GLOCAL_HBM_DISABLED;
+		panel_update_lhbm(ctx);
+		/* TODO(b/267170999): MODE */
 		mutex_unlock(&ctx->mode_lock);
-		TODO(tknelms) DPU_ATRACE_END("set_lhbm");
+		/* TODO(b/261073288) PANEL_ATRACE_END("set_lhbm"); */
 	}
-	*/
 
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_DIMMING_UPDATE) &&
 	    gs_panel_has_func(ctx, set_dimming) && (ctx->dimming_on != conn_state->dimming_on)) {

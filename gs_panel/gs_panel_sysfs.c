@@ -9,8 +9,10 @@
 
 #include "gs_panel_internal.h"
 
+#include <linux/delay.h>
 #include <linux/sysfs.h>
 #include <drm/drm_mipi_dsi.h>
+#include <drm/drm_vblank.h>
 
 #include "gs_panel/gs_panel.h"
 
@@ -373,10 +375,91 @@ static ssize_t hbm_mode_show(struct device *dev, struct device_attribute *attr, 
 	return sysfs_emit(buf, "%u\n", ctx->hbm_mode);
 }
 
+static ssize_t local_hbm_mode_store(struct device *dev, struct device_attribute *attr,
+				    const char *buf, size_t count)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+	bool local_hbm_en;
+	int ret;
+	struct drm_crtc *crtc = get_gs_panel_connector_crtc(ctx);
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		return -EPERM;
+	}
+
+	if (!gs_panel_has_func(ctx, set_local_hbm_mode)) {
+		dev_err(ctx->dev, "Local HBM is not supported\n");
+		return -ENOTSUPP;
+	}
+
+	ret = kstrtobool(buf, &local_hbm_en);
+	if (ret) {
+		dev_err(ctx->dev, "invalid local_hbm_mode value\n");
+		return ret;
+	}
+
+	if (crtc && !drm_crtc_vblank_get(crtc)) {
+		struct drm_vblank_crtc vblank = crtc->dev->vblank[crtc->index];
+		u32 delay_us = vblank.framedur_ns / 2000;
+
+		drm_crtc_wait_one_vblank(crtc);
+		drm_crtc_vblank_put(crtc);
+		/* wait for 0.5 frame to send to ensure it is done in one frame */
+		usleep_range(delay_us, delay_us + 10);
+	}
+
+	dev_info(ctx->dev, "%s: set LHBM to %d\n", __func__, local_hbm_en);
+	mutex_lock(&ctx->mode_lock); /* TODO(b/267170999): MODE */
+	ctx->lhbm.requested_state = local_hbm_en;
+	panel_update_lhbm(ctx);
+	mutex_unlock(&ctx->mode_lock); /* TODO(b/267170999): MODE */
+
+	return count;
+}
+
+static ssize_t local_hbm_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+
+	return sysfs_emit(buf, "%d\n", ctx->lhbm.effective_state);
+}
+
+static ssize_t local_hbm_max_timeout_store(struct device *dev, struct device_attribute *attr,
+					   const char *buf, size_t count)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+	int ret;
+
+	ret = kstrtou32(buf, 0, &ctx->lhbm.max_timeout_ms);
+	if (ret) {
+		dev_err(ctx->dev, "invalid local_hbm_max_timeout_ms value\n");
+		return ret;
+	}
+
+	return count;
+}
+
+static ssize_t local_hbm_max_timeout_show(struct device *dev, struct device_attribute *attr,
+					  char *buf)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+
+	return sysfs_emit(buf, "%d\n", ctx->lhbm.max_timeout_ms);
+}
+
 static DEVICE_ATTR_RW(hbm_mode);
+static DEVICE_ATTR_RW(local_hbm_mode);
+static DEVICE_ATTR_RW(local_hbm_max_timeout);
 
 static struct attribute *bl_device_attrs[] = {
 	&dev_attr_hbm_mode.attr,
+	&dev_attr_local_hbm_mode.attr,
+	&dev_attr_local_hbm_max_timeout.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(bl_device);

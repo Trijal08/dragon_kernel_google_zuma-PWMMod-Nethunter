@@ -879,6 +879,11 @@ static inline ssize_t gs_get_te2_type_len(const struct gs_panel_desc *desc, bool
 	}
 }
 
+static inline u32 get_current_frame_duration_us(struct gs_panel *ctx)
+{
+	return USEC_PER_SEC / drm_mode_vrefresh(&ctx->current_mode->mode);
+}
+
 static inline bool gs_is_local_hbm_post_enabling_supported(struct gs_panel *ctx)
 {
 	return (!ctx->lhbm.post_work_disabled && ctx->desc && ctx->desc->lhbm_desc &&
@@ -1057,6 +1062,35 @@ static inline void te2_state_changed(struct backlight_device *bl)
 {
 	sysfs_notify(&bl->dev.kobj, NULL, "te2_state");
 }
+
+/* Helper Utilities */
+
+/**
+ * panel_calc_gamma_2_2_luminance() - calculate prorated luminance based on gamma2.2 curve
+ *
+ * @value: the input to prorate the luminance on X axis of gamma2.2 curve
+ * @max_value: the maximum value on the X axis
+ * @nit: the luminance associated with max_value on Y axis
+ *
+ * Description: luminance = exp(ln(value/max_value) * 2.2) * max_Luminance, gamma_2_2_coef_x_1m
+ *              stands for "exp(ln(value/max_value) * 2.2)". The function uses interpolation
+ *              method to calculate the prorated luminance.
+ *
+ * Return: prorated luminance
+ */
+u32 panel_calc_gamma_2_2_luminance(const u32 value, const u32 max_value, const u32 nit);
+/**
+ * panel_calc_linear_luminance() - calculate prorated luminance based on linear curve
+ *
+ * @value: input value to prorate luminance
+ * @coef_x_1k: linear coefficient multiplied by 1000
+ * @offset: offset value of Y axis
+ *
+ * Description: luminance = coefficient * value + offset
+ *
+ * Return: prorated luminance
+ */
+u32 panel_calc_linear_luminance(const u32 value, const u32 coef_x_1k, const int offset);
 
 /* HBM */
 
