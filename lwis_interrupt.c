@@ -40,6 +40,20 @@ static irqreturn_t lwis_interrupt_regular_isr(int irq_number, void *data);
 static irqreturn_t lwis_interrupt_aggregate_isr(int irq_number, void *data);
 static irqreturn_t lwis_interrupt_gpios_event_isr(int irq_number, void *data);
 
+static void combine_mask_value(struct lwis_interrupt *irq, int int_reg_bit, bool is_set)
+{
+	if (!irq) {
+		pr_err("irq is NULL.\n");
+		return;
+	}
+	/* Unmask the interrupt */
+	if (is_set) {
+		irq->mask_value |= (1ULL << int_reg_bit);
+	} else {
+		irq->mask_value &= ~(1ULL << int_reg_bit);
+	}
+}
+
 struct lwis_interrupt_list *lwis_interrupt_list_alloc(struct lwis_device *lwis_dev, int count)
 {
 	struct lwis_interrupt_list *list;
@@ -151,6 +165,8 @@ int lwis_interrupt_get(struct lwis_interrupt_list *list, int index,
 
 	spin_lock_irqsave(&list->irq[index].lock, flags);
 	list->irq[index].irq = irq;
+	list->irq[index].has_mask_value = false;
+	list->irq[index].mask_value = 0;
 	spin_unlock_irqrestore(&list->irq[index].lock, flags);
 
 	return 0;
@@ -712,7 +728,36 @@ static int lwis_interrupt_single_event_enable_locked(struct lwis_interrupt *irq,
 	is_set = (!irq->mask_toggled) ? enabled : !enabled;
 	/* GPIO HW interrupt doesn't support to set interrupt mask */
 	if (irq->irq_type != GPIO_HW_INTERRUPT) {
-		ret = lwis_interrupt_set_mask(irq, event->int_reg_bit, is_set);
+		combine_mask_value(irq, event->int_reg_bit, is_set);
+	}
+
+	return ret;
+}
+
+int lwis_interrupt_write_combined_mask_value(struct lwis_interrupt_list *list)
+{
+	int index, ret = 0;
+	unsigned long flags;
+
+	for (index = 0; index < list->count; index++) {
+		spin_lock_irqsave(&list->irq[index].lock, flags);
+		/* GPIO HW interrupt doesn't support to set interrupt mask */
+		if (list->irq[index].irq_type != GPIO_HW_INTERRUPT) {
+			if (list->irq[index].has_mask_value) {
+				/* Write the mask register */
+				ret = lwis_device_single_register_write(
+					list->irq[index].lwis_dev, list->irq[index].irq_reg_bid,
+					list->irq[index].irq_mask_reg, list->irq[index].mask_value,
+					list->irq[index].irq_reg_access_size);
+				if (ret) {
+					pr_err("Failed to write IRQ mask register(0x%llx)\n",
+					       list->irq[index].irq_mask_reg);
+				}
+				/* Set the flag to false because the mask register is written. */
+				list->irq[index].has_mask_value = false;
+			}
+		}
+		spin_unlock_irqrestore(&list->irq[index].lock, flags);
 	}
 
 	return ret;
@@ -733,6 +778,7 @@ int lwis_interrupt_event_enable(struct lwis_interrupt_list *list, int64_t event_
 		spin_lock_irqsave(&list->irq[index].lock, flags);
 		event = lwis_interrupt_get_single_event_info_locked(&list->irq[index], event_id);
 		if (event) {
+			list->irq[index].has_mask_value = true;
 			ret = lwis_interrupt_single_event_enable_locked(&list->irq[index], event,
 									enabled);
 		}
