@@ -1030,6 +1030,13 @@ static int cmd_event_control_set(struct lwis_client *lwis_client, struct lwis_cm
 			goto exit;
 		}
 	}
+
+	if (lwis_dev->irqs) {
+		ret = lwis_interrupt_write_combined_mask_value(lwis_dev->irqs);
+		if (ret) {
+			goto exit;
+		}
+	}
 exit:
 	kfree(k_event_controls);
 	header->ret_code = ret;
