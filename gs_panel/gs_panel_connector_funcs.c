@@ -359,7 +359,7 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 		/*TODO(b/267170999): MODE*/
 		mutex_lock(&ctx->mode_lock);
 		gs_panel_func->set_hbm_mode(ctx, conn_state->global_hbm_mode);
-		backlight_state_changed(ctx->bl);
+		schedule_work(&ctx->state_notify);
 		/*TODO(b/267170999): MODE*/
 		mutex_unlock(&ctx->mode_lock);
 		/*TODO(tknelms) DPU_ATRACE_END("set_hbm");*/

@@ -401,9 +401,6 @@ void gs_panel_update_te2(struct gs_panel *ctx)
 		return;
 
 	ctx->desc->gs_panel_func->update_te2(ctx);
-
-	if (ctx->bl)
-		te2_state_changed(ctx->bl);
 }
 EXPORT_SYMBOL(gs_panel_update_te2);
 

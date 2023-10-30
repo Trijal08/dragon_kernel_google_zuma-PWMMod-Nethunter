@@ -69,7 +69,7 @@ void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state pane
 	mutex_unlock(&ctx->bl_state_lock); /*TODO(b/267170999): BL*/
 
 	if (state_changed) {
-		backlight_state_changed(bl);
+		schedule_work(&ctx->state_notify);
 		dev_dbg(ctx->dev, "%s: panel:%d, bl:0x%x\n", __func__, panel_state,
 			bl->props.state);
 	}
@@ -257,7 +257,7 @@ static void bridge_mode_set_normal(struct gs_panel *ctx, const struct gs_panel_m
 		gs_panel_set_backlight_state(ctx, is_active ? GPANEL_STATE_NORMAL :
 							      GPANEL_STATE_OFF);
 	else if (ctx->bl)
-		backlight_state_changed(ctx->bl);
+		schedule_work(&ctx->state_notify);
 }
 
 static void bridge_mode_set_update_timestamps(struct gs_panel *ctx,

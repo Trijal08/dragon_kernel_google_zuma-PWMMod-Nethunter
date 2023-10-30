@@ -1077,16 +1077,6 @@ int gs_panel_get_current_mode_te2(struct gs_panel *ctx, struct gs_panel_te2_timi
  */
 void gs_panel_update_te2(struct gs_panel *ctx);
 
-static inline void backlight_state_changed(struct backlight_device *bl)
-{
-	sysfs_notify(&bl->dev.kobj, NULL, "state");
-}
-
-static inline void te2_state_changed(struct backlight_device *bl)
-{
-	sysfs_notify(&bl->dev.kobj, NULL, "te2_state");
-}
-
 /* Helper Utilities */
 
 /**
