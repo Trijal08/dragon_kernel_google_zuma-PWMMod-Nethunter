@@ -260,17 +260,13 @@ static int lwis_slc_device_probe(struct platform_device *plat_dev)
 	ret = lwis_base_probe(&slc_dev->base_dev);
 	if (ret) {
 		dev_err(dev, "Error in lwis base probe\n");
-		goto error_probe;
+		return ret;
 	}
 	platform_set_drvdata(plat_dev, &slc_dev->base_dev);
 
 	dev_info(slc_dev->base_dev.dev, "SLC Device Probe: Success\n");
 
 	return 0;
-
-error_probe:
-	kfree(slc_dev);
-	return ret;
 }
 
 #ifdef CONFIG_OF

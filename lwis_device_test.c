@@ -164,7 +164,7 @@ static int lwis_test_device_probe(struct platform_device *plat_dev)
 	ret = lwis_base_probe(&test_dev->base_dev);
 	if (ret) {
 		dev_err(dev, "TEST device: Error in lwis base probe: %d\n", ret);
-		goto error_probe;
+		return ret;
 	}
 	platform_set_drvdata(plat_dev, &test_dev->base_dev);
 
@@ -173,15 +173,12 @@ static int lwis_test_device_probe(struct platform_device *plat_dev)
 	if (ret) {
 		dev_err(test_dev->base_dev.dev, "Error in TEST device initialization\n");
 		lwis_base_unprobe(&test_dev->base_dev);
-		goto error_probe;
+		return ret;
 	}
 
 	dev_info(test_dev->base_dev.dev, "TEST Device Probe: Success\n");
 
 	return 0;
-
-error_probe:
-	return ret;
 }
 
 #ifdef CONFIG_OF

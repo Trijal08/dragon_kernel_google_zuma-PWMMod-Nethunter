@@ -110,7 +110,7 @@ static int lwis_ioreg_device_probe(struct platform_device *plat_dev)
 	ret = lwis_base_probe(&ioreg_dev->base_dev);
 	if (ret) {
 		dev_err(dev, "Error in lwis base probe\n");
-		goto error_probe;
+		return ret;
 	}
 	platform_set_drvdata(plat_dev, &ioreg_dev->base_dev);
 
@@ -119,7 +119,7 @@ static int lwis_ioreg_device_probe(struct platform_device *plat_dev)
 	if (ret) {
 		dev_err(ioreg_dev->base_dev.dev, "Error in IOREG device initialization\n");
 		lwis_base_unprobe(&ioreg_dev->base_dev);
-		goto error_probe;
+		return ret;
 	}
 
 	/* Create associated kworker threads */
@@ -127,7 +127,7 @@ static int lwis_ioreg_device_probe(struct platform_device *plat_dev)
 	if (ret) {
 		dev_err(ioreg_dev->base_dev.dev, "Failed to create lwis_ioreg_kthread");
 		lwis_base_unprobe(&ioreg_dev->base_dev);
-		goto error_probe;
+		return ret;
 	}
 
 	if (ioreg_dev->base_dev.transaction_thread_priority != 0) {
@@ -138,17 +138,13 @@ static int lwis_ioreg_device_probe(struct platform_device *plat_dev)
 			dev_err(ioreg_dev->base_dev.dev,
 				"Failed to set LWIS IOREG transaction kthread priority (%d)", ret);
 			lwis_base_unprobe(&ioreg_dev->base_dev);
-			goto error_probe;
+			return ret;
 		}
 	}
 
 	dev_info(ioreg_dev->base_dev.dev, "IOREG Device Probe: Success\n");
 
 	return 0;
-
-error_probe:
-	kfree(ioreg_dev);
-	return ret;
 }
 
 #ifdef CONFIG_PM
