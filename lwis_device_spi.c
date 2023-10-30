@@ -126,7 +126,7 @@ static int lwis_spi_device_probe(struct spi_device *spi)
 	ret = lwis_base_probe(&spi_dev->base_dev);
 	if (ret) {
 		dev_err(dev, "Error in lwis base probe\n");
-		goto error_probe;
+		return ret;
 	}
 	spi_set_drvdata(spi, &spi_dev->base_dev);
 
@@ -135,7 +135,7 @@ static int lwis_spi_device_probe(struct spi_device *spi)
 	if (ret) {
 		dev_err(spi_dev->base_dev.dev, "Error in spi device initialization\n");
 		lwis_base_unprobe(&spi_dev->base_dev);
-		goto error_probe;
+		return ret;
 	}
 
 	/* Create associated kworker threads */
@@ -143,7 +143,7 @@ static int lwis_spi_device_probe(struct spi_device *spi)
 	if (ret) {
 		dev_err(spi_dev->base_dev.dev, "Failed to create lwis_spi_kthread");
 		lwis_base_unprobe(&spi_dev->base_dev);
-		goto error_probe;
+		return ret;
 	}
 
 	if (spi_dev->base_dev.transaction_thread_priority != 0) {
@@ -154,16 +154,13 @@ static int lwis_spi_device_probe(struct spi_device *spi)
 			dev_err(spi_dev->base_dev.dev,
 				"Failed to set LWIS SPI transaction kthread priority (%d)", ret);
 			lwis_base_unprobe(&spi_dev->base_dev);
-			goto error_probe;
+			return ret;
 		}
 	}
 
 	dev_info(spi_dev->base_dev.dev, "SPI Device Probe: Success\n");
 
 	return 0;
-
-error_probe:
-	return ret;
 }
 
 #ifdef CONFIG_PM
