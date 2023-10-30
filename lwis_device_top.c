@@ -494,7 +494,7 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 	ret = lwis_base_probe(&top_dev->base_dev);
 	if (ret) {
 		dev_err(dev, "Error in lwis base probe\n");
-		goto error_probe;
+		return ret;
 	}
 	platform_set_drvdata(plat_dev, &top_dev->base_dev);
 
@@ -503,7 +503,7 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 	if (ret) {
 		dev_err(top_dev->base_dev.dev, "Error in top device initialization\n");
 		lwis_base_unprobe(&top_dev->base_dev);
-		goto error_probe;
+		return ret;
 	}
 
 	lwis_top_event_subscribe_init(top_dev);
@@ -513,7 +513,7 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 		kthread_worker_fn, &top_dev->subscribe_worker, LWIS_SUBSCRIBER_THREAD_NAME);
 	if (IS_ERR_OR_NULL(top_dev->subscribe_worker_thread)) {
 		dev_err(top_dev->base_dev.dev, "subscribe kthread_run failed\n");
-		goto error_probe;
+		return ret;
 	}
 
 	ret = lwis_set_kthread_priority(&top_dev->base_dev, top_dev->subscribe_worker_thread,
@@ -522,7 +522,7 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 		dev_err(top_dev->base_dev.dev,
 			"Failed to set LWIS top subscription kthread priority (%d)", ret);
 		lwis_base_unprobe(&top_dev->base_dev);
-		goto error_probe;
+		return ret;
 	}
 
 	/* Create associated kworker threads */
@@ -530,16 +530,12 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 	if (ret) {
 		dev_err(top_dev->base_dev.dev, "Failed to create lwis_top_kthread");
 		lwis_base_unprobe(&top_dev->base_dev);
-		goto error_probe;
+		return ret;
 	}
 
 	dev_info(top_dev->base_dev.dev, "Top Device Probe: Success\n");
 
 	return 0;
-
-error_probe:
-	kfree(top_dev);
-	return ret;
 }
 
 #ifdef CONFIG_OF
