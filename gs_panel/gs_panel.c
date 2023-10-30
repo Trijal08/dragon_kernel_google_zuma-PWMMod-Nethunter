@@ -939,6 +939,20 @@ static void gs_panel_init_te2(struct gs_panel *ctx)
 	ctx->te2.option = GTE2_OPT_CHANGEABLE;
 }
 
+static void state_notify_worker(struct work_struct *work)
+{
+	struct gs_panel *ctx = container_of(work, struct gs_panel, state_notify);
+
+	sysfs_notify(&ctx->bl->dev.kobj, NULL, "state");
+}
+
+static void brightness_notify_worker(struct work_struct *work)
+{
+	struct gs_panel *ctx = container_of(work, struct gs_panel, brightness_notify);
+
+	sysfs_notify(&ctx->bl->dev.kobj, NULL, "brightness");
+}
+
 int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 {
 	struct device *dev = &dsi->dev;
@@ -1008,6 +1022,9 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	/* Idle work */
 	ctx->idle_data.panel_idle_enabled = gs_panel_has_func(ctx, set_self_refresh);
 	INIT_DELAYED_WORK(&ctx->idle_data.idle_work, panel_idle_work);
+
+	INIT_WORK(&ctx->state_notify, state_notify_worker);
+	INIT_WORK(&ctx->brightness_notify, brightness_notify_worker);
 
 	/* Initialize mutexes */
 	/*TODO(b/267170999): all*/

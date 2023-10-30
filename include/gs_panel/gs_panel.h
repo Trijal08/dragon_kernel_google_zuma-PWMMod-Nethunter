@@ -813,6 +813,10 @@ struct gs_panel {
 	struct device_node *touch_dev;
 	struct gs_panel_timestamps timestamps;
 
+	/* works of sysfs_notify */
+	struct work_struct state_notify;
+	struct work_struct brightness_notify;
+
 	/* Automatic Current Limiting(ACL) */
 	enum gs_acl_mode acl_mode;
 

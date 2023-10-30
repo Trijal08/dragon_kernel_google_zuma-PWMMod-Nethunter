@@ -368,7 +368,7 @@ static ssize_t hbm_mode_store(struct device *dev, struct device_attribute *attr,
 
 	if (hbm_mode != ctx->hbm_mode) {
 		ctx->desc->gs_panel_func->set_hbm_mode(ctx, hbm_mode);
-		backlight_state_changed(bd);
+		schedule_work(&ctx->state_notify);
 	}
 
 unlock:
