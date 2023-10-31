@@ -316,6 +316,7 @@ enum gti_fw_status : u32 {
 	GTI_FW_STATUS_WATER_ENTER,
 	GTI_FW_STATUS_WATER_EXIT,
 	GTI_FW_STATUS_NOISE_MODE,
+	GTI_FW_STATUS_GESTURE_EVENT,
 };
 
 enum gti_gesture_params : u8 {
@@ -613,12 +614,31 @@ struct gti_union_cmd_data {
 };
 
 /**
+ * struct gti_gesture_event_data - GTI gesture event data for notifying changed.
+ * @gesture_type: triggered gesture type.
+ * @x: x coordinate for the finger.
+ * @y: x coordinate for the finger.
+ * @major: major of the finger in pixels.
+ * @minor: minor of the finger in pixels.
+ * @angle: finger angle from -4095 ~ 4096.
+ */
+struct gti_gesture_event_data {
+	enum gti_gesture_type type;
+	u16 x;
+	u16 y;
+	u16 major;
+	u16 minor;
+	s16 angle;
+};
+
+/**
  * struct gti_fw_status_data - GTI fw status data for notifying changed.
  * @noise_level: the noise level for noise mode.
  */
 struct gti_fw_status_data {
 	enum gti_noise_mode_level noise_level;
 	u8 water_mode;
+	struct gti_gesture_event_data gesture_event;
 };
 
 /**

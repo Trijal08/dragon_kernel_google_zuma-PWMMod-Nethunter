@@ -4157,6 +4157,8 @@ EXPORT_SYMBOL_GPL(goog_pm_unregister_notification);
 void goog_notify_fw_status_changed(struct goog_touch_interface *gti,
 		enum gti_fw_status status, struct gti_fw_status_data* data)
 {
+	const char *gesture_type = "N/A";
+
 	if (!gti)
 		return;
 
@@ -4206,6 +4208,19 @@ void goog_notify_fw_status_changed(struct goog_touch_interface *gti,
 			}
 			gti->context_changed.noise_state = 1;
 		}
+		break;
+	case GTI_FW_STATUS_GESTURE_EVENT:
+		if (data->gesture_event.type == GTI_GESTURE_STTW)
+			gesture_type = "STTW";
+		else if (data->gesture_event.type == GTI_GESTURE_LPTW)
+			gesture_type = "LPTW";
+		GOOG_INFO(gti, "Gesture %s detected, x:%u y:%u major:%u minor:%u angle:%d.\n",
+				gesture_type,
+				data->gesture_event.x,
+				data->gesture_event.y,
+				data->gesture_event.major,
+				data->gesture_event.minor,
+				data->gesture_event.angle);
 		break;
 	default:
 		break;
