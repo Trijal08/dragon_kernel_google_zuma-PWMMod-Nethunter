@@ -603,6 +603,7 @@ void lwis_process_transactions_in_queue(struct lwis_client *client)
 		}
 	}
 	spin_unlock_irqrestore(&client->transaction_lock, flags);
+	lwis_pending_events_emit(client->lwis_dev, &pending_events);
 	lwis_fences_pending_signal_emit(client->lwis_dev, &pending_fences);
 }
 
