@@ -23,6 +23,95 @@ static struct mutex i2c_bus_manager_list_lock;
 static struct lwis_i2c_bus_manager_list i2c_bus_manager_list;
 
 /*
+ * is_valid_connected_device:
+ * Makes sure a valid client connected to this I2C executes the job on this manager
+ */
+static bool is_valid_connected_device(struct lwis_device *lwis_dev,
+				      struct lwis_i2c_bus_manager *i2c_bus_manager)
+{
+	struct lwis_i2c_connected_device *connected_i2c_device;
+	struct list_head *i2c_connected_device_node, *i2c_connected_device_tmp_node;
+
+	if ((lwis_dev == NULL) || (i2c_bus_manager == NULL)) {
+		return false;
+	}
+
+	list_for_each_safe (i2c_connected_device_node, i2c_connected_device_tmp_node,
+			    &i2c_bus_manager->i2c_connected_devices) {
+		connected_i2c_device =
+			list_entry(i2c_connected_device_node, struct lwis_i2c_connected_device,
+				   connected_device_node);
+		if (connected_i2c_device->connected_device == lwis_dev) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/*
+ * process_high_priority_transaction_queue:
+ * Process high priority transactions on the clients
+ * queued on the high priority transaction queue.
+ */
+static void process_high_priority_transaction_queue(struct lwis_i2c_bus_manager *i2c_bus_manager)
+{
+	struct lwis_i2c_process_queue *high_priority_process_queue = NULL;
+	struct list_head *request, *request_tmp;
+	struct lwis_i2c_process_request *processing_node;
+	struct lwis_client *processing_client = NULL;
+	struct lwis_device *processing_dev = NULL;
+	unsigned long flags;
+
+	if (!i2c_bus_manager) {
+		return;
+	}
+
+	high_priority_process_queue = &i2c_bus_manager->i2c_high_priority_transaction_queue;
+	if (!high_priority_process_queue) {
+		return;
+	}
+
+	spin_lock_irqsave(&i2c_bus_manager->i2c_transaction_queue_lock, flags);
+	if (!lwis_i2c_process_request_queue_is_empty(high_priority_process_queue)) {
+		list_for_each_safe (request, request_tmp, &high_priority_process_queue->head) {
+			processing_node =
+				list_entry(request, struct lwis_i2c_process_request, request_node);
+			processing_client = processing_node->requesting_client;
+			processing_dev = processing_client->lwis_dev;
+			if (lwis_i2c_bus_manager_debug) {
+				dev_info(processing_dev->dev,
+					 "Processing high priority client %p on bus %s\n",
+					 processing_client, i2c_bus_manager->i2c_bus_name);
+			}
+			if (is_valid_connected_device(processing_dev, i2c_bus_manager)) {
+				spin_unlock_irqrestore(&i2c_bus_manager->i2c_transaction_queue_lock,
+						       flags);
+				lwis_process_transactions_in_queue(
+					processing_node->requesting_client,
+					/*process_high_priority_transaction=*/true);
+				spin_lock_irqsave(&i2c_bus_manager->i2c_transaction_queue_lock,
+						  flags);
+			}
+
+			if (lwis_i2c_bus_manager_debug) {
+				dev_info(
+					processing_dev->dev,
+					"Removing client %s(%p) from high priority queue on bus %s\n",
+					processing_dev->name, processing_client,
+					i2c_bus_manager->i2c_bus_name);
+			}
+			list_del(&processing_node->request_node);
+			processing_node->requesting_client = NULL;
+			kfree(processing_node);
+			processing_node = NULL;
+			high_priority_process_queue->number_of_nodes--;
+		}
+	}
+	spin_unlock_irqrestore(&i2c_bus_manager->i2c_transaction_queue_lock, flags);
+}
+
+/*
  * insert_bus_manager_id_in_list:
  * Inserts the newly created instance of I2C bus manager in the list
  */
@@ -177,29 +266,6 @@ static int set_i2c_thread_priority(struct lwis_i2c_bus_manager *i2c_bus_manager,
 }
 
 /*
- * is_valid_connected_device:
- * Makes sure a valid client connected to this I2C executes the job on this manager
- */
-static bool is_valid_connected_device(struct lwis_device *lwis_dev,
-				      struct lwis_i2c_bus_manager *i2c_bus_manager)
-{
-	struct lwis_i2c_connected_device *connected_i2c_device;
-	struct list_head *i2c_connected_device_node, *i2c_connected_device_tmp_node;
-
-	list_for_each_safe (i2c_connected_device_node, i2c_connected_device_tmp_node,
-			    &i2c_bus_manager->i2c_connected_devices) {
-		connected_i2c_device =
-			list_entry(i2c_connected_device_node, struct lwis_i2c_connected_device,
-				   connected_device_node);
-		if (connected_i2c_device->connected_device == lwis_dev) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
-/*
  * set_i2c_bus_manager_name:
  * Builds and sets the I2C Bus manager name
  */
@@ -217,6 +283,8 @@ static void destroy_i2c_bus_manager(struct lwis_i2c_bus_manager *i2c_bus_manager
 				    struct lwis_device *lwis_dev)
 {
 	int i = 0;
+	unsigned long flags;
+
 	if (!i2c_bus_manager) {
 		return;
 	}
@@ -227,6 +295,11 @@ static void destroy_i2c_bus_manager(struct lwis_i2c_bus_manager *i2c_bus_manager
 		lwis_i2c_process_request_queue_destroy(&i2c_bus_manager->i2c_bus_process_queue[i]);
 	}
 	mutex_unlock(&i2c_bus_manager->i2c_process_queue_lock);
+
+	spin_lock_irqsave(&i2c_bus_manager->i2c_transaction_queue_lock, flags);
+	lwis_i2c_process_request_queue_destroy(
+		&i2c_bus_manager->i2c_high_priority_transaction_queue);
+	spin_unlock_irqrestore(&i2c_bus_manager->i2c_transaction_queue_lock, flags);
 
 	delete_bus_manager_id_in_list(i2c_bus_manager->i2c_bus_id);
 
@@ -301,12 +374,8 @@ void lwis_i2c_bus_manager_process_worker_queue(struct lwis_client *client)
 	for (i = 0; i < I2C_MAX_PRIORITY_LEVELS; i++) {
 		process_queue = &i2c_bus_manager->i2c_bus_process_queue[i];
 		list_for_each_safe (i2c_client_node, i2c_client_tmp_node, &process_queue->head) {
-			if (lwis_i2c_bus_manager_debug) {
-				dev_info(lwis_dev->dev,
-					 "Process request nodes for %s: cur %p tmp %p\n",
-					 i2c_bus_manager->i2c_bus_name, i2c_client_node,
-					 i2c_client_tmp_node);
-			}
+			process_high_priority_transaction_queue(i2c_bus_manager);
+
 			process_request = list_entry(i2c_client_node,
 						     struct lwis_i2c_process_request, request_node);
 			if (!process_request) {
@@ -334,7 +403,9 @@ void lwis_i2c_bus_manager_process_worker_queue(struct lwis_client *client)
 			}
 
 			if (is_valid_connected_device(lwis_dev_to_process, i2c_bus_manager)) {
-				lwis_process_transactions_in_queue(client_to_process);
+				lwis_process_transactions_in_queue(
+					client_to_process,
+					/*process_high_priority_transaction=*/false);
 				lwis_process_periodic_io_in_queue(client_to_process);
 			}
 
@@ -375,6 +446,7 @@ int lwis_i2c_bus_manager_create(struct lwis_i2c_device *i2c_dev)
 		/* Mutex and Lock initializations */
 		mutex_init(&i2c_bus_manager->i2c_bus_lock);
 		mutex_init(&i2c_bus_manager->i2c_process_queue_lock);
+		spin_lock_init(&i2c_bus_manager->i2c_transaction_queue_lock);
 
 		/* List initializations */
 		INIT_LIST_HEAD(&i2c_bus_manager->i2c_connected_devices);
@@ -384,6 +456,9 @@ int lwis_i2c_bus_manager_create(struct lwis_i2c_device *i2c_dev)
 			lwis_i2c_process_request_queue_initialize(
 				&i2c_bus_manager->i2c_bus_process_queue[i]);
 		}
+
+		lwis_i2c_process_request_queue_initialize(
+			&i2c_bus_manager->i2c_high_priority_transaction_queue);
 
 		/* Insert this instance of bus manager in the bus manager list */
 		ret = insert_bus_manager_id_in_list(i2c_bus_manager, i2c_dev->adapter->nr);
@@ -484,9 +559,6 @@ void lwis_i2c_bus_manager_lock_i2c_bus(struct lwis_device *lwis_dev)
 	struct lwis_i2c_bus_manager *i2c_bus_manager = lwis_i2c_bus_manager_get(lwis_dev);
 	if (i2c_bus_manager) {
 		mutex_lock(&i2c_bus_manager->i2c_bus_lock);
-		if (lwis_i2c_bus_manager_debug) {
-			dev_info(lwis_dev->dev, "%s lock\n", i2c_bus_manager->i2c_bus_name);
-		}
 	}
 }
 
@@ -498,9 +570,6 @@ void lwis_i2c_bus_manager_unlock_i2c_bus(struct lwis_device *lwis_dev)
 {
 	struct lwis_i2c_bus_manager *i2c_bus_manager = lwis_i2c_bus_manager_get(lwis_dev);
 	if (i2c_bus_manager) {
-		if (lwis_i2c_bus_manager_debug) {
-			dev_info(lwis_dev->dev, "%s unlock\n", i2c_bus_manager->i2c_bus_name);
-		}
 		mutex_unlock(&i2c_bus_manager->i2c_bus_lock);
 	}
 }
@@ -769,4 +838,76 @@ void lwis_i2c_bus_manager_disconnect_client(struct lwis_client *disconnecting_cl
 	mutex_lock(&i2c_bus_manager->i2c_process_queue_lock);
 	find_client(device_priority, i2c_bus_manager, disconnecting_client, I2C_CLIENT_DISCONNECT);
 	mutex_unlock(&i2c_bus_manager->i2c_process_queue_lock);
+}
+
+/*
+ * lwis_i2c_bus_manager_add_high_priority_client:
+ * Add clients to high priority transaction queue that will process
+ * the transactions submitted on this device first regardless of
+ * the device's priority. Only the transactions marked as high priority
+ * are executed through this queue. All other transactions are processed
+ * in the regular device priority order.
+ */
+int lwis_i2c_bus_manager_add_high_priority_client(struct lwis_client *client)
+{
+	struct lwis_i2c_process_queue *high_priority_process_queue;
+	struct lwis_i2c_process_request *high_priority_client_node;
+	struct list_head *request, *request_tmp;
+	struct lwis_i2c_process_request *search_node;
+	struct lwis_i2c_bus_manager *i2c_bus_manager = lwis_i2c_bus_manager_get(client->lwis_dev);
+	unsigned long flags;
+	bool add_node = true;
+
+	/*
+	 * Bus manager will be NULL for non-I2C devices.
+	 * Returning success here if bus manager is NULL will ensure that
+	 * non-I2C devices are not added to the I2C high priority transaction queue.
+	 */
+	if (!i2c_bus_manager) {
+		return 0;
+	}
+
+	spin_lock_irqsave(&i2c_bus_manager->i2c_transaction_queue_lock, flags);
+
+	high_priority_process_queue = &i2c_bus_manager->i2c_high_priority_transaction_queue;
+	if (!lwis_i2c_process_request_queue_is_empty(high_priority_process_queue)) {
+		list_for_each_safe (request, request_tmp, &high_priority_process_queue->head) {
+			search_node =
+				list_entry(request, struct lwis_i2c_process_request, request_node);
+			if (search_node->requesting_client == client) {
+				if (lwis_i2c_bus_manager_debug) {
+					dev_info(
+						client->lwis_dev->dev,
+						"I2C client %s(%p) already added to high priority queue on bus %s \n",
+						client->lwis_dev->name, client,
+						i2c_bus_manager->i2c_bus_name);
+				}
+				add_node = false;
+				break;
+			}
+		}
+	}
+
+	if (add_node) {
+		high_priority_client_node =
+			kzalloc(sizeof(struct lwis_i2c_process_request), GFP_ATOMIC);
+		if (!high_priority_client_node) {
+			spin_unlock_irqrestore(&i2c_bus_manager->i2c_transaction_queue_lock, flags);
+			return -ENOMEM;
+		}
+
+		high_priority_client_node->requesting_client = client;
+		INIT_LIST_HEAD(&high_priority_client_node->request_node);
+		list_add_tail(&high_priority_client_node->request_node,
+			      &high_priority_process_queue->head);
+		high_priority_process_queue->number_of_nodes++;
+		if (lwis_i2c_bus_manager_debug) {
+			dev_info(client->lwis_dev->dev,
+				 "Adding client %s(%p) to high priority queue on bus %s\n",
+				 client->lwis_dev->name, client, i2c_bus_manager->i2c_bus_name);
+		}
+	}
+
+	spin_unlock_irqrestore(&i2c_bus_manager->i2c_transaction_queue_lock, flags);
+	return 0;
 }

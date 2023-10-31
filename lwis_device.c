@@ -1967,7 +1967,7 @@ static void __exit lwis_driver_exit(void)
 
 void lwis_process_worker_queue(struct lwis_client *client)
 {
-	lwis_process_transactions_in_queue(client);
+	lwis_process_transactions_in_queue(client, /*process_high_priority_transaction=*/false);
 	lwis_process_periodic_io_in_queue(client);
 }
 

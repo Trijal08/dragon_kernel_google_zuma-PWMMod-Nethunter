@@ -365,7 +365,7 @@ bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
 {
 	int32_t operator_type;
 	size_t all_signaled;
-	struct lwis_transaction_info_v2 *info = &transaction->info;
+	struct lwis_transaction_info_v3 *info = &transaction->info;
 	int i;
 	struct lwis_fence *lwis_fence;
 	bool is_node_signaled = false;
@@ -472,7 +472,7 @@ bool lwis_fence_triggered_condition_ready(struct lwis_transaction *transaction, 
 
 int lwis_parse_trigger_condition(struct lwis_client *client, struct lwis_transaction *transaction)
 {
-	struct lwis_transaction_info_v2 *info;
+	struct lwis_transaction_info_v3 *info;
 	struct lwis_device *lwis_dev;
 	int i, ret;
 
@@ -529,7 +529,7 @@ int ioctl_lwis_fence_create(struct lwis_device *lwis_dev, int32_t __user *msg)
 int lwis_initialize_transaction_fences(struct lwis_client *client,
 				       struct lwis_transaction *transaction)
 {
-	struct lwis_transaction_info_v2 *info = &transaction->info;
+	struct lwis_transaction_info_v3 *info = &transaction->info;
 	struct lwis_device *lwis_dev = client->lwis_dev;
 	int i;
 	int fd_or_err;

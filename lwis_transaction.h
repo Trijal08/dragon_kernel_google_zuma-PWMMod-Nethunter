@@ -26,7 +26,7 @@ struct lwis_fence;
  *    into a queue.
  */
 struct lwis_transaction {
-	struct lwis_transaction_info_v2 info;
+	struct lwis_transaction_info_v3 info;
 	struct lwis_transaction_response_header *resp;
 	struct list_head event_list_node;
 	struct list_head process_queue_node;
@@ -71,7 +71,7 @@ struct lwis_transaction {
  * well as the time it executes and the time it took to execute.
  */
 struct lwis_transaction_history {
-	struct lwis_transaction_info_v2 info;
+	struct lwis_transaction_info_v3 info;
 	int64_t process_timestamp;
 	int64_t process_duration_ns;
 };
@@ -113,6 +113,7 @@ int lwis_transaction_replace_locked(struct lwis_client *client,
 int lwis_trigger_event_add_weak_transaction(struct lwis_client *client, int64_t transaction_id,
 					    int64_t event_id, int32_t precondition_fence_fd);
 
-void lwis_process_transactions_in_queue(struct lwis_client *client);
+void lwis_process_transactions_in_queue(struct lwis_client *client,
+					bool process_high_priority_transaction);
 
 #endif /* LWIS_TRANSACTION_H_ */

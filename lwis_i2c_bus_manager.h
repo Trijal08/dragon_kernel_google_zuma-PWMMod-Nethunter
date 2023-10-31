@@ -86,6 +86,10 @@ struct lwis_i2c_bus_manager {
 	/* Total number of physically connected devices to the bus
 	 * This count is set while probe/unprobe sequence */
 	int number_of_connected_devices;
+	/* Lock to control access to the I2C high priority transaction queue for this bus */
+	spinlock_t i2c_transaction_queue_lock;
+	/* Queue for devices with high priority transactions */
+	struct lwis_i2c_process_queue i2c_high_priority_transaction_queue;
 };
 
 /* This maintains the structure to identify the connected devices to a given I2C bus.
@@ -116,5 +120,7 @@ void lwis_i2c_bus_manager_list_deinitialize(void);
 int lwis_i2c_bus_manager_connect_client(struct lwis_client *connecting_client);
 
 void lwis_i2c_bus_manager_disconnect_client(struct lwis_client *disconnecting_client);
+
+int lwis_i2c_bus_manager_add_high_priority_client(struct lwis_client *client);
 
 #endif /* LWIS_I2C_BUS_MANAGER_H */
