@@ -375,6 +375,38 @@ static ssize_t hbm_mode_show(struct device *dev, struct device_attribute *attr, 
 	return sysfs_emit(buf, "%u\n", ctx->hbm_mode);
 }
 
+static ssize_t dimming_on_store(struct device *dev, struct device_attribute *attr, const char *buf,
+				size_t count)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+	bool dimming_on;
+	int ret;
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		return -EPERM;
+	}
+
+	ret = kstrtobool(buf, &dimming_on);
+	if (ret) {
+		dev_err(ctx->dev, "invalid dimming_on value\n");
+		return ret;
+	}
+
+	gs_panel_set_dimming(ctx, dimming_on);
+
+	return count;
+}
+
+static ssize_t dimming_on_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+
+	return sysfs_emit(buf, "%d\n", ctx->dimming_on);
+}
+
 static ssize_t local_hbm_mode_store(struct device *dev, struct device_attribute *attr,
 				    const char *buf, size_t count)
 {
@@ -453,11 +485,13 @@ static ssize_t local_hbm_max_timeout_show(struct device *dev, struct device_attr
 }
 
 static DEVICE_ATTR_RW(hbm_mode);
+static DEVICE_ATTR_RW(dimming_on);
 static DEVICE_ATTR_RW(local_hbm_mode);
 static DEVICE_ATTR_RW(local_hbm_max_timeout);
 
 static struct attribute *bl_device_attrs[] = {
 	&dev_attr_hbm_mode.attr,
+	&dev_attr_dimming_on.attr,
 	&dev_attr_local_hbm_mode.attr,
 	&dev_attr_local_hbm_max_timeout.attr,
 	NULL,

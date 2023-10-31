@@ -621,6 +621,19 @@ int gs_panel_update_brightness_desc(struct gs_panel_brightness_desc *desc,
 }
 EXPORT_SYMBOL(gs_panel_update_brightness_desc);
 
+void gs_panel_set_dimming(struct gs_panel *ctx, bool dimming_on)
+{
+	if (!gs_panel_has_func(ctx, set_dimming))
+		return;
+
+	mutex_lock(&ctx->mode_lock); /* TODO(b/267170999): MODE */
+	if (dimming_on != ctx->dimming_on) {
+		ctx->desc->gs_panel_func->set_dimming(ctx, dimming_on);
+		panel_update_idle_mode_locked(ctx, false);
+	}
+	mutex_unlock(&ctx->mode_lock); /* TODO(b/267170999): MODE */
+}
+
 /* Regulators */
 
 static int _gs_panel_reg_ctrl(struct gs_panel *ctx, const struct panel_reg_ctrl *reg_ctrl,

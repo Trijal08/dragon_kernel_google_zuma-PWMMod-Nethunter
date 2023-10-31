@@ -70,3 +70,10 @@ Description:
   Userspace client uses this to activate global high brightness mode (HBM), which
   is used to access higher brightness levels than what is normally available for
   use in direct sunlight applications.
+
+What: /sys/devices/platform/gs-drm-connector/panel/backlight/panel0-backlight/dimming_on
+Date: October 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client uses this to view or override dimming mode for NBM and HBM transition.

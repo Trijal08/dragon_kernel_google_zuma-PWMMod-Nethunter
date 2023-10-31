@@ -124,6 +124,15 @@ int gs_panel_first_enable(struct gs_panel *ctx);
 void panel_update_idle_mode_locked(struct gs_panel *ctx, bool allow_delay_update);
 
 /**
+ * gs_panel_set_dimming() - Executes set_dimming function of panel driver
+ * @ctx: handle for gs_panel
+ * @dimming_on: Whether to enable or disable dimming feature
+ *
+ * If panel has a set_dimming() function, executes it
+ */
+void gs_panel_set_dimming(struct gs_panel *ctx, bool dimming_on);
+
+/**
  * get_gs_panel_connector_crtc() - Get crtc associated with panel
  * @ctx: panel struct
  *

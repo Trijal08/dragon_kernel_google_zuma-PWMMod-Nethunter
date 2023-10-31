@@ -390,9 +390,9 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_DIMMING_UPDATE) &&
 	    gs_panel_has_func(ctx, set_dimming) && (ctx->dimming_on != conn_state->dimming_on)) {
-		/*TODO(tknelms) DPU_ATRACE_BEGIN("set_dimming");*/
-		gs_panel_func->set_dimming(ctx, conn_state->dimming_on);
-		/*TODO(tknelms) DPU_ATRACE_END("set_dimming");*/
+		/* TODO(b/261073288) PANEL_ATRACE_BEGIN("set_dimming"); */
+		gs_panel_set_dimming(ctx, conn_state->dimming_on);
+		/* TODO(b/261073288) PANEL_ATRACE_END("set_dimming"); */
 	}
 
 	if (conn_state->pending_update_flags & GS_HBM_FLAG_OP_RATE_UPDATE)
