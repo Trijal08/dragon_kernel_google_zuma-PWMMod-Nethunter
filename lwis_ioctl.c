@@ -764,6 +764,33 @@ static int cmd_dump_debug_state(struct lwis_client *lwis_client, struct lwis_cmd
 	return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
 }
 
+static int cmd_get_device_enable_state(struct lwis_client *lwis_client, struct lwis_cmd_pkt *header,
+				       struct lwis_cmd_get_device_enable_state __user *u_msg)
+{
+	struct lwis_device *lwis_dev = lwis_client->lwis_dev;
+	struct lwis_cmd_get_device_enable_state enable_state;
+
+	if (copy_from_user((void *)&enable_state, (void __user *)u_msg, sizeof(enable_state))) {
+		dev_err(lwis_dev->dev, "Failed to copy %zu bytes from user\n",
+			sizeof(enable_state));
+		return -EFAULT;
+	}
+
+	mutex_lock(&lwis_dev->client_lock);
+	if (lwis_dev->enabled) {
+		if (lwis_dev->is_suspended) {
+			enable_state.state = DEVICE_ENABLE_STATE_SUSPEND;
+		} else {
+			enable_state.state = DEVICE_ENABLE_STATE_ENABLE;
+		}
+	} else {
+		enable_state.state = DEVICE_ENABLE_STATE_DISABLE;
+	}
+	mutex_unlock(&lwis_dev->client_lock);
+	enable_state.header.ret_code = 0;
+	return copy_pkt_to_user(lwis_dev, u_msg, (void *)&enable_state, sizeof(enable_state));
+}
+
 static int cmd_dma_buffer_enroll(struct lwis_client *lwis_client, struct lwis_cmd_pkt *header,
 				 struct lwis_cmd_dma_buffer_enroll __user *u_msg)
 {
@@ -1810,6 +1837,13 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 	case LWIS_CMD_ID_DUMP_DEBUG_STATE:
 		ret = cmd_dump_debug_state(lwis_client, header,
 					   (struct lwis_cmd_pkt __user *)user_msg);
+		break;
+	case LWIS_CMD_ID_GET_DEVICE_ENABLE_STATE:
+		mutex_lock(&lwis_client->lock);
+		ret = cmd_get_device_enable_state(
+			lwis_client, header,
+			(struct lwis_cmd_get_device_enable_state __user *)user_msg);
+		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_DMA_BUFFER_ENROLL:
 		mutex_lock(&lwis_client->lock);
