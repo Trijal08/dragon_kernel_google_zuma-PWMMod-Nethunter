@@ -51,8 +51,8 @@ static bool panel_update_lhbm_notimeout(struct gs_panel *ctx)
 	if (lhbm->requested_state != GLOCAL_HBM_DISABLED &&
 	    !ctx->desc->lhbm_desc->no_lhbm_rr_constraints) {
 		const int vrefresh = drm_mode_vrefresh(&pmode->mode);
-		/* only allow to turn on LHBM at peak refresh rate to comply with HW constraint */
-		if (ctx->peak_vrefresh && vrefresh != ctx->peak_vrefresh) {
+		/* only allow to turn on LHBM at max refresh rate to comply with HW constraint */
+		if (ctx->max_vrefresh && vrefresh != ctx->max_vrefresh) {
 			dev_err(ctx->dev, "unexpected mode `%s` while enabling LHBM, give up\n",
 				pmode->mode.name);
 			return false;

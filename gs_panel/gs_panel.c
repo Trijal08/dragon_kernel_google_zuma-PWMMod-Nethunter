@@ -1001,8 +1001,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 		for (i = 0; i < ctx->desc->modes->num_modes; i++) {
 			const struct gs_panel_mode *pmode = &ctx->desc->modes->modes[i];
 			const int vrefresh = drm_mode_vrefresh(&pmode->mode);
-			if (ctx->peak_vrefresh < vrefresh)
-				ctx->peak_vrefresh = vrefresh;
+			if (ctx->max_vrefresh < vrefresh)
+				ctx->max_vrefresh = vrefresh;
 		}
 	}
 
