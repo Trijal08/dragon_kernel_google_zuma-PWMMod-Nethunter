@@ -17,6 +17,7 @@
 
 #include <linux/soc/samsung/exynos-smc.h>
 
+#include "auth-control.h"
 #include "exynos-hdcp-interface.h"
 #include "teeif.h"
 #include "hdcp-log.h"
@@ -224,6 +225,7 @@ static int dp_hdcp_protocol_self_test_internal(void) {
 	int rc, version;
 
 	hdcp_dplink_connect_state(DP_CONNECT);
+	msleep(HDCP_SCHEDULE_DELAY_MSEC);
 
 	version = -1;
 	for (i = 0; i < 50; ++i) {

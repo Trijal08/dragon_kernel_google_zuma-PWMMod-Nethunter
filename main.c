@@ -26,6 +26,7 @@
 #include "exynos-hdcp-interface.h"
 
 #include "auth-control.h"
+#include "hdcp.h"
 #include "hdcp-log.h"
 #include "selftest.h"
 #include "teeif.h"
@@ -48,8 +49,94 @@ static ssize_t hdcp_read(struct file *filp, char __user *buf,
 	return 0;
 }
 
+static ssize_t hdcp2_success_count_show(struct device *dev, struct device_attribute *attr,
+					    char *buf)
+{
+	struct hdcp_device *hdcp = dev_get_drvdata(dev);
+
+	return sysfs_emit(buf, "%u\n", hdcp->hdcp2_success_count);
+}
+static DEVICE_ATTR_RO(hdcp2_success_count);
+
+static ssize_t hdcp2_fallback_count_show(struct device *dev, struct device_attribute *attr,
+					    char *buf)
+{
+	struct hdcp_device *hdcp = dev_get_drvdata(dev);
+
+	return sysfs_emit(buf, "%u\n", hdcp->hdcp2_fallback_count);
+}
+static DEVICE_ATTR_RO(hdcp2_fallback_count);
+
+static ssize_t hdcp2_fail_count_show(struct device *dev, struct device_attribute *attr,
+					    char *buf)
+{
+	struct hdcp_device *hdcp = dev_get_drvdata(dev);
+
+	return sysfs_emit(buf, "%u\n", hdcp->hdcp2_fail_count);
+}
+static DEVICE_ATTR_RO(hdcp2_fail_count);
+
+static ssize_t hdcp1_success_count_show(struct device *dev, struct device_attribute *attr,
+					    char *buf)
+{
+	struct hdcp_device *hdcp = dev_get_drvdata(dev);
+
+	return sysfs_emit(buf, "%u\n", hdcp->hdcp1_success_count);
+}
+static DEVICE_ATTR_RO(hdcp1_success_count);
+
+static ssize_t hdcp1_fail_count_show(struct device *dev, struct device_attribute *attr,
+					    char *buf)
+{
+	struct hdcp_device *hdcp = dev_get_drvdata(dev);
+
+	return sysfs_emit(buf, "%u\n", hdcp->hdcp1_fail_count);
+}
+static DEVICE_ATTR_RO(hdcp1_fail_count);
+
+static ssize_t hdcp0_count_show(struct device *dev, struct device_attribute *attr,
+					    char *buf)
+{
+	struct hdcp_device *hdcp = dev_get_drvdata(dev);
+
+	return sysfs_emit(buf, "%u\n", hdcp->hdcp0_count);
+}
+static DEVICE_ATTR_RO(hdcp0_count);
+
+static const struct attribute *hdcp_attrs[] = {
+					&dev_attr_hdcp2_success_count.attr,
+					&dev_attr_hdcp2_fallback_count.attr,
+					&dev_attr_hdcp2_fail_count.attr,
+					&dev_attr_hdcp1_success_count.attr,
+					&dev_attr_hdcp1_fail_count.attr,
+					&dev_attr_hdcp0_count.attr,
+					NULL };
+
 static int exynos_hdcp_probe(struct platform_device *pdev)
 {
+	struct device *dev = &pdev->dev;
+	struct hdcp_device *hdcp_dev = NULL;
+	int ret = 0;
+
+	hdcp_dev = devm_kzalloc(dev, sizeof(struct hdcp_device), GFP_KERNEL);
+	if (!hdcp_dev) {
+		return -ENOMEM;
+	}
+	hdcp_dev->dev = dev;
+	platform_set_drvdata(pdev, hdcp_dev);
+	hdcp_auth_worker_init(hdcp_dev);
+
+	ret = sysfs_create_files(&dev->kobj, hdcp_attrs);
+	if (ret)
+		dev_err(dev, "failed to create hdcp sysfs files\n");
+
+	return 0;
+}
+
+static int exynos_hdcp_remove(struct platform_device *pdev)
+{
+	struct hdcp_device *hdcp_dev = platform_get_drvdata(pdev);
+	hdcp_auth_worker_deinit(hdcp_dev);
 	return 0;
 }
 
@@ -60,6 +147,7 @@ static const struct of_device_id exynos_hdcp_of_match_table[] = {
 
 static struct platform_driver exynos_hdcp_driver = {
 	.probe = exynos_hdcp_probe,
+	.remove = exynos_hdcp_remove,
 	.driver = {
 		.name = "exynos-hdcp",
 		.owner = THIS_MODULE,
@@ -81,8 +169,6 @@ static int __init hdcp_init(void)
 	}
 
 	hdcp_tee_init();
-	hdcp_auth_worker_init();
-
 	return platform_driver_register(&exynos_hdcp_driver);
 }
 
@@ -90,7 +176,6 @@ static void __exit hdcp_exit(void)
 {
 	misc_deregister(&hdcp);
 	hdcp_tee_close();
-	hdcp_auth_worker_deinit();
 
 	platform_driver_unregister(&exynos_hdcp_driver);
 }

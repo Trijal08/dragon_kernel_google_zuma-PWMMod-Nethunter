@@ -188,12 +188,12 @@ int hdcp13_dplink_authenticate(void)
 	ret = hdcp_dplink_recv(DP_AUX_HDCP_BCAPS, &bcaps, sizeof(bcaps));
 	if (ret) {
 		hdcp_err("BCaps Read failure (%d)\n", ret);
-		return -EIO;
+		return -EOPNOTSUPP;
 	}
 
 	if (!(bcaps & DP_BCAPS_HDCP_CAPABLE)) {
 		hdcp_err("HDCP13 is not supported\n");
-		return -EIO;
+		return -EOPNOTSUPP;
 	}
 
 	ret = hdcp_dplink_recv(DP_AUX_HDCP_BKSV, (uint8_t*)&bksv, HDCP_BKSV_SIZE);
