@@ -248,7 +248,7 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 	ret = lwis_base_probe(&i2c_dev->base_dev);
 	if (ret) {
 		dev_err(dev, "Error in lwis base probe\n");
-		goto error_probe;
+		return ret;
 	}
 	platform_set_drvdata(plat_dev, &i2c_dev->base_dev);
 
@@ -257,7 +257,7 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 	if (ret) {
 		dev_err(i2c_dev->base_dev.dev, "Error in i2c device initialization\n");
 		lwis_base_unprobe(&i2c_dev->base_dev);
-		goto error_probe;
+		return ret;
 	}
 
 	/* Create I2C Bus Manager */
@@ -265,16 +265,12 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 	if (ret) {
 		dev_err(i2c_dev->base_dev.dev, "Error in i2c bus manager creation\n");
 		lwis_base_unprobe(&i2c_dev->base_dev);
-		goto error_probe;
+		return ret;
 	}
 
 	dev_info(i2c_dev->base_dev.dev, "I2C Device Probe: Success\n");
 
 	return 0;
-
-error_probe:
-	kfree(i2c_dev);
-	return ret;
 }
 
 #ifdef CONFIG_PM
