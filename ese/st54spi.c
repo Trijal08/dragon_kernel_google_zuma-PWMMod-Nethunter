@@ -69,6 +69,9 @@ static DECLARE_BITMAP(minors, N_SPI_MINORS);
 
 #define ST54SPI_IOC_RD_POWER _IOR(SPI_IOC_MAGIC, 99, __u32)
 #define ST54SPI_IOC_WR_POWER _IOW(SPI_IOC_MAGIC, 99, __u32)
+#define ST54SPI_GET_CHIP_EN_VALUE _IOR(SPI_IOC_MAGIC, 98, __u32)
+#define ST54SPI_SET_CHIP_EN_VALUE _IOW(SPI_IOC_MAGIC, 98, __u32)
+#define ST54SPI_CHIP_EN_PULSE_RESET _IO(SPI_IOC_MAGIC, 97)
 
 /* Bit masks for spi_device.mode management.  Note that incorrect
  * settings for some settings can cause *lots* of trouble for other
@@ -104,6 +107,9 @@ struct st54spi_data {
 	/* GPIO for SE_POWER_REQ / SE_nRESET */
 	struct gpio_desc *gpiod_se_reset;
 
+	/* GPIO for SE_CHIP_EN */
+	struct gpio_desc *gpiod_se_chip_en;
+
 	int power_gpio_mode;
 	int power_gpio;
 	int nfcc_needs_poweron;
@@ -127,7 +133,7 @@ MODULE_PARM_DESC(bufsiz, "data bytes in biggest supported SPI message");
 
 #define VERBOSE 0
 
-#define DRIVER_VERSION "2.2.1"
+#define DRIVER_VERSION "2.3.0"
 
 /*-------------------------------------------------------------------------*/
 
@@ -643,6 +649,36 @@ static long st54spi_ioctl(struct file *filp, unsigned int cmd,
 				 tmp);
 		}
 		break;
+	case ST54SPI_GET_CHIP_EN_VALUE:
+		if (!IS_ERR(st54spi->gpiod_se_chip_en)) {
+			retval = gpiod_get_value(st54spi->gpiod_se_chip_en);
+			dev_dbg(&st54spi->spi->dev, "SE_CHIP_ENABLE get: %d\n", retval);
+		} else {
+			retval = -ENODEV;
+		}
+		break;
+	case ST54SPI_SET_CHIP_EN_VALUE:
+		if (!IS_ERR(st54spi->gpiod_se_chip_en)) {
+			dev_dbg(&st54spi->spi->dev, "SE_CHIP_ENABLE set: %lu\n", arg);
+			if ((arg == 0) || (arg == 1)) {
+				gpiod_set_value(st54spi->gpiod_se_chip_en, arg);
+			} else {
+				retval = -ENOIOCTLCMD;
+			}
+		} else {
+			retval = -ENODEV;
+		}
+		break;
+	case ST54SPI_CHIP_EN_PULSE_RESET:
+		if (!IS_ERR(st54spi->gpiod_se_chip_en)) {
+			dev_dbg(&st54spi->spi->dev, "ST54SPI_CHIP_EN_PULSE_RESET\n");
+			gpiod_set_value(st54spi->gpiod_se_chip_en, 0);
+			usleep_range(2000, 3000);
+			gpiod_set_value(st54spi->gpiod_se_chip_en, 1);
+		} else {
+			retval = -ENODEV;
+		}
+		break;
 	default:
 		/* segmented and/or full-duplex I/O request */
 		/* Check message and copy into scratch area */
@@ -981,6 +1017,9 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 		dev_err(dev, "%s: ST54H mode not supported", __FILE__);
 	}
 	if (pdata->power_gpio_mode == POWER_MODE_ST54L) {
+		/* Optional se_chip_en Gpio */
+		pdata->gpiod_se_chip_en =
+			devm_gpiod_get(dev, "ese_chip_enable", GPIOD_OUT_HIGH);
 		pdata->pinctrl = devm_pinctrl_get(dev);
 		if (IS_ERR(pdata->pinctrl)) {
 			dev_err(dev, "could not get pinctrl\n");
