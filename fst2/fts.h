@@ -23,6 +23,11 @@
 #include "fts_lib/fts_io.h"
 #include <drm/drm_bridge.h>
 
+#undef pr_fmt
+#define pr_fmt(fmt) "gtd: fst2: " fmt
+#undef dev_fmt
+#define dev_fmt(fmt) "gtd: " fmt
+
 #define FTS_TS_DRV_NAME		"fst2"
 #define FTS_TS_DRV_VERSION	"6.0.3"
 #define FTS_TS_DRV_VER		0x06000004
