@@ -184,7 +184,7 @@ static void gs_panel_bridge_enable(struct drm_bridge *bridge,
 		dev_dbg(ctx->dev, "self refresh state : %s\n", __func__);
 
 		ctx->idle_data.self_refresh_active = false;
-		panel_update_idle_mode_locked(ctx);
+		panel_update_idle_mode_locked(ctx, false);
 	} else {
 		gs_panel_set_backlight_state(ctx, ctx->panel_state);
 		if (ctx->panel_state == GPANEL_STATE_NORMAL)
@@ -398,7 +398,7 @@ static void gs_panel_bridge_disable(struct drm_bridge *bridge,
 
 		ctx->idle_data.self_refresh_active = true;
 		/*TODO(tknelms)
-		panel_update_idle_mode_locked(ctx);
+		panel_update_idle_mode_locked(ctx, false);
 		*/
 		mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 	} else {
