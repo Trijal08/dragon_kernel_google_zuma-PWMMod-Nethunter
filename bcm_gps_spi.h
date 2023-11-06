@@ -8,6 +8,8 @@
 #ifndef __BCM_GPS_SPI_H__
 #define __BCM_GPS_SPI_H__
 
+#include <linux/platform_data/sscoredump.h>
+
 #define WORD_BURST_SIZE			4
 #define CONFIG_SPI_DMA_BYTES_PER_WORD	4
 #define CONFIG_SPI_DMA_BITS_PER_WORD	(CONFIG_SPI_DMA_BYTES_PER_WORD * 8)
@@ -218,6 +220,10 @@ struct bcm_spi_priv {
 	unsigned long rx_buffer_avail_bytes;// = HSI_PZC_MAX_RX_BUFFER;
 	/* Should be more MAX_SPI_FRAME_LEN. See below */
 	struct bbd_device *bbd;
+	/* To register ssrdump platform */
+	struct platform_device sscd_dev;
+	/* To register ssrdump driver */
+	struct sscd_platform_data sscd_pdata;
 };
 
 /* bcm_gps_regs.cpp */
