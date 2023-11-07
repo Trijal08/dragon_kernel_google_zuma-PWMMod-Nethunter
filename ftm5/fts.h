@@ -69,10 +69,10 @@
 
 /* #define DEBUG */	/* /< define to print more logs in the kernel log
 			 * and better follow the code flow */
-#ifdef pr_fmt
 #undef pr_fmt
-#define pr_fmt(fmt) "[ FTS ] " fmt
-#endif
+#define pr_fmt(fmt) "gtd: fts: " fmt
+#undef dev_fmt
+#define dev_fmt(fmt) "gtd: " fmt
 
 #define PINCTRL_STATE_ACTIVE    "pmx_ts_active"
 #define PINCTRL_STATE_SUSPEND   "pmx_ts_suspend"
