@@ -246,7 +246,33 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 			}
 			read_buf += sizeof(struct lwis_io_result) + io_result->num_value_bytes;
 		} else if (entry->type == LWIS_IO_ENTRY_POLL) {
-			ret = lwis_io_entry_poll(lwis_dev, entry);
+			ret = lwis_io_entry_poll(lwis_dev, entry, /*is_short=*/false);
+			if (ret) {
+				resp->error_code = ret;
+				if (skip_err) {
+					dev_warn(
+						lwis_dev->dev,
+						"transaction type %d processing failed, skip this error and run the next command\n",
+						entry->type);
+					continue;
+				}
+				break;
+			}
+		} else if (entry->type == LWIS_IO_ENTRY_POLL_SHORT) {
+			ret = lwis_io_entry_poll(lwis_dev, entry, /*is_short=*/true);
+			if (ret) {
+				resp->error_code = ret;
+				if (skip_err) {
+					dev_warn(
+						lwis_dev->dev,
+						"transaction type %d processing failed, skip this error and run the next command\n",
+						entry->type);
+					continue;
+				}
+				break;
+			}
+		} else if (entry->type == LWIS_IO_ENTRY_WAIT) {
+			ret = lwis_io_entry_wait(lwis_dev, entry);
 			if (ret) {
 				resp->error_code = ret;
 				if (skip_err) {

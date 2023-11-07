@@ -210,7 +210,13 @@ static int synchronous_process_io_entries(struct lwis_device *lwis_dev, int num_
 			ret = register_write(lwis_dev, &io_entries[i]);
 			break;
 		case LWIS_IO_ENTRY_POLL:
-			ret = lwis_io_entry_poll(lwis_dev, &io_entries[i]);
+			ret = lwis_io_entry_poll(lwis_dev, &io_entries[i], /*is_short=*/false);
+			break;
+		case LWIS_IO_ENTRY_POLL_SHORT:
+			ret = lwis_io_entry_poll(lwis_dev, &io_entries[i], /*is_short=*/true);
+			break;
+		case LWIS_IO_ENTRY_WAIT:
+			ret = lwis_io_entry_wait(lwis_dev, &io_entries[i]);
 			break;
 		case LWIS_IO_ENTRY_READ_ASSERT:
 			ret = lwis_io_entry_read_assert(lwis_dev, &io_entries[i]);
