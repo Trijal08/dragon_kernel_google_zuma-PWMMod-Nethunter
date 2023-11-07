@@ -979,6 +979,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 			return ret;
 		}
 	}
+	if (ctx->panel_model[0] == '\0')
+		scnprintf(ctx->panel_model, PANEL_MODEL_MAX, "Common Panel");
 
 	/* Backlight */
 	ret = gs_panel_init_backlight(ctx);

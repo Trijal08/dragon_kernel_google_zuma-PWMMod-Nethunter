@@ -20,6 +20,7 @@
 #define PANEL_ID_READ_SIZE (PANEL_ID_LEN + PANEL_ID_OFFSET)
 #define PANEL_SLSI_DDIC_ID_REG 0xD6
 #define PANEL_SLSI_DDIC_ID_LEN 5
+#define PROJECT_CODE_MAX 5
 
 void gs_panel_get_panel_rev(struct gs_panel *ctx, u8 rev)
 {
@@ -102,6 +103,32 @@ int gs_panel_read_id(struct gs_panel *ctx)
 	return 0;
 }
 EXPORT_SYMBOL(gs_panel_read_id);
+
+void gs_panel_model_init(struct gs_panel *ctx, const char *project, u8 extra_info)
+{
+	u8 vendor_info;
+	u8 panel_rev;
+
+	if (ctx->panel_extinfo[0] == '\0' || ctx->panel_rev == 0 || !project)
+		return;
+
+	if (strlen(project) > PROJECT_CODE_MAX) {
+		dev_err(ctx->dev, "Project Code '%s' is longer than maximum %d characters\n",
+			project, PROJECT_CODE_MAX);
+		return;
+	}
+
+	vendor_info = hex_to_bin(ctx->panel_extinfo[1]) & 0x0f;
+	panel_rev = __builtin_ctz(ctx->panel_rev);
+
+	/*
+	 * Panel Model Format:
+	 * [Project Code]-[Vendor Info][Panel Revision]-[Extra Info]
+	 */
+	scnprintf(ctx->panel_model, PANEL_MODEL_MAX, "%s-%01X%02X-%02X", project, vendor_info,
+		  panel_rev, extra_info);
+}
+EXPORT_SYMBOL(gs_panel_model_init);
 
 bool gs_panel_is_mode_seamless_helper(const struct gs_panel *ctx, const struct gs_panel_mode *pmode)
 {

@@ -524,6 +524,7 @@ struct gs_panel_mode_array {
 #define MAX_TE2_TYPE 20
 #define PANEL_ID_MAX 40
 #define PANEL_EXTINFO_MAX 16
+#define PANEL_MODEL_MAX 14
 #define LOCAL_HBM_MAX_TIMEOUT_MS 3000 /* 3000 ms */
 #define LOCAL_HBM_GAMMA_CMD_SIZE_MAX 16
 
@@ -806,6 +807,7 @@ struct gs_panel {
 	struct drm_property_blob *lp_mode_blob;
 	char panel_id[PANEL_ID_MAX];
 	char panel_extinfo[PANEL_EXTINFO_MAX];
+	char panel_model[PANEL_MODEL_MAX];
 	u32 panel_rev;
 	enum drm_panel_orientation orientation;
 	struct gs_te2_data te2;
