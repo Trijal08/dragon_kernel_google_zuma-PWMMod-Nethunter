@@ -1164,7 +1164,7 @@ static int construct_transaction_from_cmd(struct lwis_client *client, uint32_t c
 	struct lwis_transaction *k_transaction;
 	struct lwis_device *lwis_dev = client->lwis_dev;
 
-	k_transaction = kmalloc(sizeof(*k_transaction), GFP_KERNEL);
+	k_transaction = kzalloc(sizeof(struct lwis_transaction), GFP_KERNEL);
 	if (!k_transaction) {
 		return -ENOMEM;
 	}
