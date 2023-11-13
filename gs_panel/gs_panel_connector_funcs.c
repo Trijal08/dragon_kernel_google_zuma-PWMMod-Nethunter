@@ -359,7 +359,7 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 		/*TODO(b/267170999): MODE*/
 		mutex_lock(&ctx->mode_lock);
 		gs_panel_func->set_hbm_mode(ctx, conn_state->global_hbm_mode);
-		backlight_state_changed(ctx->bl);
+		schedule_work(&ctx->state_notify);
 		/*TODO(b/267170999): MODE*/
 		mutex_unlock(&ctx->mode_lock);
 		/*TODO(tknelms) DPU_ATRACE_END("set_hbm");*/
@@ -374,26 +374,25 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 		/*TODO(tknelms) DPU_ATRACE_END("set_bl");*/
 	}
 
-	/* TODO(b/279521693)
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_LHBM_UPDATE) &&
 		gs_panel_has_func(ctx, set_local_hbm_mode)){
-		TODO(tknelms) DPU_ATRACE_BEGIN("set_lhbm");
-		dev_info(dev, "%s: set LHBM to %d\n", __func__,
-			conn_state->local_hbm_on);
+		/* TODO(b/261073288) PANEL_ATRACE_BEGIN("set_lhbm"); */
+		dev_dbg(ctx->dev, "%s: set LHBM to %d\n", __func__, conn_state->local_hbm_on);
+		/* TODO(b/267170999): MODE */
 		mutex_lock(&ctx->mode_lock);
-		ctx->hbm.local_hbm.requested_state = conn_state->local_hbm_on ? GLOCAL_HBM_ENABLED :
-										GLOCAL_HBM_DISABLED;
-		panel_update_local_hbm_locked(ctx);
+		ctx->lhbm.requested_state = conn_state->local_hbm_on ? GLOCAL_HBM_ENABLED :
+								       GLOCAL_HBM_DISABLED;
+		panel_update_lhbm(ctx);
+		/* TODO(b/267170999): MODE */
 		mutex_unlock(&ctx->mode_lock);
-		TODO(tknelms) DPU_ATRACE_END("set_lhbm");
+		/* TODO(b/261073288) PANEL_ATRACE_END("set_lhbm"); */
 	}
-	*/
 
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_DIMMING_UPDATE) &&
 	    gs_panel_has_func(ctx, set_dimming) && (ctx->dimming_on != conn_state->dimming_on)) {
-		/*TODO(tknelms) DPU_ATRACE_BEGIN("set_dimming");*/
-		gs_panel_func->set_dimming(ctx, conn_state->dimming_on);
-		/*TODO(tknelms) DPU_ATRACE_END("set_dimming");*/
+		/* TODO(b/261073288) PANEL_ATRACE_BEGIN("set_dimming"); */
+		gs_panel_set_dimming(ctx, conn_state->dimming_on);
+		/* TODO(b/261073288) PANEL_ATRACE_END("set_dimming"); */
 	}
 
 	if (conn_state->pending_update_flags & GS_HBM_FLAG_OP_RATE_UPDATE)
@@ -429,8 +428,14 @@ static void gs_panel_connector_atomic_pre_commit(struct gs_drm_connector *gs_con
 						 struct gs_drm_connector_state *gs_new_state)
 {
 	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+	struct gs_panel_idle_data *idle_data = &ctx->idle_data;
 
 	gs_panel_pre_commit_properties(ctx, gs_new_state);
+
+	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+	if (idle_data->panel_update_idle_mode_pending)
+		panel_update_idle_mode_locked(ctx, false);
+	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 }
 
 static void gs_panel_connector_atomic_commit(struct gs_drm_connector *gs_connector,

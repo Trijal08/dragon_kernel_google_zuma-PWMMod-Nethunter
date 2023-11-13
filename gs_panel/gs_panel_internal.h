@@ -37,7 +37,24 @@ const struct drm_bridge_funcs *get_panel_drm_bridge_funcs(void);
 void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state panel_state);
 
 /* gs_panel_sysfs.c */
+/**
+ * gs_panel_sysfs_create_files() - Creates sysfs files for panel
+ * @dev: pointer to panel's device node
+ *
+ * Creates sysfs files for panel itself
+ *
+ * Return: Result of sysfs_create_files function
+ */
 int gs_panel_sysfs_create_files(struct device *dev);
+/**
+ * gs_panel_sysfs_create_bl_files() - Creates sysfs files for panel backlight
+ * @bl_dev: pointer to backlight's device node
+ *
+ * Creates sysfs files for panel backlight
+ *
+ * Return: Result of sysfs_create_files function
+ */
+int gs_panel_sysfs_create_bl_files(struct device *bl_dev);
 
 /* gs_panel_debugfs.c */
 /**
@@ -59,6 +76,28 @@ static int gs_panel_create_debugfs_entries(struct gs_panel *ctx, struct dentry *
 	return -EOPNOTSUPP;
 }
 #endif
+
+/* gs_panel_lhbm.c */
+/**
+ * gs_panel_init_lhbm() - Initializes lhbm data, threads, etc.
+ * @ctx: panel struct
+ *
+ * Meant to be called during common_init function. This sets up, based on the
+ * capabilities of the gs_panel_desc (specifically the function capabilities),
+ * the various lhbm-related data, threads, and callbacks for the panel.
+ */
+void gs_panel_init_lhbm(struct gs_panel *ctx);
+/**
+ * panel_update_lhbm() - Updates lhbm state to match requested state
+ * @ctx: panel struct
+ *
+ * Updates lhbm state to match the requested state. This primarily wraps
+ * panel_update_lhbm_notimeout(), except it also handles updating the lhbm
+ * timeout.
+ *
+ * Context: Expects ctx->mode_lock to be locked
+ */
+void panel_update_lhbm(struct gs_panel *ctx);
 
 /* gs_dsi_dcs_helper.c */
 /**
@@ -82,7 +121,27 @@ ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *da
 
 /* gs_panel.c */
 int gs_panel_first_enable(struct gs_panel *ctx);
-void panel_update_idle_mode_locked(struct gs_panel *ctx);
+void panel_update_idle_mode_locked(struct gs_panel *ctx, bool allow_delay_update);
+
+/**
+ * gs_panel_set_dimming() - Executes set_dimming function of panel driver
+ * @ctx: handle for gs_panel
+ * @dimming_on: Whether to enable or disable dimming feature
+ *
+ * If panel has a set_dimming() function, executes it
+ */
+void gs_panel_set_dimming(struct gs_panel *ctx, bool dimming_on);
+
+/**
+ * get_gs_panel_connector_crtc() - Get crtc associated with panel
+ * @ctx: panel struct
+ *
+ * Convenience method to retrieve the crtc associated with the panel's connector
+ * Note that it may return NULL if the connector has no state
+ *
+ * Return: crtc attached to panel
+ */
+struct drm_crtc *get_gs_panel_connector_crtc(struct gs_panel *ctx);
 
 /**
  * gs_set_te2_timing() - handle for setting te2 timings from sysfs node

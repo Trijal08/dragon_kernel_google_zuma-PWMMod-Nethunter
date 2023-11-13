@@ -261,6 +261,16 @@ struct gs_panel_funcs {
 				   bool local_hbm_en);
 
 	/**
+	 * @set_local_hbm_mode_post:
+	 *
+	 * This callback is used to implement panel specific logic at some time after enabling
+	 * local high brightness mode.
+	 *
+	 * TODO(b/279521693): implementation
+	 */
+	void (*set_local_hbm_mode_post)(struct gs_panel *gs_panel);
+
+	/**
 	 * @mode_set:
 	 *
 	 * This callback is used to perform driver specific logic for mode_set.
@@ -397,6 +407,15 @@ struct gs_panel_funcs {
 	void (*panel_init)(struct gs_panel *gs_panel);
 
 	/**
+	 * @panel_reset:
+	 *
+	 * This callback is used to allow panel to toggle only reset pin instead of full
+	 * prepare sequence (including power rails) while the device is in BLANK state.
+	 * This is not called in any other state.
+	 */
+	void (*panel_reset)(struct gs_panel *gs_panel);
+
+	/**
 	 * @get_te_usec
 	 *
 	 * This callback is used to get current TE pulse time.
@@ -456,13 +475,37 @@ int gs_panel_update_brightness_desc(struct gs_panel_brightness_desc *desc,
 				    u32 num_configs, u32 panel_rev);
 
 /**
- * struct gs_panel_lhbm_desc
- * TODO: document
+ * struct gs_panel_lhbm_desc - Descriptor of lhbm behaviors
  */
 struct gs_panel_lhbm_desc {
+	/**
+	 * @no_lhbm_rr_constraints: whether lhbm has rr constraints
+	 *
+	 * set true if the panel doesn't have lhbm common hw constraints, include
+	 * 1. only allow turn on lhbm at peak refresh rate
+	 *    - `freq set` may set to peak when enabling lhbm cause underrun at
+	 *      non-peak refresh rate.
+	 *    - abnormal display (like green tint) when enabling lhbm at non-peak
+	 *      refresh rate.
+	 * 2. not allow switch refresh rate when lhbm is on
+	 *    - if `freq set` is changed when lhbm is on, lhbm may not work normally.
+	 */
 	bool no_lhbm_rr_constraints;
+	/**
+	 * @post_cmd_delay_frames: Frames to delay before sending post_lhbm
+	 */
 	const u32 post_cmd_delay_frames;
+	/**
+	 * @effective_delay_frames: Frames to delay before updating effective state
+	 */
 	const u32 effective_delay_frames;
+	/**
+	 * @lhbm_on_delay_frames: Frames needed before sending lhbm on
+	 *
+	 * Indicate how many frames are needed before sending lhbm on commands
+	 * while exiting from AoD mode. Default 0 means no such constraint.
+	 */
+	const u32 lhbm_on_delay_frames;
 };
 
 /**
@@ -481,6 +524,7 @@ struct gs_panel_mode_array {
 #define MAX_TE2_TYPE 20
 #define PANEL_ID_MAX 40
 #define PANEL_EXTINFO_MAX 16
+#define PANEL_MODEL_MAX 14
 #define LOCAL_HBM_MAX_TIMEOUT_MS 3000 /* 3000 ms */
 #define LOCAL_HBM_GAMMA_CMD_SIZE_MAX 16
 
@@ -584,6 +628,7 @@ struct gs_panel_regulator {
 struct gs_panel_idle_data {
 	bool panel_idle_enabled;
 	bool panel_need_handle_idle_exit;
+	bool panel_update_idle_mode_pending;
 	bool self_refresh_active;
 	u32 panel_idle_vrefresh;
 	u32 idle_delay_ms;
@@ -629,6 +674,93 @@ struct gs_panel_timestamps {
 };
 
 /**
+ * struct gs_local_hbm_timestamps - timestamps for lhbm
+ *
+ * @en_cmd_ts: Timestamp of sending initial lhbm command
+ * @next_vblank_ts: Timestamp of the next upcoming vblank
+ * @last_vblank_ts: Timestamp of the last vblank
+ * @last_lp_vblank_cnt: Absolute vblank number of the final LP vblank
+ */
+struct gs_local_hbm_timestamps {
+	ktime_t en_cmd_ts;
+	ktime_t next_vblank_ts;
+	ktime_t last_vblank_ts;
+	u64 last_lp_vblank_cnt;
+};
+
+/**
+ * struct gs_local_hbm_work_data - Data required for threading lhbm work queue
+ *
+ * @wq: work queue to dispatch lhbm timeou worker onto threads
+ * @timeout_work: work used to turn off local hbm if reach max_timeout
+ * @worker: worker servicing the post_work
+ * @thread: thread associated with the post_work worker
+ * @post_work: Work to execute the post_lhbm commands
+ */
+struct gs_local_hbm_work_data {
+	/* timeout */
+	struct workqueue_struct *wq;
+	struct delayed_work timeout_work;
+	/* post work */
+	struct kthread_worker worker;
+	struct task_struct *thread;
+	struct kthread_work post_work;
+};
+
+/**
+ * struct gs_local_hbm - Local state data for lhbm handling
+ */
+struct gs_local_hbm {
+	/**
+	 * @requested_state: lhbm state requested to be executed
+	 */
+	enum gs_local_hbm_enable_state requested_state;
+	/**
+	 * @effective_state: currently-active lhbm state
+	 */
+	enum gs_local_hbm_enable_state effective_state;
+
+	/**
+	 * @max_timeout_ms: max local hbm on period in ms
+	 */
+	u32 max_timeout_ms;
+
+	/**
+	 * @post_work_disabled: control variable for lhbm_post_work
+	 *
+	 * Control variable to allow or disallow queueing the lhbm_post_work
+	 * method from debugfs
+	 */
+	bool post_work_disabled;
+
+	/**
+	 * @work_data: Data required for threading lhbm work queue
+	 */
+	struct gs_local_hbm_work_data work_data;
+
+	/**
+	 * @timestamps: records of timestamps relating to lhbm sequences
+	 */
+	struct gs_local_hbm_timestamps timestamps;
+
+	/**
+	 * @frame_index: counter to keep track of frames while waiting
+	 * Specifically used for the post_work callback in
+	 * lhbm_wait_vblank_and_delay function
+	 */
+	u32 frame_index;
+
+	/**
+	 * @gamma_para_ready: Deprecated flag for gamma commands during lhbm
+	 */
+	bool gamma_para_ready;
+	/**
+	 * @gamma_cmd: Deprecated data relating to gamma commands during lhbm
+	 */
+	u8 gamma_cmd[LOCAL_HBM_GAMMA_CMD_SIZE_MAX];
+};
+
+/**
  * struct gs_panel - data associated with panel driver operation
  * TODO: better documentation
  */
@@ -649,8 +781,21 @@ struct gs_panel {
 	struct gs_panel_idle_data idle_data;
 	u32 op_hz;
 	u32 osc2_clk_khz;
+	/**
+	 * indicates the lower bound of refresh rate
+	 * 0 means there is no lower bound limitation
+	 * -1 means display should not switch to lower
+	 * refresh rate while idle.
+	 */
 	int min_vrefresh;
-	int peak_vrefresh;
+	/**
+	 * indicates the supported max refresh rate in the panel.
+	 */
+	int max_vrefresh;
+	/**
+	 * indicates the supported max bts fps in the panel.
+	 */
+	int peak_bts_fps;
 	bool dimming_on;
 	bool bl_ctrl_dcs;
 	enum gs_cabc_mode cabc_mode;
@@ -662,6 +807,7 @@ struct gs_panel {
 	struct drm_property_blob *lp_mode_blob;
 	char panel_id[PANEL_ID_MAX];
 	char panel_extinfo[PANEL_EXTINFO_MAX];
+	char panel_model[PANEL_MODEL_MAX];
 	u32 panel_rev;
 	enum drm_panel_orientation orientation;
 	struct gs_te2_data te2;
@@ -673,42 +819,13 @@ struct gs_panel {
 
 	/* current type of mode switch */
 	enum mode_progress_type mode_in_progress;
+	/* indicates BTS raise due to op_hz switch */
+	bool boosted_for_op_hz;
 
-	/* Automatic Current Limiting(ACL) */
-	enum gs_acl_mode acl_mode;
-
-	/* current type of mode switch */
-	enum mode_progress_type mode_in_progress;
-
-	/* GHBM (maybe reevaluate */
+	/* GHBM */
 	enum gs_hbm_mode hbm_mode;
-	/* HBM struct */
-	struct {
-		struct gs_local_hbm {
-			bool gamma_para_ready;
-			u8 gamma_cmd[LOCAL_HBM_GAMMA_CMD_SIZE_MAX];
-			enum gs_local_hbm_enable_state requested_state;
-			union {
-				enum gs_local_hbm_enable_state effective_state;
-				enum gs_local_hbm_enable_state enabled;
-			};
-			/* max local hbm on period in ms */
-			u32 max_timeout_ms;
-			/* work used to turn off local hbm if reach max_timeout */
-			struct delayed_work timeout_work;
-			struct kthread_worker worker;
-			struct task_struct *thread;
-			struct kthread_work post_work;
-			ktime_t en_cmd_ts;
-			ktime_t next_vblank_ts;
-			u32 frame_index;
-			ktime_t last_vblank_ts;
-			bool post_work_disabled;
-			u64 last_lp_vblank_cnt;
-		} local_hbm;
-
-		struct workqueue_struct *wq;
-	} hbm;
+	/* LHBM struct */
+	struct gs_local_hbm lhbm;
 };
 
 /* FUNCTIONS */
@@ -788,21 +905,22 @@ static inline ssize_t gs_get_te2_type_len(const struct gs_panel_desc *desc, bool
 	}
 }
 
+static inline u32 get_current_frame_duration_us(struct gs_panel *ctx)
+{
+	return USEC_PER_SEC / drm_mode_vrefresh(&ctx->current_mode->mode);
+}
+
 static inline bool gs_is_local_hbm_post_enabling_supported(struct gs_panel *ctx)
 {
-	return false;
-	/*TODO(tknelms): implement?
-	return (!ctx->hbm.local_hbm.post_work_disabled && ctx->desc
-		&& ctx->desc->lhbm_desc
-		&& (ctx->desc->lhbm_desc->effective_delay_frames
-		 || (ctx->desc->lhbm_desc->post_cmd_delay_frames
-		  && ctx->desc->gs_panel_func->base->set_local_hbm_mode_post)));
-	*/
+	return (!ctx->lhbm.post_work_disabled && ctx->desc && ctx->desc->lhbm_desc &&
+		(ctx->desc->lhbm_desc->effective_delay_frames ||
+		 (ctx->desc->lhbm_desc->post_cmd_delay_frames &&
+		  ctx->desc->gs_panel_func->set_local_hbm_mode_post)));
 }
 
 static inline bool gs_is_local_hbm_disabled(struct gs_panel *ctx)
 {
-	return (ctx->hbm.local_hbm.effective_state == GLOCAL_HBM_DISABLED);
+	return (ctx->lhbm.effective_state == GLOCAL_HBM_DISABLED);
 }
 
 /**
@@ -961,15 +1079,34 @@ int gs_panel_get_current_mode_te2(struct gs_panel *ctx, struct gs_panel_te2_timi
  */
 void gs_panel_update_te2(struct gs_panel *ctx);
 
-static inline void backlight_state_changed(struct backlight_device *bl)
-{
-	sysfs_notify(&bl->dev.kobj, NULL, "state");
-}
+/* Helper Utilities */
 
-static inline void te2_state_changed(struct backlight_device *bl)
-{
-	sysfs_notify(&bl->dev.kobj, NULL, "te2_state");
-}
+/**
+ * panel_calc_gamma_2_2_luminance() - calculate prorated luminance based on gamma2.2 curve
+ *
+ * @value: the input to prorate the luminance on X axis of gamma2.2 curve
+ * @max_value: the maximum value on the X axis
+ * @nit: the luminance associated with max_value on Y axis
+ *
+ * Description: luminance = exp(ln(value/max_value) * 2.2) * max_Luminance, gamma_2_2_coef_x_1m
+ *              stands for "exp(ln(value/max_value) * 2.2)". The function uses interpolation
+ *              method to calculate the prorated luminance.
+ *
+ * Return: prorated luminance
+ */
+u32 panel_calc_gamma_2_2_luminance(const u32 value, const u32 max_value, const u32 nit);
+/**
+ * panel_calc_linear_luminance() - calculate prorated luminance based on linear curve
+ *
+ * @value: input value to prorate luminance
+ * @coef_x_1k: linear coefficient multiplied by 1000
+ * @offset: offset value of Y axis
+ *
+ * Description: luminance = coefficient * value + offset
+ *
+ * Return: prorated luminance
+ */
+u32 panel_calc_linear_luminance(const u32 value, const u32 coef_x_1k, const int offset);
 
 /* HBM */
 

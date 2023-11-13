@@ -9,8 +9,10 @@
 
 #include "gs_panel_internal.h"
 
+#include <linux/delay.h>
 #include <linux/sysfs.h>
 #include <drm/drm_mipi_dsi.h>
+#include <drm/drm_vblank.h>
 
 #include "gs_panel/gs_panel.h"
 
@@ -27,7 +29,7 @@ static ssize_t serial_number_show(struct device *dev, struct device_attribute *a
 	if (!strcmp(ctx->panel_id, ""))
 		return -EINVAL;
 
-	return snprintf(buf, PAGE_SIZE, "%s\n", ctx->panel_id);
+	return sysfs_emit(buf, "%s\n", ctx->panel_id);
 }
 
 static ssize_t panel_extinfo_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -38,7 +40,7 @@ static ssize_t panel_extinfo_show(struct device *dev, struct device_attribute *a
 	if (!ctx->initialized)
 		return -EPERM;
 
-	return snprintf(buf, PAGE_SIZE, "%s\n", ctx->panel_extinfo);
+	return sysfs_emit(buf, "%s\n", ctx->panel_extinfo);
 }
 
 static ssize_t panel_name_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -53,7 +55,15 @@ static ssize_t panel_name_show(struct device *dev, struct device_attribute *attr
 	else
 		p++;
 
-	return snprintf(buf, PAGE_SIZE, "%s\n", p);
+	return sysfs_emit(buf, "%s\n", p);
+}
+
+static ssize_t panel_model_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	const struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+
+	return sysfs_emit(buf, "%s\n", ctx->panel_model);
 }
 
 static ssize_t panel_idle_store(struct device *dev, struct device_attribute *attr, const char *buf,
@@ -77,7 +87,7 @@ static ssize_t panel_idle_store(struct device *dev, struct device_attribute *att
 		if (idle_enabled)
 			ctx->timestamps.last_panel_idle_set_ts = ktime_get();
 
-		panel_update_idle_mode_locked(ctx);
+		panel_update_idle_mode_locked(ctx, true);
 	}
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
@@ -137,8 +147,10 @@ static ssize_t idle_delay_ms_store(struct device *dev, struct device_attribute *
 	}
 
 	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
-	ctx->idle_data.idle_delay_ms = idle_delay_ms;
-	panel_update_idle_mode_locked(ctx);
+	if (ctx->idle_data.idle_delay_ms != idle_delay_ms) {
+		ctx->idle_data.idle_delay_ms = idle_delay_ms;
+		panel_update_idle_mode_locked(ctx, true);
+	}
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
 	return count;
@@ -166,8 +178,10 @@ static ssize_t min_vrefresh_store(struct device *dev, struct device_attribute *a
 	}
 
 	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
-	ctx->min_vrefresh = min_vrefresh;
-	panel_update_idle_mode_locked(ctx);
+	if (ctx->min_vrefresh != min_vrefresh) {
+		ctx->min_vrefresh = min_vrefresh;
+		panel_update_idle_mode_locked(ctx, true);
+	}
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
 	return count;
@@ -272,6 +286,7 @@ static ssize_t te2_lp_timing_show(struct device *dev, struct device_attribute *a
 static DEVICE_ATTR_RO(serial_number);
 static DEVICE_ATTR_RO(panel_extinfo);
 static DEVICE_ATTR_RO(panel_name);
+static DEVICE_ATTR_RO(panel_model);
 static DEVICE_ATTR_RW(panel_idle);
 static DEVICE_ATTR_RW(panel_need_handle_idle_exit);
 static DEVICE_ATTR_RW(idle_delay_ms);
@@ -291,6 +306,7 @@ static const struct attribute *panel_attrs[] = {
 	&dev_attr_serial_number.attr,
 	&dev_attr_panel_extinfo.attr,
 	&dev_attr_panel_name.attr,
+	&dev_attr_panel_model.attr,
 	&dev_attr_panel_idle.attr,
 	&dev_attr_panel_need_handle_idle_exit.attr,
 	&dev_attr_idle_delay_ms.attr,
@@ -311,4 +327,188 @@ static const struct attribute *panel_attrs[] = {
 int gs_panel_sysfs_create_files(struct device *dev)
 {
 	return sysfs_create_files(&dev->kobj, panel_attrs);
+}
+
+/* Backlight Sysfs Node */
+
+static ssize_t hbm_mode_store(struct device *dev, struct device_attribute *attr, const char *buf,
+			      size_t count)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+	const struct gs_panel_mode *pmode;
+	u32 hbm_mode;
+	int ret;
+
+	if (!gs_panel_has_func(ctx, set_hbm_mode)) {
+		dev_err(ctx->dev, "HBM is not supported\n");
+		return -ENOTSUPP;
+	}
+
+	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+	pmode = ctx->current_mode;
+
+	if (!gs_is_panel_active(ctx) || !pmode) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		ret = -EPERM;
+		goto unlock;
+	}
+
+	if (pmode->gs_mode.is_lp_mode) {
+		dev_dbg(ctx->dev, "hbm unsupported in LP mode\n");
+		ret = -EPERM;
+		goto unlock;
+	}
+
+	ret = kstrtouint(buf, 0, &hbm_mode);
+	if (ret || (hbm_mode >= GS_HBM_STATE_MAX)) {
+		dev_err(ctx->dev, "invalid hbm_mode value\n");
+		goto unlock;
+	}
+
+	if (hbm_mode != ctx->hbm_mode) {
+		ctx->desc->gs_panel_func->set_hbm_mode(ctx, hbm_mode);
+		backlight_state_changed(bd);
+	}
+
+unlock:
+	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+
+	return ret ? ret : count;
+}
+
+static ssize_t hbm_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+
+	return sysfs_emit(buf, "%u\n", ctx->hbm_mode);
+}
+
+static ssize_t dimming_on_store(struct device *dev, struct device_attribute *attr, const char *buf,
+				size_t count)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+	bool dimming_on;
+	int ret;
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		return -EPERM;
+	}
+
+	ret = kstrtobool(buf, &dimming_on);
+	if (ret) {
+		dev_err(ctx->dev, "invalid dimming_on value\n");
+		return ret;
+	}
+
+	gs_panel_set_dimming(ctx, dimming_on);
+
+	return count;
+}
+
+static ssize_t dimming_on_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+
+	return sysfs_emit(buf, "%d\n", ctx->dimming_on);
+}
+
+static ssize_t local_hbm_mode_store(struct device *dev, struct device_attribute *attr,
+				    const char *buf, size_t count)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+	bool local_hbm_en;
+	int ret;
+	struct drm_crtc *crtc = get_gs_panel_connector_crtc(ctx);
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		return -EPERM;
+	}
+
+	if (!gs_panel_has_func(ctx, set_local_hbm_mode)) {
+		dev_err(ctx->dev, "Local HBM is not supported\n");
+		return -ENOTSUPP;
+	}
+
+	ret = kstrtobool(buf, &local_hbm_en);
+	if (ret) {
+		dev_err(ctx->dev, "invalid local_hbm_mode value\n");
+		return ret;
+	}
+
+	if (crtc && !drm_crtc_vblank_get(crtc)) {
+		struct drm_vblank_crtc vblank = crtc->dev->vblank[crtc->index];
+		u32 delay_us = vblank.framedur_ns / 2000;
+
+		drm_crtc_wait_one_vblank(crtc);
+		drm_crtc_vblank_put(crtc);
+		/* wait for 0.5 frame to send to ensure it is done in one frame */
+		usleep_range(delay_us, delay_us + 10);
+	}
+
+	dev_info(ctx->dev, "%s: set LHBM to %d\n", __func__, local_hbm_en);
+	mutex_lock(&ctx->mode_lock); /* TODO(b/267170999): MODE */
+	ctx->lhbm.requested_state = local_hbm_en;
+	panel_update_lhbm(ctx);
+	mutex_unlock(&ctx->mode_lock); /* TODO(b/267170999): MODE */
+
+	return count;
+}
+
+static ssize_t local_hbm_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+
+	return sysfs_emit(buf, "%d\n", ctx->lhbm.effective_state);
+}
+
+static ssize_t local_hbm_max_timeout_store(struct device *dev, struct device_attribute *attr,
+					   const char *buf, size_t count)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+	int ret;
+
+	ret = kstrtou32(buf, 0, &ctx->lhbm.max_timeout_ms);
+	if (ret) {
+		dev_err(ctx->dev, "invalid local_hbm_max_timeout_ms value\n");
+		return ret;
+	}
+
+	return count;
+}
+
+static ssize_t local_hbm_max_timeout_show(struct device *dev, struct device_attribute *attr,
+					  char *buf)
+{
+	struct backlight_device *bd = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bd);
+
+	return sysfs_emit(buf, "%d\n", ctx->lhbm.max_timeout_ms);
+}
+
+static DEVICE_ATTR_RW(hbm_mode);
+static DEVICE_ATTR_RW(dimming_on);
+static DEVICE_ATTR_RW(local_hbm_mode);
+static DEVICE_ATTR_RW(local_hbm_max_timeout);
+
+static struct attribute *bl_device_attrs[] = {
+	&dev_attr_hbm_mode.attr,
+	&dev_attr_dimming_on.attr,
+	&dev_attr_local_hbm_mode.attr,
+	&dev_attr_local_hbm_max_timeout.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(bl_device);
+
+int gs_panel_sysfs_create_bl_files(struct device *bl_dev)
+{
+	return sysfs_create_groups(&bl_dev->kobj, bl_device_groups);
 }
