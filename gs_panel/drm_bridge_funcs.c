@@ -69,7 +69,7 @@ void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state pane
 	mutex_unlock(&ctx->bl_state_lock); /*TODO(b/267170999): BL*/
 
 	if (state_changed) {
-		backlight_state_changed(bl);
+		schedule_work(&ctx->state_notify);
 		dev_dbg(ctx->dev, "%s: panel:%d, bl:0x%x\n", __func__, panel_state,
 			bl->props.state);
 	}
@@ -108,9 +108,9 @@ static int gs_panel_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_att
 	if (ret) {
 		dev_warn(dev, "%s attaching encoder returned nonzero code (%d)\n", __func__, ret);
 	}
-	/*TODO(tknelms): "if we have a commit_done function:
-	 *   mark needs_commit = true;"
-	 */
+
+	if (gs_panel_has_func(ctx, commit_done))
+		ctx->gs_connector->needs_commit = true;
 
 	ret = sysfs_create_link(&connector->kdev->kobj, &ctx->dev->kobj, "panel");
 	if (ret)
@@ -257,7 +257,7 @@ static void bridge_mode_set_normal(struct gs_panel *ctx, const struct gs_panel_m
 		gs_panel_set_backlight_state(ctx, is_active ? GPANEL_STATE_NORMAL :
 							      GPANEL_STATE_OFF);
 	else if (ctx->bl)
-		backlight_state_changed(ctx->bl);
+		schedule_work(&ctx->state_notify);
 }
 
 static void bridge_mode_set_update_timestamps(struct gs_panel *ctx,
@@ -357,10 +357,8 @@ static void gs_panel_bridge_mode_set(struct drm_bridge *bridge, const struct drm
 		}
 		ctx->current_mode = pmode;
 		if (state_changed) {
-			/*TODO(b/279521893)
-			 * if (!is_lp_mode)
-			 * 	gs_panel_update_te2(ctx);
-			 */
+			if (!is_lp_mode)
+				gs_panel_update_te2(ctx);
 		}
 	} else {
 		ctx->current_mode = pmode;
@@ -397,9 +395,7 @@ static void gs_panel_bridge_disable(struct drm_bridge *bridge,
 		dev_dbg(dev, "self refresh state : %s\n", __func__);
 
 		ctx->idle_data.self_refresh_active = true;
-		/*TODO(tknelms)
 		panel_update_idle_mode_locked(ctx, false);
-		*/
 		mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 	} else {
 		if (gs_conn_state->blanked_mode) {
@@ -430,16 +426,11 @@ static void gs_panel_bridge_pre_enable(struct drm_bridge *bridge,
 {
 	struct gs_panel *ctx = bridge_to_gs_panel(bridge);
 
-	/*TODO(tknelms)
-	if (ctx->panel_state == PANEL_STATE_BLANK) {
-		const struct gs_panel_funcs *funcs = ctx->desc->gs_panel_func;
-
-		if (funcs && funcs->panel_reset)
-			funcs->panel_reset(ctx);
-	} else */
-	if (!gs_is_panel_enabled(ctx)) {
+	if (ctx->panel_state == GPANEL_STATE_BLANK) {
+		if (gs_panel_has_func(ctx, panel_reset))
+			ctx->desc->gs_panel_func->panel_reset(ctx);
+	} else if (!gs_is_panel_enabled(ctx))
 		drm_panel_prepare(&ctx->base);
-	}
 }
 
 static void gs_panel_set_partial(struct gs_display_partial *partial,
@@ -515,10 +506,119 @@ static int gs_panel_bridge_atomic_check(struct drm_bridge *bridge,
 {
 	struct gs_panel *ctx = bridge_to_gs_panel(bridge);
 	struct drm_atomic_state *state = new_crtc_state->state;
+	const struct drm_display_mode *current_mode = &ctx->current_mode->mode;
 	int ret;
 
 	if (unlikely(!new_crtc_state))
 		return 0;
+
+	if (unlikely(!current_mode)) {
+		dev_warn(ctx->dev, "%s: failed to get current mode, skip mode check\n", __func__);
+	} else {
+		struct drm_display_mode *target_mode = &new_crtc_state->adjusted_mode;
+		struct gs_drm_connector_state *gs_conn_state = to_gs_connector_state(conn_state);
+		int current_vrefresh = drm_mode_vrefresh(current_mode);
+		int target_vrefresh = drm_mode_vrefresh(target_mode);
+		int current_bts_fps = gs_drm_mode_bts_fps(current_mode);
+		int target_bts_fps = gs_drm_mode_bts_fps(target_mode);
+
+		int clock;
+
+		/* if resolution changing */
+		if (current_mode->hdisplay != target_mode->hdisplay &&
+		    current_mode->vdisplay != target_mode->vdisplay) {
+			/* if refresh rate changing */
+			if (current_vrefresh != target_vrefresh ||
+			    current_bts_fps != target_bts_fps) {
+				/*
+				 * While switching resolution and refresh rate (from high to low) in
+				 * the same commit, the frame transfer time will become longer due
+				 * to BTS update. In the case, frame done time may cross to the next
+				 * vsync, which will hit DDIC’s constraint and cause the noises.
+				 * Keep the current BTS (higher one) for a few frames to avoid
+				 * the problem.
+				 */
+				if (current_bts_fps > target_bts_fps) {
+					target_mode->clock = gs_bts_fps_to_drm_mode_clock(
+						target_mode, current_bts_fps);
+					if (target_mode->clock != new_crtc_state->mode.clock) {
+						new_crtc_state->mode_changed = true;
+						dev_dbg(ctx->dev,
+							"%s: keep mode (%s) clock %dhz on rrs\n",
+							__func__, target_mode->name,
+							current_bts_fps);
+					}
+					clock = target_mode->clock;
+				}
+
+				ctx->mode_in_progress = MODE_RES_AND_RR_IN_PROGRESS;
+			/* else refresh rate not changing */
+			} else {
+				ctx->mode_in_progress = MODE_RES_IN_PROGRESS;
+			}
+		/* else resolution not changing */
+		} else {
+			if (ctx->mode_in_progress == MODE_RES_AND_RR_IN_PROGRESS &&
+			    new_crtc_state->adjusted_mode.clock != new_crtc_state->mode.clock) {
+				new_crtc_state->mode_changed = true;
+				new_crtc_state->adjusted_mode.clock = new_crtc_state->mode.clock;
+				clock = new_crtc_state->mode.clock;
+				dev_dbg(ctx->dev, "%s: restore mode (%s) clock after rrs\n",
+					__func__, new_crtc_state->mode.name);
+			}
+
+			if ((current_vrefresh != target_vrefresh) ||
+			    (current_bts_fps != target_bts_fps))
+				ctx->mode_in_progress = MODE_RR_IN_PROGRESS;
+			else
+				ctx->mode_in_progress = MODE_DONE;
+		}
+
+		/* debug output */
+		if (current_mode->hdisplay != target_mode->hdisplay ||
+		    current_mode->vdisplay != target_mode->vdisplay ||
+		    current_vrefresh != target_vrefresh || current_bts_fps != target_bts_fps)
+			dev_dbg(ctx->dev,
+				"%s: current %dx%d@%d(bts %d), target %dx%d@%d(bts %d), type %d\n",
+				__func__, current_mode->hdisplay, current_mode->vdisplay,
+				current_vrefresh, current_bts_fps, target_mode->hdisplay,
+				target_mode->vdisplay, target_vrefresh, target_bts_fps,
+				ctx->mode_in_progress);
+
+		/*
+		 * We may transfer the frame for the first TE after switching to higher
+		 * op_hz. In this case, the DDIC read speed will become higher while
+		 * the DPU write speed will remain the same, so underruns would happen.
+		 * Use higher BTS can avoid the issue. Also consider the clock from RRS
+		 * and select the higher one.
+		 */
+		if ((gs_conn_state->pending_update_flags & GS_HBM_FLAG_OP_RATE_UPDATE) &&
+		    gs_conn_state->operation_rate > ctx->op_hz) {
+			target_mode->clock =
+				gs_bts_fps_to_drm_mode_clock(target_mode, ctx->peak_bts_fps);
+			/* use the higher clock to avoid underruns */
+			if (target_mode->clock < clock)
+				target_mode->clock = clock;
+
+			if (target_mode->clock != new_crtc_state->mode.clock) {
+				new_crtc_state->mode_changed = true;
+				ctx->boosted_for_op_hz = true;
+				dev_dbg(ctx->dev, "%s: raise mode clock %dhz on op_hz %d\n",
+					__func__, ctx->peak_bts_fps, gs_conn_state->operation_rate);
+			}
+		} else if (ctx->boosted_for_op_hz &&
+			   new_crtc_state->adjusted_mode.clock != new_crtc_state->mode.clock) {
+			new_crtc_state->mode_changed = true;
+			ctx->boosted_for_op_hz = false;
+			/* use the higher clock to avoid underruns */
+			if (new_crtc_state->mode.clock < clock)
+				new_crtc_state->adjusted_mode.clock = clock;
+			else
+				new_crtc_state->adjusted_mode.clock = new_crtc_state->mode.clock;
+
+			dev_dbg(ctx->dev, "%s: restore mode clock after op_hz\n", __func__);
+		}
+	}
 
 	if (gs_panel_has_func(ctx, atomic_check)) {
 		ret = ctx->desc->gs_panel_func->atomic_check(ctx, state);

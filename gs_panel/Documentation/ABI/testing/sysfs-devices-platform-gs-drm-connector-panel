@@ -23,6 +23,14 @@ Contact: "Taylor Nelms" <tknelms@google.com>
 Description:
   Userspace client can use to view the name of the panel.
 
+What: /sys/devices/platform/gs-drm-connector/panel/panel_model
+Date: November 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client can use to view a string describing the exact panel model.
+  The format is: "[Project Code]-[Vendor Info][Panel Revision]-[Extra Info]"
+
 What: /sys/devices/platform/gs-drm-connector/panel/panel_idle
 Date: September 2023
 KernelVersion: 6.1

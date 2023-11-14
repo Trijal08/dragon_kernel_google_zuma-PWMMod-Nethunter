@@ -222,4 +222,9 @@ int gs_connector_bind(struct device *dev, struct device *master, void *data);
 
 void gs_connector_set_panel_name(const char *new_name, size_t len);
 
+/* BTS Helpers */
+
+int gs_drm_mode_bts_fps(const struct drm_display_mode *mode);
+int gs_bts_fps_to_drm_mode_clock(const struct drm_display_mode *mode, int bts_fps);
+
 #endif /* _GS_DRM_CONNECTOR_H_ */

@@ -29,7 +29,7 @@ static ssize_t serial_number_show(struct device *dev, struct device_attribute *a
 	if (!strcmp(ctx->panel_id, ""))
 		return -EINVAL;
 
-	return snprintf(buf, PAGE_SIZE, "%s\n", ctx->panel_id);
+	return sysfs_emit(buf, "%s\n", ctx->panel_id);
 }
 
 static ssize_t panel_extinfo_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -40,7 +40,7 @@ static ssize_t panel_extinfo_show(struct device *dev, struct device_attribute *a
 	if (!ctx->initialized)
 		return -EPERM;
 
-	return snprintf(buf, PAGE_SIZE, "%s\n", ctx->panel_extinfo);
+	return sysfs_emit(buf, "%s\n", ctx->panel_extinfo);
 }
 
 static ssize_t panel_name_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -55,7 +55,15 @@ static ssize_t panel_name_show(struct device *dev, struct device_attribute *attr
 	else
 		p++;
 
-	return snprintf(buf, PAGE_SIZE, "%s\n", p);
+	return sysfs_emit(buf, "%s\n", p);
+}
+
+static ssize_t panel_model_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	const struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+
+	return sysfs_emit(buf, "%s\n", ctx->panel_model);
 }
 
 static ssize_t panel_idle_store(struct device *dev, struct device_attribute *attr, const char *buf,
@@ -278,6 +286,7 @@ static ssize_t te2_lp_timing_show(struct device *dev, struct device_attribute *a
 static DEVICE_ATTR_RO(serial_number);
 static DEVICE_ATTR_RO(panel_extinfo);
 static DEVICE_ATTR_RO(panel_name);
+static DEVICE_ATTR_RO(panel_model);
 static DEVICE_ATTR_RW(panel_idle);
 static DEVICE_ATTR_RW(panel_need_handle_idle_exit);
 static DEVICE_ATTR_RW(idle_delay_ms);
@@ -297,6 +306,7 @@ static const struct attribute *panel_attrs[] = {
 	&dev_attr_serial_number.attr,
 	&dev_attr_panel_extinfo.attr,
 	&dev_attr_panel_name.attr,
+	&dev_attr_panel_model.attr,
 	&dev_attr_panel_idle.attr,
 	&dev_attr_panel_need_handle_idle_exit.attr,
 	&dev_attr_idle_delay_ms.attr,

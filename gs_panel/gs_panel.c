@@ -401,9 +401,6 @@ void gs_panel_update_te2(struct gs_panel *ctx)
 		return;
 
 	ctx->desc->gs_panel_func->update_te2(ctx);
-
-	if (ctx->bl)
-		te2_state_changed(ctx->bl);
 }
 EXPORT_SYMBOL(gs_panel_update_te2);
 
@@ -982,6 +979,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 			return ret;
 		}
 	}
+	if (ctx->panel_model[0] == '\0')
+		scnprintf(ctx->panel_model, PANEL_MODEL_MAX, "Common Panel");
 
 	/* Backlight */
 	ret = gs_panel_init_backlight(ctx);
@@ -1001,8 +1000,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 		for (i = 0; i < ctx->desc->modes->num_modes; i++) {
 			const struct gs_panel_mode *pmode = &ctx->desc->modes->modes[i];
 			const int vrefresh = drm_mode_vrefresh(&pmode->mode);
-			if (ctx->peak_vrefresh < vrefresh)
-				ctx->peak_vrefresh = vrefresh;
+			if (ctx->max_vrefresh < vrefresh)
+				ctx->max_vrefresh = vrefresh;
 		}
 	}
 

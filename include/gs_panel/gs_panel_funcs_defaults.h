@@ -69,6 +69,16 @@ int gs_panel_read_slsi_ddic_id(struct gs_panel *ctx);
 int gs_panel_read_id(struct gs_panel *ctx);
 
 /**
+ * gs_panel_model_init() - Helper function to construct panel_model string
+ * @ctx: Reference to panel data
+ * @project: Project code to write to panel_model string
+ * @extra_info: Additional info to write into panel_model string
+ *
+ * Context: this may be called as part of an implementation of panel_config()
+ */
+void gs_panel_model_init(struct gs_panel *ctx, const char *project, u8 extra_info);
+
+/**
  * gs_panel_is_mode_seamless_helper() - Default implementation for checking
  *                                      seamless transition.
  * @ctx: Reference to panel data

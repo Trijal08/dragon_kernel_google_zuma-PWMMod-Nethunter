@@ -407,6 +407,15 @@ struct gs_panel_funcs {
 	void (*panel_init)(struct gs_panel *gs_panel);
 
 	/**
+	 * @panel_reset:
+	 *
+	 * This callback is used to allow panel to toggle only reset pin instead of full
+	 * prepare sequence (including power rails) while the device is in BLANK state.
+	 * This is not called in any other state.
+	 */
+	void (*panel_reset)(struct gs_panel *gs_panel);
+
+	/**
 	 * @get_te_usec
 	 *
 	 * This callback is used to get current TE pulse time.
@@ -515,6 +524,7 @@ struct gs_panel_mode_array {
 #define MAX_TE2_TYPE 20
 #define PANEL_ID_MAX 40
 #define PANEL_EXTINFO_MAX 16
+#define PANEL_MODEL_MAX 14
 #define LOCAL_HBM_MAX_TIMEOUT_MS 3000 /* 3000 ms */
 #define LOCAL_HBM_GAMMA_CMD_SIZE_MAX 16
 
@@ -771,8 +781,21 @@ struct gs_panel {
 	struct gs_panel_idle_data idle_data;
 	u32 op_hz;
 	u32 osc2_clk_khz;
+	/**
+	 * indicates the lower bound of refresh rate
+	 * 0 means there is no lower bound limitation
+	 * -1 means display should not switch to lower
+	 * refresh rate while idle.
+	 */
 	int min_vrefresh;
-	int peak_vrefresh;
+	/**
+	 * indicates the supported max refresh rate in the panel.
+	 */
+	int max_vrefresh;
+	/**
+	 * indicates the supported max bts fps in the panel.
+	 */
+	int peak_bts_fps;
 	bool dimming_on;
 	bool bl_ctrl_dcs;
 	enum gs_cabc_mode cabc_mode;
@@ -784,6 +807,7 @@ struct gs_panel {
 	struct drm_property_blob *lp_mode_blob;
 	char panel_id[PANEL_ID_MAX];
 	char panel_extinfo[PANEL_EXTINFO_MAX];
+	char panel_model[PANEL_MODEL_MAX];
 	u32 panel_rev;
 	enum drm_panel_orientation orientation;
 	struct gs_te2_data te2;
@@ -795,6 +819,8 @@ struct gs_panel {
 
 	/* current type of mode switch */
 	enum mode_progress_type mode_in_progress;
+	/* indicates BTS raise due to op_hz switch */
+	bool boosted_for_op_hz;
 
 	/* GHBM */
 	enum gs_hbm_mode hbm_mode;
@@ -1052,16 +1078,6 @@ int gs_panel_get_current_mode_te2(struct gs_panel *ctx, struct gs_panel_te2_timi
  * necessary changes in the panel driver.
  */
 void gs_panel_update_te2(struct gs_panel *ctx);
-
-static inline void backlight_state_changed(struct backlight_device *bl)
-{
-	sysfs_notify(&bl->dev.kobj, NULL, "state");
-}
-
-static inline void te2_state_changed(struct backlight_device *bl)
-{
-	sysfs_notify(&bl->dev.kobj, NULL, "te2_state");
-}
 
 /* Helper Utilities */
 

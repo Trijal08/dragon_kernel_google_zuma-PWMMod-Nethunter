@@ -32,6 +32,20 @@ static char panel_name[PANEL_DRV_LEN] = "panel-gs-simple";
 module_param_string(panel_name, panel_name, sizeof(panel_name), 0644);
 MODULE_PARM_DESC(panel_name, "preferred panel name");
 
+int gs_drm_mode_bts_fps(const struct drm_display_mode *mode)
+{
+	/* TODO: get bts fps*/
+	return drm_mode_vrefresh(mode);
+}
+EXPORT_SYMBOL(gs_drm_mode_bts_fps);
+
+int gs_bts_fps_to_drm_mode_clock(const struct drm_display_mode *mode, int bts_fps)
+{
+	/* TODO: calculate required mode clock correctly */
+	return DIV_ROUND_UP(mode->htotal * mode->vtotal * bts_fps, 1000);
+}
+EXPORT_SYMBOL(gs_bts_fps_to_drm_mode_clock);
+
 struct gs_drm_connector_properties *
 gs_drm_connector_get_properties(struct gs_drm_connector *gs_connector)
 {
