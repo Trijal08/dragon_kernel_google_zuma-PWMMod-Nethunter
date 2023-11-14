@@ -403,12 +403,6 @@ static void gs_panel_bridge_disable(struct drm_bridge *bridge,
 			ctx->panel_state = GPANEL_STATE_BLANK;
 		} else if (crtc_state && crtc_state->mode_changed &&
 			   drm_atomic_crtc_effectively_active(crtc_state)) {
-			if (ctx->desc->delay_dsc_reg_init_us) {
-				struct gs_display_mode *gs_mode = &gs_conn_state->gs_mode;
-
-				gs_mode->dsc.delay_reg_init_us = ctx->desc->delay_dsc_reg_init_us;
-			}
-
 			ctx->panel_state = GPANEL_STATE_MODESET;
 		} else if (ctx->force_power_on) {
 			/* force blank state instead of power off */
