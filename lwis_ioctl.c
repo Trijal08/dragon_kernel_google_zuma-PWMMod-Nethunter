@@ -802,7 +802,9 @@ static int cmd_dma_buffer_enroll(struct lwis_client *lwis_client, struct lwis_cm
 	buffer->info.dma_read = buf_info.info.dma_read;
 	buffer->info.dma_write = buf_info.info.dma_write;
 
+	mutex_lock(&lwis_client->lock);
 	ret = lwis_buffer_enroll(lwis_client, buffer);
+	mutex_unlock(&lwis_client->lock);
 	if (ret) {
 		dev_err(lwis_dev->dev, "Failed to enroll buffer\n");
 		goto error_enroll;
@@ -814,7 +816,9 @@ static int cmd_dma_buffer_enroll(struct lwis_client *lwis_client, struct lwis_cm
 	buf_info.header.ret_code = ret;
 	ret = copy_pkt_to_user(lwis_dev, u_msg, (void *)&buf_info, sizeof(buf_info));
 	if (ret) {
+		mutex_lock(&lwis_client->lock);
 		lwis_buffer_disenroll(lwis_client, buffer);
+		mutex_unlock(&lwis_client->lock);
 		goto error_enroll;
 	}
 
@@ -839,8 +843,10 @@ static int cmd_dma_buffer_disenroll(struct lwis_client *lwis_client, struct lwis
 		return -EFAULT;
 	}
 
+	mutex_lock(&lwis_client->lock);
 	buffer = lwis_client_enrolled_buffer_find(lwis_client, info.info.fd, info.info.dma_vaddr);
 	if (!buffer) {
+		mutex_unlock(&lwis_client->lock);
 		dev_err(lwis_dev->dev, "Failed to find dma buffer for fd %d vaddr %pad\n",
 			info.info.fd, &info.info.dma_vaddr);
 		header->ret_code = -ENOENT;
@@ -848,6 +854,7 @@ static int cmd_dma_buffer_disenroll(struct lwis_client *lwis_client, struct lwis
 	}
 
 	ret = lwis_buffer_disenroll(lwis_client, buffer);
+	mutex_unlock(&lwis_client->lock);
 	if (ret) {
 		dev_err(lwis_dev->dev, "Failed to disenroll dma buffer for fd %d vaddr %pad\n",
 			info.info.fd, &info.info.dma_vaddr);
@@ -872,11 +879,13 @@ static int cmd_dma_buffer_cpu_access(struct lwis_client *lwis_client, struct lwi
 		return -EFAULT;
 	}
 
+	mutex_lock(&lwis_client->lock);
 	ret = lwis_buffer_cpu_access(lwis_client, &op.op);
+	mutex_unlock(&lwis_client->lock);
+
 	if (ret) {
 		dev_err(lwis_dev->dev, "Failed to prepare for cpu access for fd %d\n", op.op.fd);
 	}
-
 	header->ret_code = ret;
 	return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
 }
@@ -901,7 +910,9 @@ static int cmd_dma_buffer_alloc(struct lwis_client *lwis_client, struct lwis_cmd
 		goto error_alloc;
 	}
 
+	mutex_lock(&lwis_client->lock);
 	ret = lwis_buffer_alloc(lwis_client, &alloc_info.info, buffer);
+	mutex_unlock(&lwis_client->lock);
 	if (ret) {
 		dev_err(lwis_dev->dev, "Failed to allocate buffer\n");
 		goto error_alloc;
@@ -910,7 +921,9 @@ static int cmd_dma_buffer_alloc(struct lwis_client *lwis_client, struct lwis_cmd
 	alloc_info.header.ret_code = 0;
 	ret = copy_pkt_to_user(lwis_dev, u_msg, (void *)&alloc_info, sizeof(alloc_info));
 	if (ret) {
+		mutex_lock(&lwis_client->lock);
 		lwis_buffer_free(lwis_client, buffer);
+		mutex_unlock(&lwis_client->lock);
 		ret = -EFAULT;
 		goto error_alloc;
 	}
@@ -936,14 +949,17 @@ static int cmd_dma_buffer_free(struct lwis_client *lwis_client, struct lwis_cmd_
 		return -EFAULT;
 	}
 
+	mutex_lock(&lwis_client->lock);
 	buffer = lwis_client_allocated_buffer_find(lwis_client, info.fd);
 	if (!buffer) {
+		mutex_unlock(&lwis_client->lock);
 		dev_err(lwis_dev->dev, "Cannot find allocated buffer FD %d\n", info.fd);
 		header->ret_code = -ENOENT;
 		return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
 	}
 
 	ret = lwis_buffer_free(lwis_client, buffer);
+	mutex_unlock(&lwis_client->lock);
 	if (ret) {
 		dev_err(lwis_dev->dev, "Failed to free buffer FD %d\n", info.fd);
 		header->ret_code = ret;
@@ -1796,36 +1812,26 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_DMA_BUFFER_ENROLL:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_dma_buffer_enroll(lwis_client, header,
 					    (struct lwis_cmd_dma_buffer_enroll __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_DMA_BUFFER_DISENROLL:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_dma_buffer_disenroll(
 			lwis_client, header,
 			(struct lwis_cmd_dma_buffer_disenroll __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_DMA_BUFFER_CPU_ACCESS:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_dma_buffer_cpu_access(
 			lwis_client, header,
 			(struct lwis_cmd_dma_buffer_cpu_access __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_DMA_BUFFER_ALLOC:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_dma_buffer_alloc(lwis_client, header,
 					   (struct lwis_cmd_dma_buffer_alloc __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_DMA_BUFFER_FREE:
-		mutex_lock(&lwis_client->lock);
 		ret = cmd_dma_buffer_free(lwis_client, header,
 					  (struct lwis_cmd_dma_buffer_free __user *)user_msg);
-		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_REG_IO:
 		mutex_lock(&lwis_client->lock);
@@ -1918,7 +1924,7 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 }
 
 static int ioctl_handle_cmd_pkt(struct lwis_client *lwis_client,
-				     struct lwis_cmd_pkt __user *user_msg)
+				struct lwis_cmd_pkt __user *user_msg)
 {
 	struct lwis_device *lwis_dev = lwis_client->lwis_dev;
 	struct lwis_cmd_pkt header;
