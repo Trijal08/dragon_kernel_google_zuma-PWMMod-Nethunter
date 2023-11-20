@@ -80,6 +80,10 @@ struct lwis_interrupt {
 	/* List of aggregate interrupt leaf nodes */
 	/* GUARDED_BY(lock) */
 	struct list_head leaf_nodes;
+	/* Store the combined IRQ mask value */
+	uint64_t mask_value;
+	/* If IRQ mask value is written */
+	bool has_mask_value;
 };
 
 /*
@@ -168,6 +172,15 @@ int lwis_interrupt_add_leaf(struct lwis_interrupt_list *list, int index, uint32_
  */
 int lwis_interrupt_set_gpios_event_info(struct lwis_interrupt_list *list, int index,
 					int64_t irq_event);
+
+/*
+ * lwis_interrupt_write_combined_mask_value: Handles writing combined mask value
+ *
+ * Locks: May lock list->irq[index].lock
+ * Alloc: No
+ * Returns: 0 on success
+ */
+int lwis_interrupt_write_combined_mask_value(struct lwis_interrupt_list *list);
 
 /*
  * lwis_interrupt_event_enable: Handles masking and unmasking interrupts when
