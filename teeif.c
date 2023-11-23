@@ -16,7 +16,9 @@
 #include <linux/module.h>
 #include <asm/cacheflush.h>
 #include <linux/dma-mapping.h>
+#include <drm/drm_mode.h>
 
+#include "dpcd.h"
 #include "teeif.h"
 #include "hdcp-log.h"
 
@@ -249,15 +251,27 @@ int hdcp_tee_send_cmd(uint32_t cmd) {
 }
 
 int hdcp_tee_enable_enc_22(void) {
-	return hdcp_tee_comm_xchg(HDCP_CMD_ENCRYPTION_SET, HDCP_V2_3, NULL,
-		NULL);
+	int ret = hdcp_tee_comm_xchg(HDCP_CMD_ENCRYPTION_SET, HDCP_V2_3, NULL,
+			NULL);
+	if (ret)
+		return ret;
+
+	hdcp_dplink_update_cp(DRM_MODE_CONTENT_PROTECTION_ENABLED);
+	return 0;
 }
 
 int hdcp_tee_enable_enc_13(void) {
-	return hdcp_tee_comm_xchg(HDCP_CMD_ENCRYPTION_SET, HDCP_V1, NULL, NULL);
+	int ret = hdcp_tee_comm_xchg(HDCP_CMD_ENCRYPTION_SET, HDCP_V1, NULL,
+			NULL);
+	if (ret)
+		return ret;
+
+	hdcp_dplink_update_cp(DRM_MODE_CONTENT_PROTECTION_ENABLED);
+	return 0;
 }
 
 int hdcp_tee_disable_enc(void) {
+	hdcp_dplink_update_cp(DRM_MODE_CONTENT_PROTECTION_DESIRED);
 	return hdcp_tee_comm_xchg(HDCP_CMD_ENCRYPTION_SET, HDCP_NONE, NULL, NULL);
 }
 
