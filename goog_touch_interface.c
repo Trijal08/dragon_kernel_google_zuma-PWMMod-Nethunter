@@ -2284,7 +2284,7 @@ int goog_process_vendor_cmd(struct goog_touch_interface *gti, enum gti_cmd_type 
 		ret = gti->options.get_palm_mode(private_data, &gti->cmd.palm_cmd);
 		break;
 	case GTI_CMD_GET_SCAN_MODE:
-		ret = gti->options.set_scan_mode(private_data, &gti->cmd.scan_cmd);
+		ret = gti->options.get_scan_mode(private_data, &gti->cmd.scan_cmd);
 		break;
 	case GTI_CMD_GET_SCREEN_PROTECTOR_MODE:
 		ret = gti->options.get_screen_protector_mode(private_data,

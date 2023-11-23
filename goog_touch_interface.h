@@ -574,6 +574,7 @@ struct gti_sensor_data_cmd {
  * @display_state_cmd: command to notify display state.
  * @display_vrefresh_cmd: command to notify display vertical refresh rate.
  * @fw_version_cmd: command to get fw version.
+ * @gesture_config_cmd: command to set gesture parameters and gesture types.
  * @grip_cmd: command to set/get grip mode.
  * @heatmap_cmd: command to set heatmap enabled.
  * @irq_cmd: command to set/get irq mode.
@@ -663,6 +664,7 @@ struct gti_fw_status_data {
  * @selftest: vendor driver operation to exec self-test.
  * @set_continuous_report: vendor driver operation to apply the continuous reporting setting.
  * @set_coord_filter_enabled: vendor driver operation to apply the coordinate filter enabled.
+ * @set_gesture_config: vendor driver operation to apply the gesture settings.
  * @set_grip_mode: vendor driver operation to apply the grip setting.
  * @set_heatmap_enabled: vendor driver operation to apply the heatmap setting.
  * @set_irq_mode: vendor driver operation to apply the irq setting.
