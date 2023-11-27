@@ -18,6 +18,15 @@
 #include <drm/drm_dsc.h>
 #endif
 
+/* customized DRM mode type and flags */
+#define DRM_MODE_TYPE_VRR DRM_MODE_TYPE_USERDEF
+#define DRM_MODE_FLAG_NS DRM_MODE_FLAG_CLKDIV2
+#define DRM_MODE_FLAG_TE_FREQ_X1 DRM_MODE_FLAG_PHSYNC
+#define DRM_MODE_FLAG_TE_FREQ_X2 DRM_MODE_FLAG_NHSYNC
+#define DRM_MODE_FLAG_TE_FREQ_X4 DRM_MODE_FLAG_PVSYNC
+#define DRM_MODE_FLAG_TE_FREQ_MASK \
+	(DRM_MODE_FLAG_TE_FREQ_X1 | DRM_MODE_FLAG_TE_FREQ_X2 | DRM_MODE_FLAG_TE_FREQ_X4)
+
 /**
  * DRM_H_TIMING() - fills in horizontal timing in struct drm_display_mode
  * @HDISPLAY: Horizontal active region

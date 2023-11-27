@@ -62,6 +62,10 @@ struct brightness_capability {
 	struct brightness_attribute hbm;
 };
 
+#define GS_PANEL_REFRESH_CTRL_FI BIT(0)
+#define GS_PANEL_REFRESH_CTRL_IDLE BIT(1)
+#define GS_PANEL_REFRESH_CTRL_MASK (GS_PANEL_REFRESH_CTRL_FI | GS_PANEL_REFRESH_CTRL_IDLE)
+
 /**
  * enum gs_panel_state - panel operating state
  * TODO: reword, rethink, refactor (code style for enums relevant)
@@ -349,6 +353,13 @@ struct gs_panel_funcs {
 	 * otherwise returns false if no action was taken.
 	 */
 	bool (*set_self_refresh)(struct gs_panel *gs_panel, bool enable);
+
+	/**
+	 * @refresh_ctrl
+	 *
+	 * Control some panel refresh behaviors
+	 */
+	void (*refresh_ctrl)(struct gs_panel *gs_panel, u32 ctrl);
 
 	/**
 	 * @set_op_hz
@@ -924,6 +935,16 @@ static inline bool gs_is_local_hbm_post_enabling_supported(struct gs_panel *ctx)
 static inline bool gs_is_local_hbm_disabled(struct gs_panel *ctx)
 {
 	return (ctx->lhbm.effective_state == GLOCAL_HBM_DISABLED);
+}
+
+static inline bool gs_is_vrr_mode(const struct gs_panel_mode *pmode)
+{
+	return (pmode->mode.type & DRM_MODE_TYPE_VRR);
+}
+
+static inline bool gs_is_ns_op_rate(const struct gs_panel_mode *pmode)
+{
+	return (pmode->mode.flags & DRM_MODE_FLAG_NS);
 }
 
 /**

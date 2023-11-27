@@ -218,11 +218,21 @@ crtc_get_gs_connector_state(const struct drm_atomic_state *state,
 	return NULL;
 }
 
+static inline int gs_drm_mode_te_freq(const struct drm_display_mode *mode)
+{
+	int freq = drm_mode_vrefresh(mode);
+
+	if (mode->flags & DRM_MODE_FLAG_TE_FREQ_X2)
+		freq *= 2;
+	else if (mode->flags & DRM_MODE_FLAG_TE_FREQ_X4)
+		freq *= 4;
+
+	return freq;
+}
+
 int gs_connector_bind(struct device *dev, struct device *master, void *data);
 
 void gs_connector_set_panel_name(const char *new_name, size_t len);
-
-/* BTS Helpers */
 
 int gs_drm_mode_bts_fps(const struct drm_display_mode *mode);
 int gs_bts_fps_to_drm_mode_clock(const struct drm_display_mode *mode, int bts_fps);
