@@ -16,6 +16,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/gpio/consumer.h>
 #include <linux/backlight.h>
+#include <linux/thermal.h>
 #include <linux/version.h>
 #include <drm/drm_bridge.h>
 #include <drm/drm_modes.h>
@@ -65,6 +66,28 @@ struct brightness_capability {
 #define GS_PANEL_REFRESH_CTRL_FI BIT(0)
 #define GS_PANEL_REFRESH_CTRL_IDLE BIT(1)
 #define GS_PANEL_REFRESH_CTRL_MASK (GS_PANEL_REFRESH_CTRL_FI | GS_PANEL_REFRESH_CTRL_IDLE)
+
+/**
+ * enum gs_panel_feature - features supported by this panel
+ * @FEAT_HBM: high brightness mode
+ * @FEAT_IRC_Z_MODE: IR compensation on state and use Flat Z mode
+ * @FEAT_EARLY_EXIT: early exit from a long frame
+ * @FEAT_OP_NS: normal speed (not high speed)
+ * @FEAT_FRAME_AUTO: automatic (not manual) frame control
+ * @FEAT_MAX: placeholder, counter for number of features
+ *
+ * The following features are correlated, if one or more of them change, the others need
+ * to be updated unconditionally.
+ */
+enum gs_panel_feature {
+	FEAT_HBM = 0,
+	FEAT_IRC_Z_MODE,
+	FEAT_EARLY_EXIT,
+	FEAT_OP_NS,
+	FEAT_FRAME_AUTO,
+	FEAT_ZA,
+	FEAT_MAX,
+};
 
 /**
  * enum gs_panel_state - panel operating state
@@ -646,6 +669,33 @@ struct gs_panel_regulator {
 	u32 vddd_lp_uV;
 };
 
+/**
+ * struct gs_panel_status - hw or sw status of panel
+ *
+ * For some features, we would like to have a record of both the intended state
+ * of the panel in the software and the current state of the panel in the
+ * hardware. This struct carries a number of fields that exist both as intended
+ * sw state and actual hw state. Not all features will necessarily be supported
+ * on all panels.
+ */
+struct gs_panel_status {
+	/**
+	 * @feat: software or working correlated features, not guaranteed to be effective in panel
+	 * Specifically, this is a bitmap of enum gs_panel_feature features
+	 */
+	DECLARE_BITMAP(feat, FEAT_MAX);
+	/** @vrefresh: vrefresh rate effective in panel, in Hz */
+	u32 vrefresh;
+	/** @te_freq: panel TE frequency, in Hz */
+	u32 te_freq;
+	/** @idle_vrefresh: idle vrefresh rate effective in panel, in Hz */
+	u32 idle_vrefresh;
+	/** @dbv: brightness */
+	u16 dbv;
+	/** @acl_setting: automatic current limiting setting */
+	enum gs_acl_mode acl_mode;
+};
+
 struct gs_panel_idle_data {
 	bool panel_idle_enabled;
 	bool panel_need_handle_idle_exit;
@@ -692,6 +742,7 @@ struct gs_panel_timestamps {
 	ktime_t last_panel_idle_set_ts;
 	ktime_t last_rr_switch_ts;
 	ktime_t last_lp_exit_ts;
+	ktime_t idle_exit_dimming_delay_ts;
 };
 
 /**
@@ -782,6 +833,21 @@ struct gs_local_hbm {
 };
 
 /**
+ * struct gs_thermal_data - access to thermal data for panels that need it
+ */
+struct gs_thermal_data {
+	/** @tz: thermal zone device for reading temperature */
+	struct thermal_zone_device *tz;
+	/** @hw_temp: the temperature applied into panel */
+	u32 hw_temp;
+	/**
+	 * @pending_temp_update: whether there is pending temperature update. It will be
+	 *                       handled in the commit_done function.
+	 */
+	bool pending_temp_update;
+};
+
+/**
  * struct gs_panel - data associated with panel driver operation
  * TODO: better documentation
  */
@@ -796,7 +862,18 @@ struct gs_panel {
 	const struct gs_panel_desc *desc;
 	const struct gs_panel_mode *current_mode;
 	bool initialized;
+	/**
+	 * @panel_state: High-level state of the panel and driver
+	 */
 	enum gs_panel_state panel_state;
+	/**
+	 * @sw_status: intended status of panel hardware
+	 */
+	struct gs_panel_status sw_status;
+	/**
+	 * @hw_status: current status of panel hardware
+	 */
+	struct gs_panel_status hw_status;
 	/* If true, panel won't be powered off */
 	bool force_power_on;
 	struct gs_panel_idle_data idle_data;
@@ -813,6 +890,11 @@ struct gs_panel {
 	 * indicates the supported max refresh rate in the panel.
 	 */
 	int max_vrefresh;
+	/**
+	 * @throttled_min_vrefresh: indicates current minimum refresh rate while
+	 * in auto mode, if 0 it means auto mode is not enabled
+	 */
+	int throttled_min_vrefresh;
 	/**
 	 * indicates the supported max bts fps in the panel.
 	 */
@@ -835,12 +917,11 @@ struct gs_panel {
 	struct device_node *touch_dev;
 	struct gs_panel_timestamps timestamps;
 
+	struct gs_thermal_data *thermal;
+
 	/* works of sysfs_notify */
 	struct work_struct state_notify;
 	struct work_struct brightness_notify;
-
-	/* Automatic Current Limiting(ACL) */
-	enum gs_acl_mode acl_mode;
 
 	/* current type of mode switch */
 	enum mode_progress_type mode_in_progress;
