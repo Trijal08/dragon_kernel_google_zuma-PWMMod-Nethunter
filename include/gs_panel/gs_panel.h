@@ -183,7 +183,9 @@ struct gs_panel_funcs {
 	 *
 	 * This callback is used to implement driver specific logic for brightness
 	 * configuration. Otherwise defaults to sending brightness commands through
-	 * dcs command update
+	 * dcs command update.
+	 * The `br` parameter is the target brightness level, as opposed to
+	 * percentage or nits.
 	 */
 	int (*set_brightness)(struct gs_panel *gs_panel, u16 br);
 
@@ -405,15 +407,24 @@ struct gs_panel_funcs {
 	 * @panel_config:
 	 *
 	 * This callback is used to do one time panel configuration before the
-	 * common driver initialization.
+	 * common driver initialization. It may be used for driver or
+	 * code-related initialization that may be dependent on information like
+	 * panel rev, but is otherwise invariant across the life of the driver.
+	 *
+	 * Notably, panel hardware state at this point is unknown, so avoid
+	 * attempting to communicate directly with the panel.
 	 */
 	int (*panel_config)(struct gs_panel *gs_panel);
 
 	/**
 	 * @panel_init:
 	 *
-	 * This callback is used to do one time initialization for any panel
-	 * specific functions.
+	 * This callback is used to do initialization for any panel-specific
+	 * functions. It is called on first initialization as a one-time
+	 * configuration.
+	 *
+	 * Panel hardware should be available for communication at this point,
+	 * for example, to read OTP values from DDIC.
 	 */
 	void (*panel_init)(struct gs_panel *gs_panel);
 
