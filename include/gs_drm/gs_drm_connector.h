@@ -18,6 +18,10 @@
 #define MIN_WIN_BLOCK_WIDTH 8
 #define MIN_WIN_BLOCK_HEIGHT 1
 
+#ifndef INVALID_PANEL_ID
+#define INVALID_PANEL_ID 0xFFFFFFFF
+#endif
+
 enum gs_hbm_mode {
 	GS_HBM_OFF = 0,
 	GS_HBM_ON_IRC_ON,
@@ -184,6 +188,11 @@ struct gs_drm_connector {
 	 */
 	struct mipi_dsi_host *dsi_host_device;
 	/**
+	 * @panel_id: panel_id read from bootloader. Parsed by the connector,
+	 * stored here for use by the panel on init
+	 */
+	u32 panel_id;
+	/**
 	 * @needs_commit: connector will always get atomic commit callback for any
 	 * pipeline updates for as long as this flag is set
 	 */
@@ -232,6 +241,19 @@ static inline int gs_drm_mode_te_freq(const struct drm_display_mode *mode)
 
 int gs_connector_bind(struct device *dev, struct device *master, void *data);
 
+/**
+ * gs_connector_set_panel_name() - Sets the name and panel_id string for panel
+ *
+ * @new_name: Name of the panel
+ * @len: Length of the panel name
+ *
+ * When possible, we would like to use the panel name and panel_id read and set
+ * by the bootloader. On older systems, this involves passing the information to
+ * the connector from the DPU. This hook is used to do so.
+ *
+ * The expected form is "panel_name.panel_id", where the period and panel_id are
+ * optional, and the panel_id is a 6-8 character hex string.
+ */
 void gs_connector_set_panel_name(const char *new_name, size_t len);
 
 int gs_drm_mode_bts_fps(const struct drm_display_mode *mode);

@@ -23,6 +23,8 @@
 #define HDR_HLG BIT(3)
 
 #define DSIM_LABEL_LEN 5
+#define PANEL_ID_LENGTH 4
+#define LEGACY_PANEL_ID_LENGTH 3
 #define PANEL_DRV_LEN 64
 
 #define HOST_PORT 0
@@ -56,9 +58,7 @@ EXPORT_SYMBOL(gs_drm_connector_get_properties);
 void gs_connector_set_panel_name(const char *new_name, size_t len)
 {
 	strscpy(panel_name, new_name, sizeof(panel_name));
-	/* force NULL-termination at position `len` because intentionally
-	 * truncating some of new_name value (ex "panel-name.00040a").
-	 * TODO(tknelms): get panel revision from this string */
+
 	if (len < sizeof(panel_name))
 		panel_name[len] = '\0';
 }
@@ -404,6 +404,11 @@ static int connector_add_mipi_dsi_device(struct gs_drm_connector *gs_connector, 
 	struct device *dev = gs_connector->base.kdev;
 	struct mipi_dsi_host *host;
 	const char *node_label;
+	const char *p;
+	u32 cmp_len;
+
+	p = strchr(pname, '.');
+	cmp_len = p ? min((ptrdiff_t)PANEL_DRV_LEN, p - pname) : strnlen(pname, PANEL_DRV_LEN);
 
 	dev_dbg(dev, "%s+ Preferred panel %s\n", __func__, pname);
 
@@ -426,7 +431,7 @@ static int connector_add_mipi_dsi_device(struct gs_drm_connector *gs_connector, 
 		node_label = of_get_property(node, "label", NULL);
 		if (!node_label)
 			continue;
-		found = !strncmp(node_label, pname, PANEL_DRV_LEN);
+		found = !strncmp(node_label, pname, cmp_len);
 		if (found) {
 			/*TODO(tknelms): case for no pname provided */
 			strlcpy(info.type, node_label, sizeof(info.type));
@@ -492,6 +497,40 @@ static const char *get_panel_name(struct gs_drm_connector *gs_connector, const c
 	return (p + 1);
 }
 
+/**
+ * dsim_get_panel_id() - Parses the panel_id string at the end of name
+ * @name: name string to parse
+ *
+ * The panel name string parsed by the bootloader may be in the form of
+ * "panel_name.panel_id", where panel_id is a 6- or 8-character hex string. This
+ * function parses that string into an integer.
+ *
+ * Return: 32-bit integer representing the panel_id, or INVALID_PANEL_ID if
+ *         invalid or missing
+ */
+static u32 dsim_get_panel_id(const char *name)
+{
+	char *p = strchr(name, '.');
+	u8 panel_id[PANEL_ID_LENGTH] = { 0 };
+
+	/*
+	 * if period is found, expect 6 or 8 hex characters (ex. panel_name.000000),
+	 * otherwise return an invalid panel ID
+	 */
+	if (!p)
+		return INVALID_PANEL_ID;
+
+	p++;
+
+	if ((strlen(p) == (PANEL_ID_LENGTH * 2) && !hex2bin(panel_id, p, PANEL_ID_LENGTH)) ||
+	    (strlen(p) == (LEGACY_PANEL_ID_LENGTH * 2) &&
+	     !hex2bin(panel_id + 1, p, LEGACY_PANEL_ID_LENGTH))) {
+		return __builtin_bswap32(*(u32 *)panel_id);
+	}
+
+	return INVALID_PANEL_ID;
+}
+
 /*
  * Parses panel name supplied by bootloader, matches with child node,
  * adds the appropriate child panel into mipi_dsi system
@@ -500,8 +539,11 @@ static int parse_panel_name(struct gs_drm_connector *gs_connector)
 {
 	const char *pref_panel_name = get_panel_name(gs_connector, panel_name);
 
-	if (pref_panel_name && pref_panel_name[0])
+	if (pref_panel_name && pref_panel_name[0]) {
+		gs_connector->panel_id = dsim_get_panel_id(pref_panel_name);
+
 		return connector_add_mipi_dsi_device(gs_connector, pref_panel_name);
+	}
 
 	return -ENODEV;
 }

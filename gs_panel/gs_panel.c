@@ -985,6 +985,16 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 		return ret;
 	}
 
+	if (ctx->gs_connector->panel_id != INVALID_PANEL_ID) {
+		u32 id = ctx->gs_connector->panel_id;
+
+		bin2hex(ctx->panel_extinfo, &id, EXT_INFO_SIZE);
+
+		if (gs_panel_has_func(ctx, get_panel_rev))
+			ctx->desc->gs_panel_func->get_panel_rev(ctx, id);
+	} else
+		dev_dbg(ctx->dev, "Invalid panel id passed from bootloader");
+
 	/* One-time configuration */
 	if (gs_panel_has_func(ctx, panel_config)) {
 		ret = ctx->desc->gs_panel_func->panel_config(ctx);
