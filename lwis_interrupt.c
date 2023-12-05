@@ -209,7 +209,7 @@ int lwis_interrupt_get_gpio_irq(struct lwis_interrupt_list *list, int index, cha
 }
 
 static struct lwis_single_event_info *
-lwis_interrupt_get_single_event_info_locked(struct lwis_interrupt *irq, int64_t event_id)
+interrupt_get_single_event_info_locked(struct lwis_interrupt *irq, int64_t event_id)
 {
 	/* Our hash iterator */
 	struct lwis_single_event_info *p;
@@ -229,7 +229,7 @@ lwis_interrupt_get_single_event_info_locked(struct lwis_interrupt *irq, int64_t 
 	return NULL;
 }
 
-static int lwis_interrupt_set_mask(struct lwis_interrupt *irq, int int_reg_bit, bool is_set)
+static int interrupt_set_mask(struct lwis_interrupt *irq, int int_reg_bit, bool is_set)
 {
 	int ret = 0;
 	uint64_t mask_value = 0;
@@ -265,8 +265,8 @@ static int lwis_interrupt_set_mask(struct lwis_interrupt *irq, int int_reg_bit, 
 	return ret;
 }
 
-static int lwis_interrupt_read_and_clear_src_reg(struct lwis_interrupt *irq, uint64_t *source_value,
-						 uint64_t *overflow_value)
+static int interrupt_read_and_clear_src_reg(struct lwis_interrupt *irq, uint64_t *source_value,
+					    uint64_t *overflow_value)
 {
 	int ret;
 
@@ -321,8 +321,8 @@ static int lwis_interrupt_read_and_clear_src_reg(struct lwis_interrupt *irq, uin
 	return 0;
 }
 
-static void lwis_interrupt_emit_events(struct lwis_interrupt *irq, uint64_t source_value,
-				       uint64_t overflow_value)
+static void interrupt_emit_events(struct lwis_interrupt *irq, uint64_t source_value,
+				  uint64_t overflow_value)
 {
 	struct lwis_client_event_state *event_state;
 	struct lwis_single_event_info *event;
@@ -371,8 +371,7 @@ static void lwis_interrupt_emit_events(struct lwis_interrupt *irq, uint64_t sour
 							irq->lwis_dev->dev,
 							"IRQ(%s) event(0x%llx) enabled once\n",
 							irq->name, event->event_id);
-						lwis_interrupt_set_mask(irq, event->int_reg_bit,
-									false);
+						interrupt_set_mask(irq, event->int_reg_bit, false);
 					}
 				}
 			}
@@ -415,7 +414,7 @@ static irqreturn_t lwis_interrupt_regular_isr(int irq_number, void *data)
 	struct lwis_interrupt *irq = (struct lwis_interrupt *)data;
 	uint64_t source_value = 0, overflow_value = 0;
 
-	ret = lwis_interrupt_read_and_clear_src_reg(irq, &source_value, &overflow_value);
+	ret = interrupt_read_and_clear_src_reg(irq, &source_value, &overflow_value);
 	if (ret) {
 		goto error;
 	}
@@ -425,7 +424,7 @@ static irqreturn_t lwis_interrupt_regular_isr(int irq_number, void *data)
 		return IRQ_HANDLED;
 	}
 
-	lwis_interrupt_emit_events(irq, source_value, overflow_value);
+	interrupt_emit_events(irq, source_value, overflow_value);
 error:
 	return IRQ_HANDLED;
 }
@@ -435,7 +434,7 @@ int lwis_fake_event_inject(void *data)
 	struct lwis_interrupt *irq = (struct lwis_interrupt *)data;
 	uint64_t source_value = 0x00000020ll, overflow_value = 0;
 
-	lwis_interrupt_emit_events(irq, source_value, overflow_value);
+	interrupt_emit_events(irq, source_value, overflow_value);
 
 	return irq->irq;
 }
@@ -494,7 +493,7 @@ static irqreturn_t lwis_interrupt_aggregate_isr(int irq_number, void *data)
 	struct lwis_interrupt *irq = (struct lwis_interrupt *)data;
 	uint64_t source_value = 0, overflow_value = 0;
 
-	ret = lwis_interrupt_read_and_clear_src_reg(irq, &source_value, &overflow_value);
+	ret = interrupt_read_and_clear_src_reg(irq, &source_value, &overflow_value);
 	if (ret) {
 		goto error;
 	}
@@ -512,7 +511,7 @@ static irqreturn_t lwis_interrupt_aggregate_isr(int irq_number, void *data)
 		goto error;
 	}
 
-	lwis_interrupt_emit_events(irq, source_value, overflow_value);
+	interrupt_emit_events(irq, source_value, overflow_value);
 error:
 	return IRQ_HANDLED;
 }
@@ -605,8 +604,8 @@ int lwis_interrupt_set_event_info(struct lwis_interrupt_list *list, int index, i
 
 		spin_lock_irqsave(&list->irq[index].lock, flags);
 		/* Check for duplicate events */
-		if (lwis_interrupt_get_single_event_info_locked(&list->irq[index],
-								new_event->event_id) != NULL) {
+		if (interrupt_get_single_event_info_locked(&list->irq[index],
+							   new_event->event_id) != NULL) {
 			spin_unlock_irqrestore(&list->irq[index].lock, flags);
 			dev_err(list->lwis_dev->dev, "Duplicate event_id: %llx for IRQ: %s\n",
 				new_event->event_id, list->irq[index].name);
@@ -678,7 +677,7 @@ int lwis_interrupt_set_gpios_event_info(struct lwis_interrupt_list *list, int in
 
 	spin_lock_irqsave(&list->irq[index].lock, flags);
 	/* Check for duplicate events */
-	if (lwis_interrupt_get_single_event_info_locked(&list->irq[index], new_event->event_id) !=
+	if (interrupt_get_single_event_info_locked(&list->irq[index], new_event->event_id) !=
 	    NULL) {
 		spin_unlock_irqrestore(&list->irq[index].lock, flags);
 		dev_err(list->lwis_dev->dev, "Duplicate event_id: %llx for IRQ: %s\n",
@@ -701,9 +700,8 @@ int lwis_interrupt_set_gpios_event_info(struct lwis_interrupt_list *list, int in
 	return 0;
 }
 
-static int lwis_interrupt_single_event_enable_locked(struct lwis_interrupt *irq,
-						     struct lwis_single_event_info *event,
-						     bool enabled)
+static int interrupt_single_event_enable_locked(struct lwis_interrupt *irq,
+						struct lwis_single_event_info *event, bool enabled)
 {
 	int ret = 0;
 	bool is_set;
@@ -776,11 +774,11 @@ int lwis_interrupt_event_enable(struct lwis_interrupt_list *list, int64_t event_
 
 	for (index = 0; index < list->count; index++) {
 		spin_lock_irqsave(&list->irq[index].lock, flags);
-		event = lwis_interrupt_get_single_event_info_locked(&list->irq[index], event_id);
+		event = interrupt_get_single_event_info_locked(&list->irq[index], event_id);
 		if (event) {
 			list->irq[index].has_mask_value = true;
-			ret = lwis_interrupt_single_event_enable_locked(&list->irq[index], event,
-									enabled);
+			ret = interrupt_single_event_enable_locked(&list->irq[index], event,
+								   enabled);
 		}
 		spin_unlock_irqrestore(&list->irq[index].lock, flags);
 	}
