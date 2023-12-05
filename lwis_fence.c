@@ -278,7 +278,7 @@ transaction_list_find_or_create(struct lwis_fence *fence, struct lwis_client *ow
 	return (list == NULL) ? transaction_list_create(fence, owner) : list;
 }
 
-static int lwis_trigger_fence_add_transaction(int fence_fd, struct lwis_client *client,
+static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *client,
 					      struct lwis_transaction *transaction)
 {
 	unsigned long flags;
@@ -497,7 +497,7 @@ int lwis_parse_trigger_condition(struct lwis_client *client, struct lwis_transac
 				info->trigger_condition.trigger_nodes[i]
 					.event.precondition_fence_fd);
 		} else {
-			ret = lwis_trigger_fence_add_transaction(
+			ret = trigger_fence_add_transaction(
 				info->trigger_condition.trigger_nodes[i].fence_fd, client,
 				transaction);
 		}
