@@ -136,7 +136,7 @@ static int lwis_i2c_register_io(struct lwis_device *lwis_dev, struct lwis_io_ent
 	return lwis_i2c_io_entry_rw(i2c_dev, entry);
 }
 
-static int lwis_i2c_addr_matcher(struct device *dev, void *data)
+static int i2c_addr_matcher(struct device *dev, void *data)
 {
 	struct i2c_client *client = i2c_verify_client(dev);
 	int address = *(int *)data;
@@ -150,7 +150,7 @@ static int lwis_i2c_addr_matcher(struct device *dev, void *data)
 	return 1;
 }
 
-static int lwis_i2c_device_setup(struct lwis_i2c_device *i2c_dev)
+static int i2c_device_setup(struct lwis_i2c_device *i2c_dev)
 {
 	int ret;
 	struct i2c_board_info info = {};
@@ -182,7 +182,7 @@ static int lwis_i2c_device_setup(struct lwis_i2c_device *i2c_dev)
 	if (IS_ERR_OR_NULL(i2c_dev->client)) {
 		struct device *idev;
 		idev = device_find_child(&i2c_dev->adapter->dev, &i2c_dev->address,
-					 lwis_i2c_addr_matcher);
+					 i2c_addr_matcher);
 		i2c_dev->client = i2c_verify_client(idev);
 	}
 
@@ -253,7 +253,7 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 	platform_set_drvdata(plat_dev, &i2c_dev->base_dev);
 
 	/* Call I2C device specific setup function */
-	ret = lwis_i2c_device_setup(i2c_dev);
+	ret = i2c_device_setup(i2c_dev);
 	if (ret) {
 		dev_err(i2c_dev->base_dev.dev, "Error in i2c device initialization\n");
 		lwis_base_unprobe(&i2c_dev->base_dev);

@@ -76,7 +76,7 @@ static int lwis_spi_register_io(struct lwis_device *lwis_dev, struct lwis_io_ent
 	return lwis_spi_io_entry_rw(spi_dev, entry);
 }
 
-static int lwis_spi_device_setup(struct lwis_spi_device *spi_dev)
+static int spi_device_setup(struct lwis_spi_device *spi_dev)
 {
 	int ret;
 
@@ -131,7 +131,7 @@ static int lwis_spi_device_probe(struct spi_device *spi)
 	spi_set_drvdata(spi, &spi_dev->base_dev);
 
 	/* Call SPI device specific setup function */
-	ret = lwis_spi_device_setup(spi_dev);
+	ret = spi_device_setup(spi_dev);
 	if (ret) {
 		dev_err(spi_dev->base_dev.dev, "Error in spi device initialization\n");
 		lwis_base_unprobe(&spi_dev->base_dev);

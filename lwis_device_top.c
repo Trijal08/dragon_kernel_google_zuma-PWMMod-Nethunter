@@ -322,14 +322,14 @@ static int lwis_top_event_unsubscribe(struct lwis_device *lwis_dev, int64_t trig
 	return 0;
 }
 
-static void lwis_top_event_subscribe_init(struct lwis_top_device *lwis_top_dev)
+static void top_event_subscribe_init(struct lwis_top_device *lwis_top_dev)
 {
 	hash_init(lwis_top_dev->event_subscribers);
 	INIT_LIST_HEAD(&lwis_top_dev->emitted_event_list_work);
 	kthread_init_work(&lwis_top_dev->subscribe_work, subscribe_work_func);
 }
 
-static void lwis_top_event_subscribe_clear(struct lwis_top_device *lwis_top_dev)
+static void top_event_subscribe_clear(struct lwis_top_device *lwis_top_dev)
 {
 	struct lwis_event_subscriber_list *event_subscriber_list;
 	struct list_head *it_event_subscriber, *it_event_subscriber_tmp;
@@ -373,7 +373,7 @@ static void lwis_top_event_subscribe_release(struct lwis_device *lwis_dev)
 	struct lwis_top_device *lwis_top_dev =
 		container_of(lwis_dev, struct lwis_top_device, base_dev);
 	/* Clean up subscription work */
-	lwis_top_event_subscribe_clear(lwis_top_dev);
+	top_event_subscribe_clear(lwis_top_dev);
 }
 
 static int lwis_top_register_io(struct lwis_device *lwis_dev, struct lwis_io_entry *entry,
@@ -450,11 +450,11 @@ static int lwis_top_close(struct lwis_device *lwis_dev)
 {
 	struct lwis_top_device *lwis_top_dev =
 		container_of(lwis_dev, struct lwis_top_device, base_dev);
-	lwis_top_event_subscribe_clear(lwis_top_dev);
+	top_event_subscribe_clear(lwis_top_dev);
 	return 0;
 }
 
-static int lwis_top_device_setup(struct lwis_top_device *top_dev)
+static int top_device_setup(struct lwis_top_device *top_dev)
 {
 	int ret = 0;
 
@@ -499,14 +499,14 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 	platform_set_drvdata(plat_dev, &top_dev->base_dev);
 
 	/* Call top device specific setup function */
-	ret = lwis_top_device_setup(top_dev);
+	ret = top_device_setup(top_dev);
 	if (ret) {
 		dev_err(top_dev->base_dev.dev, "Error in top device initialization\n");
 		lwis_base_unprobe(&top_dev->base_dev);
 		return ret;
 	}
 
-	lwis_top_event_subscribe_init(top_dev);
+	top_event_subscribe_init(top_dev);
 
 	kthread_init_worker(&top_dev->subscribe_worker);
 	top_dev->subscribe_worker_thread = kthread_run(

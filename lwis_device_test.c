@@ -125,7 +125,7 @@ static int lwis_test_register_io(struct lwis_device *lwis_dev, struct lwis_io_en
 	return 0;
 }
 
-static int lwis_test_device_setup(struct lwis_test_device *test_dev)
+static int test_device_setup(struct lwis_test_device *test_dev)
 {
 	int ret = 0;
 
@@ -169,7 +169,7 @@ static int lwis_test_device_probe(struct platform_device *plat_dev)
 	platform_set_drvdata(plat_dev, &test_dev->base_dev);
 
 	/* Call TEST device specific setup function */
-	ret = lwis_test_device_setup(test_dev);
+	ret = test_device_setup(test_dev);
 	if (ret) {
 		dev_err(test_dev->base_dev.dev, "Error in TEST device initialization\n");
 		lwis_base_unprobe(&test_dev->base_dev);

@@ -176,7 +176,7 @@ static int lwis_open(struct inode *node, struct file *fp)
 }
 
 /* Cleans client contents to a reset state. This will hold the LWIS client mutex. */
-static int lwis_cleanup_client(struct lwis_client *lwis_client)
+static int cleanup_client(struct lwis_client *lwis_client)
 {
 	/* Let's lock the mutex while we're cleaning up to avoid other parts
 	 * of the code from acquiring dangling pointers to the client or any
@@ -225,13 +225,13 @@ static inline bool check_client_exists(const struct lwis_device *lwis_dev,
 /* Release client and deletes its entry from the device's client list,
  * this assumes that LWIS device still exists and will hold LWIS device
  * and LWIS client locks. */
-static int lwis_release_client(struct lwis_client *lwis_client)
+static int release_client(struct lwis_client *lwis_client)
 {
 	struct lwis_device *lwis_dev = lwis_client->lwis_dev;
 	int rc = 0;
 	unsigned long flags;
 
-	rc = lwis_cleanup_client(lwis_client);
+	rc = cleanup_client(lwis_client);
 	if (rc) {
 		return rc;
 	}
@@ -266,7 +266,7 @@ static int lwis_release(struct inode *node, struct file *fp)
 
 	dev_info(lwis_dev->dev, "Closing instance %d\n", iminor(node));
 
-	rc = lwis_release_client(lwis_client);
+	rc = release_client(lwis_client);
 
 	/* Release the allocator and its cache */
 	lwis_allocator_release(lwis_dev);
@@ -386,7 +386,7 @@ static ssize_t lwis_read(struct file *fp, char __user *user_buf, size_t count, l
 	return ret;
 }
 
-static int lwis_base_setup(struct lwis_device *lwis_dev)
+static int base_setup(struct lwis_device *lwis_dev)
 {
 	int ret = 0;
 
@@ -405,9 +405,9 @@ static int lwis_base_setup(struct lwis_device *lwis_dev)
 }
 
 /*
- *  lwis_assign_top_to_other: Assign top device to the devices probed before.
+ *  assign_top_to_other: Assign top device to the devices probed before.
  */
-static void lwis_assign_top_to_other(struct lwis_device *top_dev)
+static void assign_top_to_other(struct lwis_device *top_dev)
 {
 	struct lwis_device *lwis_dev;
 
@@ -878,7 +878,7 @@ int lwis_dev_process_power_sequence(struct lwis_device *lwis_dev,
 	return ret;
 }
 
-static int lwis_dev_power_up_by_default(struct lwis_device *lwis_dev)
+static int power_up_by_default(struct lwis_device *lwis_dev)
 {
 	int ret;
 
@@ -1079,9 +1079,9 @@ int lwis_dev_power_up_locked(struct lwis_device *lwis_dev)
 		}
 		increase_unified_power_count(lwis_dev);
 	} else {
-		ret = lwis_dev_power_up_by_default(lwis_dev);
+		ret = power_up_by_default(lwis_dev);
 		if (ret) {
-			dev_err(lwis_dev->dev, "Error lwis_dev_power_up_by_default (%d)\n", ret);
+			dev_err(lwis_dev->dev, "Error power_up_by_default (%d)\n", ret);
 			if (lwis_dev->type == DEVICE_TYPE_I2C) {
 				mutex_unlock(i2c_dev->group_i2c_lock);
 			}
@@ -1118,7 +1118,7 @@ error_power_up:
 	return ret;
 }
 
-static int lwis_dev_power_down_by_default(struct lwis_device *lwis_dev)
+static int power_down_by_default(struct lwis_device *lwis_dev)
 {
 	int last_error = 0;
 	int ret;
@@ -1274,9 +1274,9 @@ int lwis_dev_power_down_locked(struct lwis_device *lwis_dev)
 		}
 		decrease_unified_power_count(lwis_dev);
 	} else {
-		ret = lwis_dev_power_down_by_default(lwis_dev);
+		ret = power_down_by_default(lwis_dev);
 		if (ret) {
-			dev_err(lwis_dev->dev, "Error lwis_dev_power_down_by_default (%d)\n", ret);
+			dev_err(lwis_dev->dev, "Error power_down_by_default (%d)\n", ret);
 			last_error = ret;
 		}
 	}
@@ -1506,7 +1506,7 @@ int lwis_base_probe(struct lwis_device *lwis_dev)
 	if (lwis_dev->type == DEVICE_TYPE_TOP) {
 		lwis_dev->top_dev = lwis_dev;
 		/* Assign top device to the devices probed before */
-		lwis_assign_top_to_other(lwis_dev);
+		assign_top_to_other(lwis_dev);
 	} else {
 		lwis_dev->top_dev = find_top_dev();
 		if (lwis_dev->top_dev == NULL)
@@ -1518,7 +1518,7 @@ int lwis_base_probe(struct lwis_device *lwis_dev)
 	list_add(&lwis_dev->dev_list, &core.lwis_dev_list);
 	mutex_unlock(&core.lock);
 
-	ret = lwis_base_setup(lwis_dev);
+	ret = base_setup(lwis_dev);
 	if (ret) {
 		pr_err("Error initializing LWIS device\n");
 		goto error_init;
@@ -1835,7 +1835,7 @@ static void __exit lwis_driver_exit(void)
 		}
 		/* Relase each client registered with dev */
 		list_for_each_entry_safe (client, client_temp, &lwis_dev->clients, node) {
-			if (lwis_release_client(client))
+			if (release_client(client))
 				pr_info("Failed to release client.");
 		}
 		pm_runtime_disable(lwis_dev->k_dev);

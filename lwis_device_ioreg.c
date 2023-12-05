@@ -71,7 +71,7 @@ static int lwis_ioreg_register_io_barrier(struct lwis_device *lwis_dev, bool use
 					 use_write_barrier);
 }
 
-static int lwis_ioreg_device_setup(struct lwis_ioreg_device *ioreg_dev)
+static int ioreg_device_setup(struct lwis_ioreg_device *ioreg_dev)
 {
 	int ret = 0;
 
@@ -115,7 +115,7 @@ static int lwis_ioreg_device_probe(struct platform_device *plat_dev)
 	platform_set_drvdata(plat_dev, &ioreg_dev->base_dev);
 
 	/* Call IOREG device specific setup function */
-	ret = lwis_ioreg_device_setup(ioreg_dev);
+	ret = ioreg_device_setup(ioreg_dev);
 	if (ret) {
 		dev_err(ioreg_dev->base_dev.dev, "Error in IOREG device initialization\n");
 		lwis_base_unprobe(&ioreg_dev->base_dev);
