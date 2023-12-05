@@ -43,7 +43,7 @@
 #define IOCTL_ARG_SIZE(x) _IOC_SIZE(x)
 #define STRINGIFY(x) #x
 
-static void lwis_ioctl_pr_err(struct lwis_device *lwis_dev, unsigned int ioctl_type, int errno)
+static void ioctl_pr_err(struct lwis_device *lwis_dev, unsigned int ioctl_type, int errno)
 {
 	unsigned int type = IOCTL_TO_ENUM(ioctl_type);
 	static char type_name[32];
@@ -1981,7 +1981,7 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 	return ret;
 }
 
-static int lwis_ioctl_handle_cmd_pkt(struct lwis_client *lwis_client,
+static int ioctl_handle_cmd_pkt(struct lwis_client *lwis_client,
 				     struct lwis_cmd_pkt __user *user_msg)
 {
 	struct lwis_device *lwis_dev = lwis_client->lwis_dev;
@@ -2032,7 +2032,7 @@ int lwis_ioctl_handler(struct lwis_client *lwis_client, unsigned int type, unsig
 
 	switch (type) {
 	case LWIS_CMD_PACKET:
-		ret = lwis_ioctl_handle_cmd_pkt(lwis_client, (struct lwis_cmd_pkt *)param);
+		ret = ioctl_handle_cmd_pkt(lwis_client, (struct lwis_cmd_pkt *)param);
 		break;
 	default:
 		dev_err_ratelimited(lwis_dev->dev, "Unknown IOCTL operation\n");
@@ -2040,7 +2040,7 @@ int lwis_ioctl_handler(struct lwis_client *lwis_client, unsigned int type, unsig
 	};
 
 	if (ret && ret != -ENOENT && ret != -ETIMEDOUT && ret != -EAGAIN) {
-		lwis_ioctl_pr_err(lwis_dev, type, ret);
+		ioctl_pr_err(lwis_dev, type, ret);
 	}
 
 	return ret;
