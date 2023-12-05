@@ -104,7 +104,7 @@ static int lwis_iommu_fault_handler(struct iommu_fault *fault, void *param)
 #endif /* ENABLE_PAGE_FAULT_PANIC */
 }
 
-static bool lwis_device_support_bts(struct lwis_device *lwis_dev)
+static bool device_support_bts(struct lwis_device *lwis_dev)
 {
 	int i;
 
@@ -180,7 +180,7 @@ int lwis_platform_device_enable(struct lwis_device *lwis_dev)
 		}
 	}
 
-	if (lwis_device_support_bts(lwis_dev) && lwis_dev->bts_scenario_name) {
+	if (device_support_bts(lwis_dev) && lwis_dev->bts_scenario_name) {
 		lwis_dev->bts_scenario = bts_get_scenindex(lwis_dev->bts_scenario_name);
 		if (!lwis_dev->bts_scenario) {
 			dev_err(lwis_dev->dev, "Failed to get default camera BTS scenario.\n");
@@ -205,7 +205,7 @@ int lwis_platform_device_disable(struct lwis_device *lwis_dev)
 		return -ENODEV;
 	}
 
-	if (lwis_device_support_bts(lwis_dev) && lwis_dev->bts_scenario_name) {
+	if (device_support_bts(lwis_dev) && lwis_dev->bts_scenario_name) {
 		bts_del_scenario(lwis_dev->bts_scenario);
 	}
 
