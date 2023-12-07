@@ -909,8 +909,13 @@ static void gs_panel_init_te2(struct gs_panel *ctx)
 	struct gs_te2_mode_data *data;
 	const struct gs_binned_lp *binned_lp;
 	int i, j;
-	int lp_mode_count = ctx->desc->lp_modes->num_modes ?: 1;
+	int lp_mode_count;
 	int mode_count, actual_num_binned_lp;
+
+	if (ctx->desc->lp_modes)
+		lp_mode_count = ctx->desc->lp_modes->num_modes;
+	else
+		lp_mode_count = 0;
 
 	if (ctx->desc->has_off_binned_lp_entry)
 		actual_num_binned_lp = ctx->desc->num_binned_lp - 1;
