@@ -19,7 +19,7 @@
 
 #define BIGW_A0_CSR_PROG_FREQ 166000
 
-static inline u32 bigo_get_total_load(struct bigo_core *core)
+static inline u32 bigo_get_total_load(struct bigo_core *core, bool use_bpp)
 {
 	struct bigo_inst *inst;
 	u32 load = 0;
@@ -32,6 +32,9 @@ static inline u32 bigo_get_total_load(struct bigo_core *core)
 		if (inst->idle)
 			continue;
 		curr_load = (u64)inst->width * inst->height * inst->fps / 1024;
+		if (use_bpp) {
+			curr_load *= inst->bpp;
+		}
 		if (curr_load < core->pm.max_load - load) {
 			load += curr_load;
 		} else {
@@ -84,7 +87,7 @@ static inline void bigo_set_freq(struct bigo_core *core, u32 freq)
 
 static void bigo_scale_freq(struct bigo_core *core)
 {
-	u32 load = bigo_get_total_load(core);
+	u32 load = bigo_get_total_load(core, true);
 	u32 freq = bigo_get_target_freq(core, load);
 
 	bigo_set_freq(core, freq);
@@ -92,7 +95,7 @@ static void bigo_scale_freq(struct bigo_core *core)
 
 static void bigo_get_bw(struct bigo_core *core, struct bts_bw *bw)
 {
-	u32 load = bigo_get_total_load(core);
+	u32 load = bigo_get_total_load(core, false);
 
 	if (load) {
 		struct bigo_bw *bandwidth = bigo_get_target_bw(core, load);
