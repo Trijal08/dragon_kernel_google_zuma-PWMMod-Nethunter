@@ -1039,6 +1039,14 @@ static inline bool gs_is_ns_op_rate(const struct gs_panel_mode *pmode)
 	return (pmode->mode.flags & DRM_MODE_FLAG_NS);
 }
 
+static inline int gs_get_actual_vrefresh(struct gs_panel *ctx)
+{
+	if (ctx->idle_data.panel_idle_vrefresh)
+		return ctx->idle_data.panel_idle_vrefresh;
+
+	return drm_mode_vrefresh(&ctx->current_mode->mode);
+}
+
 /**
  * gs_panel_get_mode - Finds gs_panel_mode matching drm_display_mode for panel
  * @ctx: Pointer to panel private data structure

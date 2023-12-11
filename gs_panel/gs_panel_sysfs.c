@@ -494,16 +494,66 @@ static ssize_t local_hbm_max_timeout_show(struct device *dev, struct device_attr
 	return sysfs_emit(buf, "%d\n", ctx->lhbm.max_timeout_ms);
 }
 
+static ssize_t state_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bl = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bl);
+	const char *statestr;
+	int rc, ret_cnt;
+
+	mutex_lock(&ctx->bl_state_lock);
+
+	if (bl->props.state & BL_STATE_STANDBY) {
+		mutex_unlock(&ctx->bl_state_lock);
+		return sysfs_emit(buf, "Off\n");
+	} else if (bl->props.state & BL_STATE_LP) {
+		statestr = "LP";
+	} else if (GS_IS_HBM_ON(ctx->hbm_mode)) {
+		statestr = GS_IS_HBM_ON_IRC_OFF(ctx->hbm_mode) ? "HBM IRC_OFF" : "HBM";
+	} else {
+		statestr = "On";
+	}
+
+	mutex_unlock(&ctx->bl_state_lock);
+
+	ret_cnt = sysfs_emit(buf, "%s", statestr);
+	rc = ret_cnt;
+
+	if (rc > 0) {
+		const struct gs_panel_mode *pmode;
+
+		mutex_lock(&ctx->mode_lock);
+		pmode = ctx->current_mode;
+		mutex_unlock(&ctx->mode_lock);
+		if (pmode) {
+			ret_cnt = sysfs_emit_at(buf, ret_cnt, ": %dx%d@%d\n", pmode->mode.hdisplay,
+						pmode->mode.vdisplay, gs_get_actual_vrefresh(ctx));
+			if (ret_cnt > 0)
+				rc += ret_cnt;
+		} else {
+			ret_cnt = sysfs_emit_at(buf, ret_cnt, "\n");
+			if (ret_cnt > 0)
+				rc += ret_cnt;
+		}
+	}
+
+	dev_dbg(ctx->dev, "%s: %s\n", __func__, rc > 0 ? buf : "");
+
+	return rc;
+}
+
 static DEVICE_ATTR_RW(hbm_mode);
 static DEVICE_ATTR_RW(dimming_on);
 static DEVICE_ATTR_RW(local_hbm_mode);
 static DEVICE_ATTR_RW(local_hbm_max_timeout);
+static DEVICE_ATTR_RO(state);
 
 static struct attribute *bl_device_attrs[] = {
 	&dev_attr_hbm_mode.attr,
 	&dev_attr_dimming_on.attr,
 	&dev_attr_local_hbm_mode.attr,
 	&dev_attr_local_hbm_max_timeout.attr,
+	&dev_attr_state.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(bl_device);
