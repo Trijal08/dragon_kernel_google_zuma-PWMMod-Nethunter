@@ -104,6 +104,12 @@ struct gs_drm_connector_state {
 	 */
 	int te_gpio;
 
+	/*
+	 * @tout_gpio: Provides the gpio for panel TOUT (TE2) signal.
+	 *	       This is used for checking panel refresh rate.
+	 */
+	int tout_gpio;
+
 	/**
 	 * @partial: Specify whether this panel supports partial update feature.
 	 */
