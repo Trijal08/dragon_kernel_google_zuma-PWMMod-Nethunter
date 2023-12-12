@@ -304,7 +304,7 @@ int gs_drm_connector_create_properties(struct drm_connector *connector)
 {
 	struct gs_drm_connector *gs_connector = to_gs_connector(connector);
 	struct drm_device *drm_dev = connector->dev;
-	struct device *dev = gs_connector->base.kdev;
+	struct device *dev = gs_connector->kdev;
 	struct gs_drm_connector_properties *p = &gs_connector->properties;
 	int ret;
 
@@ -386,7 +386,7 @@ gs_drm_connector_find_host_node(const struct gs_drm_connector *gs_connector, int
 
 	if (!gs_connector)
 		return ERR_PTR(-EINVAL);
-	dev = gs_connector->base.kdev;
+	dev = gs_connector->kdev;
 	if (!dev)
 		return ERR_PTR(-EINVAL);
 
@@ -401,7 +401,7 @@ static int connector_add_mipi_dsi_device(struct gs_drm_connector *gs_connector, 
 		.channel = 1,
 	};
 	struct device_node *node;
-	struct device *dev = gs_connector->base.kdev;
+	struct device *dev = gs_connector->kdev;
 	struct mipi_dsi_host *host;
 	const char *node_label;
 	const char *p;
@@ -452,7 +452,7 @@ static int connector_add_mipi_dsi_device(struct gs_drm_connector *gs_connector, 
 static const char *get_dsim_label(const struct gs_drm_connector *gs_connector)
 {
 	static const char *dsim_label;
-	struct device *dev = gs_connector->base.kdev;
+	struct device *dev = gs_connector->kdev;
 	struct device_node *parent_node =
 		gs_drm_connector_find_host_node(gs_connector, HOST_PORT, HOST_ENDPOINT);
 
@@ -594,7 +594,7 @@ static int gs_drm_connector_probe(struct platform_device *pdev)
 	if (!gs_connector)
 		return -ENOMEM;
 
-	gs_connector->base.kdev = dev;
+	gs_connector->kdev = dev;
 
 	platform_set_drvdata(pdev, gs_connector);
 

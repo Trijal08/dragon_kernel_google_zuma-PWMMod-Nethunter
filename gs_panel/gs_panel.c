@@ -974,7 +974,7 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 
 	/* Register connector as bridge */
 #ifdef CONFIG_OF
-	ctx->bridge.of_node = ctx->gs_connector->base.kdev->of_node;
+	ctx->bridge.of_node = ctx->gs_connector->kdev->of_node;
 #endif
 	drm_bridge_add(&ctx->bridge);
 

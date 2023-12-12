@@ -184,6 +184,11 @@ struct gs_drm_connector {
 	/** @helper_private: private helper functions for drm operations */
 	const struct gs_drm_connector_helper_funcs *helper_private;
 	/**
+	 * @kdev: reference to platform_device's dev
+	 * Note that the `base` member also has a struct device pointer
+	 */
+	struct device *kdev;
+	/**
 	 * @panel_dsi_device: pointer to the dsi device associated with the
 	 * connected panel. Crucial for the `gs_connector_to_panel` function.
 	 */

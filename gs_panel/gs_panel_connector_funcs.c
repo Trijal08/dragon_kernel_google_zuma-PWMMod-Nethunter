@@ -534,7 +534,7 @@ int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *dr
 
 	/* Initialize drm_connector */
 	if (!gs_connector->base.funcs) {
-		gs_connector_bind(gs_connector->base.kdev, NULL, drm_dev);
+		gs_connector_bind(gs_connector->kdev, NULL, drm_dev);
 	}
 	ret = drm_connector_init(drm_dev, connector, gs_connector->base.funcs,
 				 DRM_MODE_CONNECTOR_DSI);

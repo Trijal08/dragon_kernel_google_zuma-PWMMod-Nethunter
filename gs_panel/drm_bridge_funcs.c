@@ -112,9 +112,14 @@ static int gs_panel_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_att
 	if (gs_panel_has_func(ctx, commit_done))
 		ctx->gs_connector->needs_commit = true;
 
+	/* Create sysfs links from connector to panel */
+	ret = sysfs_create_link(&gs_connector->kdev->kobj, &ctx->dev->kobj, "panel");
+	if (ret)
+		dev_warn(dev, "unable to link connector platform dev to panel (%d)\n", ret);
+
 	ret = sysfs_create_link(&connector->kdev->kobj, &ctx->dev->kobj, "panel");
 	if (ret)
-		dev_warn(dev, "unable to link panel sysfs (%d)\n", ret);
+		dev_warn(dev, "unable to link connector drm dev to panel (%d)\n", ret);
 
 	/* debugfs entries */
 	gs_panel_create_debugfs_entries(ctx, connector->debugfs_entry);
