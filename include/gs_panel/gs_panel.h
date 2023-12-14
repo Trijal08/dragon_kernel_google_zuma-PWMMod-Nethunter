@@ -70,7 +70,6 @@ struct brightness_capability {
 /**
  * enum gs_panel_feature - features supported by this panel
  * @FEAT_HBM: high brightness mode
- * @FEAT_IRC_Z_MODE: IR compensation on state and use Flat Z mode
  * @FEAT_EARLY_EXIT: early exit from a long frame
  * @FEAT_OP_NS: normal speed (not high speed)
  * @FEAT_FRAME_AUTO: automatic (not manual) frame control
@@ -81,12 +80,23 @@ struct brightness_capability {
  */
 enum gs_panel_feature {
 	FEAT_HBM = 0,
-	FEAT_IRC_Z_MODE,
 	FEAT_EARLY_EXIT,
 	FEAT_OP_NS,
 	FEAT_FRAME_AUTO,
 	FEAT_ZA,
 	FEAT_MAX,
+};
+
+/**
+ * enum irc_mode - possible IRC states
+ * @IRC_FLAT_DEFAULT: IR compensation on (default configuration)
+ * @IRC_FLAT_Z: IR compensation on, in Z mode
+ * @IRC_OFF: IR compensation off, to allow for maximum brightness in outdoor sun
+ */
+enum irc_mode {
+	IRC_FLAT_DEFAULT = 0,
+	IRC_FLAT_Z,
+	IRC_OFF,
 };
 
 /**
@@ -692,6 +702,8 @@ struct gs_panel_status {
 	u16 dbv;
 	/** @acl_setting: automatic current limiting setting */
 	enum gs_acl_mode acl_mode;
+	/** @irc_mode: IR compensation mode */
+	enum irc_mode irc_mode;
 };
 
 struct gs_panel_idle_data {
