@@ -525,14 +525,6 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 		return ret;
 	}
 
-	/* Create associated kworker threads */
-	ret = lwis_create_kthread_workers(&top_dev->base_dev);
-	if (ret) {
-		dev_err(top_dev->base_dev.dev, "Failed to create lwis_top_kthread");
-		lwis_base_unprobe(&top_dev->base_dev);
-		return ret;
-	}
-
 	dev_info(top_dev->base_dev.dev, "Top Device Probe: Success\n");
 
 	return 0;
