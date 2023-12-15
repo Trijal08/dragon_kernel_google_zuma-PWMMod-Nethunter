@@ -1282,21 +1282,28 @@ static ssize_t self_test_show(struct device *dev,
 	memset(gti->cmd.selftest_cmd.buffer, 0, sizeof(gti->cmd.selftest_cmd.buffer));
 	ret = goog_process_vendor_cmd(gti, GTI_CMD_SELFTEST);
 	if (ret == -EOPNOTSUPP) {
-		buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
-			"error: not supported!\n");
+		buf_idx += sysfs_emit_at(buf, buf_idx, "error: not supported!\n");
 	} else if (ret) {
-		buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
-			"error: %d!\n", ret);
+		buf_idx += sysfs_emit_at(buf, buf_idx, "error: %d!\n", ret);
 	} else {
-		if (gti->cmd.selftest_cmd.result == GTI_SELFTEST_RESULT_DONE) {
-			buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
-				"result: %s\n", gti->cmd.selftest_cmd.buffer);
-		} else if (gti->cmd.selftest_cmd.result ==
-				GTI_SELFTEST_RESULT_SHELL_CMDS_REDIRECT) {
-			buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx,
-				"redirect: %s\n", gti->cmd.selftest_cmd.buffer);
-		} else {
-			buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE - buf_idx, "error: N/A!\n");
+		switch (gti->cmd.selftest_cmd.result) {
+		case GTI_SELFTEST_RESULT_PASS:
+			buf_idx += sysfs_emit_at(buf, buf_idx, "result: PASS\n");
+			buf_idx += sysfs_emit_at(buf, buf_idx, "%s\n",
+					gti->cmd.selftest_cmd.buffer);
+			break;
+		case GTI_SELFTEST_RESULT_FAIL:
+			buf_idx += sysfs_emit_at(buf, buf_idx, "result: FAIL\n");
+			buf_idx += sysfs_emit_at(buf, buf_idx, "%s\n",
+					gti->cmd.selftest_cmd.buffer);
+			break;
+		case GTI_SELFTEST_RESULT_SHELL_CMDS_REDIRECT:
+			buf_idx += sysfs_emit_at(buf, buf_idx, "redirect: %s\n",
+					gti->cmd.selftest_cmd.buffer);
+			break;
+		default:
+			buf_idx += sysfs_emit_at(buf, buf_idx, "error: N/A!\n");
+			break;
 		}
 	}
 	GOOG_LOGI(gti, "%s", buf);
