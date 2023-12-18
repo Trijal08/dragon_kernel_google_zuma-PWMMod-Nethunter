@@ -114,7 +114,7 @@ static struct lwis_event_subscriber_list *event_subscriber_list_create(struct lw
 	struct lwis_top_device *lwis_top_dev =
 		container_of(lwis_dev, struct lwis_top_device, base_dev);
 	struct lwis_event_subscriber_list *event_subscriber_list =
-		kmalloc(sizeof(struct lwis_event_subscriber_list), GFP_KERNEL);
+		kmalloc(sizeof(struct lwis_event_subscriber_list), GFP_ATOMIC);
 	if (!event_subscriber_list) {
 		return NULL;
 	}
@@ -215,13 +215,14 @@ static int lwis_top_event_subscribe(struct lwis_device *lwis_dev, int64_t trigge
 		return -EINVAL;
 	}
 
+	spin_lock_irqsave(&lwis_top_dev->base_dev.lock, flags);
 	event_subscriber_list = event_subscriber_list_find_or_create(lwis_dev, trigger_event_id);
 	if (!event_subscriber_list) {
+		spin_unlock_irqrestore(&lwis_top_dev->base_dev.lock, flags);
 		dev_err(lwis_dev->dev, "Can't find/create event subscriber list\n");
 		return -EINVAL;
 	}
 
-	spin_lock_irqsave(&lwis_top_dev->base_dev.lock, flags);
 	list_for_each (it_event_subscriber, &event_subscriber_list->list) {
 		old_subscription = list_entry(it_event_subscriber, struct lwis_event_subscribe_info,
 					      list_node);
