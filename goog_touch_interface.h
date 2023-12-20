@@ -738,7 +738,6 @@ struct gti_optional_configuration {
 /**
  * struct gti_pm - power manager for GTI.
  * @state_update_work: a work to update pm state.
- * @event_wq: a work queue to run suspend/resume work.
  * @locks: the lock state.
  * @lock_mutex: protect the lock state.
  * @state: GTI pm state.
@@ -750,7 +749,6 @@ struct gti_optional_configuration {
  */
 struct gti_pm {
 	struct work_struct state_update_work;
-	struct workqueue_struct *event_wq;
 
 	u32 locks;
 	struct mutex lock_mutex;
@@ -781,6 +779,8 @@ struct gti_pm {
  * @cmd: struct that used by vendor default handler.
  * @proc_dir: struct that used for procfs.
  * @proc_heatmap: struct that used for heatmap procfs.
+ * @set_op_hz_work: a work to set op_hz.
+ * @event_wq: a work queue to run suspend/resume work.
  * @input_timestamp: input timestamp from touch vendor driver.
  * @mf_downtime: timestamp for motion filter control.
  * @display_vrefresh: display vrefresh in Hz.
@@ -817,6 +817,7 @@ struct gti_pm {
  * @lptw_triggered: LPTW is triggered or not.
  * @lptw_suppress_coords_enabled: enable flag for suppressing the coords after lptw.
  * @lptw_track_finger: flag for tracking the suppressed fingers.
+ * @panel_notifier_enabled: enable flag for receiving panel notifications.
  * @lptw_x: x-axis center of the lptw area.
  * @lptw_y: y-axis center of the lptw area.
  * @lptw_suppress_coords_work: delayed work for suppressing finger.
@@ -831,10 +832,12 @@ struct gti_pm {
  * @slot_bit_last_active: bitmap of last active slot when reporting offload inputs.
  * @slot_bit_offload_active: bitmap of active slot from offload.
  * @slot_bit_lptw_track: bitmap of lptw suppressed fingers.
+ * @panel_op_hz: the operating rate of display panel.
  * @dev_id: dev_t used for google interface driver.
  * @panel_id: id of the display panel.
  * @charger_state: indicates a USB charger is connected.
  * @charger_notifier: notifier for power_supply updates.
+ * @panel_notifier: notifier for display panel updates.
  * @ical_state: state of interactive calibration finite state machine.
  * @ical_timestamp_ns: time of last interactive calibration state transition.
  * @ical_result: interactive calibration FSM result.
@@ -870,6 +873,8 @@ struct goog_touch_interface {
 	struct gti_union_cmd_data cmd;
 	struct proc_dir_entry *proc_dir;
 	struct proc_dir_entry *proc_show[GTI_PROC_NUM];
+	struct work_struct set_op_hz_work;
+	struct workqueue_struct *event_wq;
 	ktime_t input_timestamp;
 	ktime_t mf_downtime;
 
@@ -915,6 +920,7 @@ struct goog_touch_interface {
 	bool lptw_triggered;
 	bool lptw_suppress_coords_enabled;
 	bool lptw_track_finger;
+	bool panel_notifier_enabled;
 	u32 lptw_x;
 	u32 lptw_y;
 	struct delayed_work lptw_suppress_coords_work;
@@ -934,6 +940,7 @@ struct goog_touch_interface {
 	unsigned long slot_bit_last_active;
 	unsigned long slot_bit_offload_active;
 	unsigned long slot_bit_lptw_track;
+	unsigned int panel_op_hz;
 	dev_t dev_id;
 	int panel_id;
 	char fw_name[64];
@@ -943,6 +950,7 @@ struct goog_touch_interface {
 
 	u8 charger_state;
 	struct notifier_block charger_notifier;
+	struct notifier_block panel_notifier;
 
 	u32 ical_state;
 	u64 ical_timestamp_ns;
