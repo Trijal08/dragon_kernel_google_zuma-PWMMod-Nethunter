@@ -43,6 +43,11 @@
 #define IOCTL_ARG_SIZE(x) _IOC_SIZE(x)
 #define STRINGIFY(x) #x
 
+static void create_top_device_worker_thread(struct lwis_client *client)
+{
+	lwis_start_top_device_worker(client);
+}
+
 static void ioctl_pr_err(struct lwis_device *lwis_dev, unsigned int ioctl_type, int errno)
 {
 	unsigned int type = IOCTL_TO_ENUM(ioctl_type);
@@ -1328,6 +1333,16 @@ static int cmd_transaction_submit(struct lwis_client *client, struct lwis_cmd_pk
 		goto err_exit;
 	}
 
+	/*
+	 * Create top device thread only when user space submits
+	 * a transaction to be executed on the top device.
+	 * This will ensure that a worker thread is not created
+	 * for the top device by default.
+	 */
+	if (lwis_dev->type == DEVICE_TYPE_TOP) {
+		create_top_device_worker_thread(client);
+	}
+
 	spin_lock_irqsave(&client->transaction_lock, flags);
 	ret = lwis_transaction_submit_locked(client, k_transaction);
 	if (header->cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT_V2) {
@@ -1496,6 +1511,16 @@ static int cmd_periodic_io_submit(struct lwis_client *client, struct lwis_cmd_pk
 	ret = construct_periodic_io_from_cmd(client, u_msg, &k_periodic_io);
 	if (ret) {
 		goto err_exit;
+	}
+
+	/*
+	 * Create top device thread only when user space submits
+	 * a periodic IO to be executed on the top device.
+	 * This will ensure that a worker thread is not created
+	 * for the top device by default.
+	 */
+	if (lwis_dev->type == DEVICE_TYPE_TOP) {
+		create_top_device_worker_thread(client);
 	}
 
 	ret = lwis_periodic_io_submit(client, k_periodic_io);

@@ -247,6 +247,15 @@ static int release_client(struct lwis_client *lwis_client)
 
 	lwis_i2c_bus_manager_disconnect_client(lwis_client);
 
+	/*
+	 * It is safe to destroy the top device worker thread when top
+	 * client is released since the top device worker doesn't need
+	 * to exist by default.
+	 */
+	if (lwis_client->lwis_dev->type == DEVICE_TYPE_TOP) {
+		lwis_stop_top_device_worker(lwis_client);
+	}
+
 	kfree(lwis_client);
 
 	return 0;
@@ -588,13 +597,38 @@ static struct lwis_device *get_power_down_dev(struct lwis_device *lwis_dev)
 	return lwis_dev;
 }
 
+static bool is_transaction_worker_active(struct lwis_client *client)
+{
+	struct lwis_device *lwis_dev;
+	struct lwis_top_device *top_dev;
+
+	/*
+	 * Return true for all device types except Top device since the worker
+	 * thread will be active till the device exists.
+	 */
+	if ((client->lwis_dev->type != DEVICE_TYPE_TOP) &&
+	    (client->lwis_dev->transaction_worker_thread)) {
+		return true;
+	}
+
+	/*
+	 * For top device, the thread is scheduled and runs only if a transaction is submitted
+	 * on the top device. Once the usecase is finished and the client is destroyed, the thread
+	 * is stopped. In this scenario, we want to avoid subsequent usecases from flushing an
+	 * inactive thread in order to avoid infinite wait or failure due to timeouts.
+	 */
+	lwis_dev = client->lwis_dev;
+	top_dev = container_of(lwis_dev, struct lwis_top_device, base_dev);
+	return (top_dev->transaction_worker_active);
+}
+
 void lwis_queue_device_worker(struct lwis_client *client)
 {
 	struct lwis_i2c_bus_manager *i2c_bus_manager = lwis_i2c_bus_manager_get(client->lwis_dev);
 	if (i2c_bus_manager) {
 		kthread_queue_work(&i2c_bus_manager->i2c_bus_worker, &client->i2c_work);
 	} else {
-		if (client->lwis_dev->transaction_worker_thread) {
+		if (is_transaction_worker_active(client)) {
 			kthread_queue_work(&client->lwis_dev->transaction_worker,
 					   &client->transaction_work);
 		}
@@ -607,7 +641,7 @@ void lwis_flush_device_worker(struct lwis_client *client)
 	if (i2c_bus_manager) {
 		lwis_i2c_bus_manager_flush_i2c_worker(client->lwis_dev);
 	} else {
-		if (client->lwis_dev->transaction_worker_thread) {
+		if (is_transaction_worker_active(client)) {
 			kthread_flush_worker(&client->lwis_dev->transaction_worker);
 		}
 	}

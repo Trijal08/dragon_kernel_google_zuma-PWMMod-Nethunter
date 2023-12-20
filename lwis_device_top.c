@@ -19,6 +19,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/workqueue.h>
 
 #include "lwis_device.h"
 #include "lwis_event.h"
@@ -490,6 +491,7 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 	top_dev->subscribe_ops = top_subscribe_ops;
 	top_dev->base_dev.plat_dev = plat_dev;
 	top_dev->base_dev.k_dev = &plat_dev->dev;
+	top_dev->transaction_worker_active = false;
 
 	/* Call the base device probe function */
 	ret = lwis_base_probe(&top_dev->base_dev);
@@ -526,17 +528,37 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 		return ret;
 	}
 
-	/* Create associated kworker threads */
-	ret = lwis_create_kthread_workers(&top_dev->base_dev);
-	if (ret) {
-		dev_err(top_dev->base_dev.dev, "Failed to create lwis_top_kthread");
-		lwis_base_unprobe(&top_dev->base_dev);
-		return ret;
-	}
-
 	dev_info(top_dev->base_dev.dev, "Top Device Probe: Success\n");
 
 	return 0;
+}
+
+void lwis_start_top_device_worker(struct lwis_client *client)
+{
+	int ret;
+	struct lwis_device *lwis_dev = client->lwis_dev;
+	struct lwis_top_device *top_dev = container_of(lwis_dev, struct lwis_top_device, base_dev);
+	if (!top_dev->transaction_worker_active) {
+		dev_info(top_dev->base_dev.dev, "Starting top device worker");
+		/* Create associated kworker threads */
+		ret = lwis_create_kthread_workers(&top_dev->base_dev);
+		if (ret) {
+			dev_err(top_dev->base_dev.dev, "Failed to create lwis_top_kthread");
+			return;
+		}
+		top_dev->transaction_worker_active = true;
+	}
+}
+
+void lwis_stop_top_device_worker(struct lwis_client *client)
+{
+	struct lwis_device *lwis_dev = client->lwis_dev;
+	struct lwis_top_device *top_dev = container_of(lwis_dev, struct lwis_top_device, base_dev);
+	if (top_dev->transaction_worker_active) {
+		dev_info(top_dev->base_dev.dev, "Stopping top device worker");
+		kthread_stop(client->lwis_dev->transaction_worker_thread);
+		top_dev->transaction_worker_active = false;
+	}
 }
 
 #ifdef CONFIG_OF

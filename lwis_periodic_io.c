@@ -16,6 +16,7 @@
 #include <linux/slab.h>
 
 #include "lwis_allocator.h"
+#include "lwis_device.h"
 #include "lwis_event.h"
 #include "lwis_io_entry.h"
 #include "lwis_ioreg.h"
@@ -56,9 +57,11 @@ static enum hrtimer_restart periodic_io_timer_func(struct hrtimer *timer)
 			}
 		}
 	}
+
 	if (active_periodic_io_present) {
 		lwis_queue_device_worker(client);
 	}
+
 	spin_unlock_irqrestore(&client->periodic_io_lock, flags);
 	if (!active_periodic_io_present) {
 		periodic_io_list->hr_timer_state = LWIS_HRTIMER_INACTIVE;

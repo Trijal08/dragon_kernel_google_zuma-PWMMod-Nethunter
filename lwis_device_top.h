@@ -56,8 +56,13 @@ struct lwis_top_device {
 	struct kthread_worker subscribe_worker;
 	struct task_struct *subscribe_worker_thread;
 	struct lwis_event_subscribe_operations subscribe_ops;
+
+	bool transaction_worker_active;
 };
 
 int lwis_top_device_init(void);
 int lwis_top_device_deinit(void);
+void lwis_start_top_device_worker(struct lwis_client *client);
+void lwis_stop_top_device_worker(struct lwis_client *client);
+
 #endif /* LWIS_DEVICE_TOP_H_ */
