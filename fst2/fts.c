@@ -41,6 +41,7 @@
 #include <linux/i2c-dev.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
+#include <linux/pinctrl/consumer.h>
 #include <linux/regulator/consumer.h>
 #include <linux/input.h>
 #include <linux/input/mt.h>
@@ -1559,10 +1560,10 @@ probe_error_exit_0:
   * This function is called when the driver need to be removed.
   */
 #ifdef I2C_INTERFACE
-static int fts_remove(struct i2c_client *client)
+static void fts_remove(struct i2c_client *client)
 {
 #else
-static int fts_remove(struct spi_device *client)
+static void fts_remove(struct spi_device *client)
 {
 #endif
 	struct fts_ts_info *info = dev_get_drvdata(&(client->dev));
@@ -1578,7 +1579,6 @@ static int fts_remove(struct spi_device *client)
 	fts_enable_reg(info, false);
 	fts_get_reg(info, false);
 	kfree(info);
-	return OK;
 }
 
 static struct of_device_id fts_of_match_table[] = {
