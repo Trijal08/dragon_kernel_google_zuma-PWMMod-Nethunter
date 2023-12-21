@@ -32,6 +32,7 @@ enum TbnOperation : __u32 {
 	TBN_OPERATION_AP_RELEASE_BUS,
 	TBN_OPERATION_AP_REQUEST_BUS,
 	TBN_OPERATION_AOC_RESET,
+	TBN_OPERATION_AOC_SEND_LPTW_EVENT,
 };
 
 struct TbnEvent {
@@ -39,11 +40,29 @@ struct TbnEvent {
 	enum TbnOperation operation;
 } __packed;
 
+struct TbnEventHeader {
+    __u32 id;
+    __s32 err;
+    enum TbnOperation operation;
+    __u8 data[52];
+} __packed;
+
 struct TbnEventResponse {
 	__u32 id;
 	__s32 err;
 	enum TbnOperation operation;
 	bool lptw_triggered;
+} __packed;
+
+struct TbnLptwEvent {
+	__u32 id;
+	__s32 err;
+	enum TbnOperation operation;
+	u16 x;
+	u16 y;
+	u16 major;
+	u16 minor;
+	s16 angle;
 } __packed;
 
 struct tbn_context {
@@ -68,9 +87,13 @@ struct tbn_context {
 	struct work_struct aoc_reset_work;
 	struct workqueue_struct *event_wq;
 #endif
+
+	void (*lptw_event_cb)(struct TbnLptwEvent* lptw, void* user_data);
+	void* lptw_event_cbdata;
 };
 
 int register_tbn(u32 *output);
+void register_tbn_lptw_callback(void* callback, void* cbdata);
 void unregister_tbn(u32 *output);
 int tbn_request_bus_with_result(u32 dev_mask, bool *lptw_triggered);
 int tbn_request_bus(u32 dev_mask);

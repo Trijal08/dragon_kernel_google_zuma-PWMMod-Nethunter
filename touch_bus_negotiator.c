@@ -24,6 +24,7 @@
 
 #define TBN_MODULE_NAME "touch_bus_negotiator"
 #define TBN_AOC_CHANNEL_THREAD_NAME "tbn_aoc_channel"
+#define TBN_DATA_BUFFER_MAX 64
 
 #undef pr_fmt
 #define pr_fmt(fmt) "gti: tbn: " fmt
@@ -82,7 +83,7 @@ static irqreturn_t tbn_aoc2ap_irq_thread(int irq, void *ptr)
 static int aoc_channel_kthread(void *data)
 {
 	struct tbn_context *tbn = data;
-	struct TbnEventResponse resp;
+	struct TbnEventHeader header;
 	ssize_t len;
 	bool service_ready = false;
 
@@ -98,7 +99,7 @@ static int aoc_channel_kthread(void *data)
 			continue;
 		}
 
-		len = aoc_tbn_service_read(&resp, sizeof(resp));
+		len = aoc_tbn_service_read(&header, sizeof(header));
 		if (len < 0) {
 			pr_err("%s: failed to read message, err: %ld\n",
 				__func__, len);
@@ -110,13 +111,30 @@ static int aoc_channel_kthread(void *data)
 			break;
 		}
 
-		if (len == sizeof(resp)) {
-			if (resp.operation == TBN_OPERATION_AOC_RESET) {
-				if (tbn->event_wq)
-					queue_work(tbn->event_wq, &tbn->aoc_reset_work);
-			} else {
-				handle_tbn_event_response(tbn, &resp);
+		if (header.operation == TBN_OPERATION_AOC_RESET) {
+			if (tbn->event_wq)
+				queue_work(tbn->event_wq, &tbn->aoc_reset_work);
+		} else if (header.operation == TBN_OPERATION_AOC_SEND_LPTW_EVENT) {
+			struct TbnLptwEvent* gesture;
+
+			if (len != sizeof(*gesture)) {
+				pr_err("%s: Abnormal gesture data length: %ld\n", __func__, len);
+				continue;
 			}
+			gesture = (struct TbnLptwEvent*)&header;
+			pr_info("%s: LPTW event, x=%u y=%u major=%u minor=%u angle=%d\n",
+				__func__, gesture->x, gesture->y, gesture->major,
+				gesture->minor, gesture->angle);
+			tbn->lptw_event_cb(gesture, tbn->lptw_event_cbdata);
+		} else {
+			struct TbnEventResponse* resp;
+
+			if (len != sizeof(*resp)) {
+				pr_err("%s: Abnormal resp data length: %ld\n", __func__, len);
+				continue;
+			}
+			resp = (struct TbnEventResponse*)&header;
+			handle_tbn_event_response(tbn, resp);
 		}
 	}
 
@@ -383,6 +401,13 @@ int register_tbn(u32 *output)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(register_tbn);
+
+void register_tbn_lptw_callback(void* callback, void* cbdata)
+{
+	tbn_context->lptw_event_cb = callback;
+	tbn_context->lptw_event_cbdata = cbdata;
+}
+EXPORT_SYMBOL_GPL(register_tbn_lptw_callback);
 
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_TBN_AOC_CHANNEL_MODE)
 void tbn_aoc_reset_work(struct work_struct *work) {
