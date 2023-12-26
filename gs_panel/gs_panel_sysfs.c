@@ -163,6 +163,54 @@ static ssize_t idle_delay_ms_show(struct device *dev, struct device_attribute *a
 	return sysfs_emit(buf, "%d\n", ctx->idle_data.idle_delay_ms);
 }
 
+static ssize_t refresh_rate_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	const struct gs_panel_mode *current_mode;
+	int rr = -1;
+
+	mutex_lock(&ctx->mode_lock);
+	current_mode = ctx->current_mode;
+	if (current_mode != NULL)
+		rr = drm_mode_vrefresh(&current_mode->mode);
+	mutex_unlock(&ctx->mode_lock);
+
+	return sysfs_emit(buf, "%d\n", rr);
+}
+
+static ssize_t refresh_ctrl_store(struct device *dev, struct device_attribute *attr,
+				  const char *buf, size_t count)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	ssize_t ret;
+	u32 ctrl;
+
+	if (!count)
+		return -EINVAL;
+
+	if (!gs_is_panel_initialized(ctx))
+		return -EAGAIN;
+
+	if (!gs_is_panel_active(ctx))
+		return -EPERM;
+
+	if (!gs_panel_has_func(ctx, refresh_ctrl))
+		return -EINVAL;
+
+	ret = kstrtou32(buf, 0, &ctrl);
+	if (ret || !(ctrl & GS_PANEL_REFRESH_CTRL_MASK)) {
+		return -EINVAL;
+	}
+
+	mutex_lock(&ctx->mode_lock);
+	ctx->desc->gs_panel_func->refresh_ctrl(ctx, ctrl);
+	mutex_unlock(&ctx->mode_lock);
+
+	return count;
+}
+
 static ssize_t min_vrefresh_store(struct device *dev, struct device_attribute *attr,
 				  const char *buf, size_t count)
 {
@@ -290,6 +338,8 @@ static DEVICE_ATTR_RO(panel_model);
 static DEVICE_ATTR_RW(panel_idle);
 static DEVICE_ATTR_RW(panel_need_handle_idle_exit);
 static DEVICE_ATTR_RW(idle_delay_ms);
+static DEVICE_ATTR_RO(refresh_rate);
+static DEVICE_ATTR_WO(refresh_ctrl);
 static DEVICE_ATTR_RW(min_vrefresh);
 static DEVICE_ATTR_RW(te2_timing);
 static DEVICE_ATTR_RW(te2_lp_timing);
@@ -310,6 +360,8 @@ static const struct attribute *panel_attrs[] = {
 	&dev_attr_panel_idle.attr,
 	&dev_attr_panel_need_handle_idle_exit.attr,
 	&dev_attr_idle_delay_ms.attr,
+	&dev_attr_refresh_rate.attr,
+	&dev_attr_refresh_ctrl.attr,
 	&dev_attr_min_vrefresh.attr,
 	&dev_attr_te2_timing.attr,
 	&dev_attr_te2_lp_timing.attr,

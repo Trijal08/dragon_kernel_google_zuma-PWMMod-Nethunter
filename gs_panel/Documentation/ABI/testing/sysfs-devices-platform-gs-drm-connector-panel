@@ -51,6 +51,23 @@ Description:
   refresh rate change and when idle mode is able to be activated. The panel will
   not enter idle mode until at least this long after the last mode/refresh change.
 
+What: /sys/devices/platform/gs-drm-connector/panel/refresh_rate
+Date: December 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client uses this to view the current refresh rate of the panel.
+
+What: /sys/devices/platform/gs-drm-connector/panel/refresh_ctrl
+Date: December 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client uses this to manually control certain operations relating to
+  the refresh capabilities of the panel. This is done using a bitmap of different
+  refresh features, representing frame insertion, idle mode, etc.
+  Not all controls are supported for all panels.
+
 What: /sys/devices/platform/gs-drm-connector/panel/panel_need_handle_idle_exit
 Date: September 2023
 KernelVersion: 6.1
