@@ -22,6 +22,14 @@ enum gs_panel_state;
 /* gs_panel_connector_funcs.c */
 int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *drm_dev,
 				     struct gs_drm_connector *gs_connector);
+/**
+ * gs_panel_set_op_hz() - Wrapper for panel-specific set_op_hz function
+ * @ctx: handle for gs_panel
+ * @hz: operation rate in Hz
+ *
+ * Return: 0 on success, negative value on error
+ */
+int gs_panel_set_op_hz(struct gs_panel *ctx, unsigned int hz);
 
 /* drm_bridge_funcs.c */
 const struct drm_bridge_funcs *get_panel_drm_bridge_funcs(void);

@@ -51,6 +51,15 @@ Description:
   refresh rate change and when idle mode is able to be activated. The panel will
   not enter idle mode until at least this long after the last mode/refresh change.
 
+What: /sys/devices/platform/gs-drm-connector/panel/op_hz
+Date: December 2023
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client uses this to view or override the operating rate of the panel.
+  This operation is not supported on every panel implementation, or if the panel
+  is not active.
+
 What: /sys/devices/platform/gs-drm-connector/panel/refresh_rate
 Date: December 2023
 KernelVersion: 6.1

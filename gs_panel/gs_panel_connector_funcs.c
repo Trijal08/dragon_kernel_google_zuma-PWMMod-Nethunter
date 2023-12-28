@@ -285,7 +285,7 @@ static const struct gs_drm_connector_funcs gs_drm_connector_funcs = {
 
 /* gs_drm_connector_helper_funcs */
 
-static int gs_panel_set_op_hz(struct gs_panel *ctx, unsigned int hz)
+int gs_panel_set_op_hz(struct gs_panel *ctx, unsigned int hz)
 {
 	struct device *dev = ctx->dev;
 	const struct gs_panel_funcs *funcs = ctx->desc->gs_panel_func;

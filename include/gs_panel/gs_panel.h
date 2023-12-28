@@ -392,8 +392,6 @@ struct gs_panel_funcs {
 	 * set display panel working on specified operation rate.
 	 *
 	 * Returns 0 if successfully setting operation rate.
-	 *
-	 * TODO(b/279521713): implementation
 	 */
 	int (*set_op_hz)(struct gs_panel *gs_panel, unsigned int hz);
 

@@ -163,6 +163,44 @@ static ssize_t idle_delay_ms_show(struct device *dev, struct device_attribute *a
 	return sysfs_emit(buf, "%d\n", ctx->idle_data.idle_delay_ms);
 }
 
+static ssize_t op_hz_store(struct device *dev, struct device_attribute *attr, const char *buf,
+			   size_t count)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	ssize_t ret;
+	u32 hz;
+
+	if (!count)
+		return -EINVAL;
+
+	ret = kstrtou32(buf, 0, &hz);
+	if (ret) {
+		dev_err(ctx->dev, "invalid op_hz value\n");
+		return ret;
+	}
+
+	ret = gs_panel_set_op_hz(ctx, hz);
+	if (ret)
+		return ret;
+
+	return count;
+}
+
+static ssize_t op_hz_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+
+	if (!gs_is_panel_initialized(ctx))
+		return -EAGAIN;
+
+	if (!gs_panel_has_func(ctx, set_op_hz))
+		return -EINVAL;
+
+	return sysfs_emit(buf, "%u\n", ctx->op_hz);
+}
+
 static ssize_t refresh_rate_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
@@ -338,6 +376,7 @@ static DEVICE_ATTR_RO(panel_model);
 static DEVICE_ATTR_RW(panel_idle);
 static DEVICE_ATTR_RW(panel_need_handle_idle_exit);
 static DEVICE_ATTR_RW(idle_delay_ms);
+static DEVICE_ATTR_RW(op_hz);
 static DEVICE_ATTR_RO(refresh_rate);
 static DEVICE_ATTR_WO(refresh_ctrl);
 static DEVICE_ATTR_RW(min_vrefresh);
@@ -349,7 +388,6 @@ static DEVICE_ATTR_WO(gamma);
 static DEVICE_ATTR_RW(force_power_on);
 static DEVICE_ATTR_RW(osc2_clk_khz);
 static DEVICE_ATTR_RO(available_osc2_clk_khz);
-static DEVICE_ATTR_RW(op_hz);
 #endif
 
 static const struct attribute *panel_attrs[] = {
@@ -360,6 +398,7 @@ static const struct attribute *panel_attrs[] = {
 	&dev_attr_panel_idle.attr,
 	&dev_attr_panel_need_handle_idle_exit.attr,
 	&dev_attr_idle_delay_ms.attr,
+	&dev_attr_op_hz.attr,
 	&dev_attr_refresh_rate.attr,
 	&dev_attr_refresh_ctrl.attr,
 	&dev_attr_min_vrefresh.attr,
@@ -371,7 +410,6 @@ static const struct attribute *panel_attrs[] = {
 	&dev_attr_force_power_on.attr,
 	&dev_attr_osc2_clk_khz.attr,
 	&dev_attr_available_osc2_clk_khz.attr,
-	&dev_attr_op_hz.attr,
 #endif
 	NULL
 };
