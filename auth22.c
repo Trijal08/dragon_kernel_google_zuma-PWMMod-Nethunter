@@ -126,6 +126,7 @@ int hdcp22_dplink_authenticate(void)
 				UPDATE_LINK_STATE(lk_data, LINK_ST_A7_VERIFY_RECEIVER_ID_LIST);
 			} else {
 				UPDATE_LINK_STATE(lk_data, LINK_ST_H1_TX_LOW_VALUE_CONTENT);
+				return -EAGAIN;
 			}
 			break;
 		case LINK_ST_A7_VERIFY_RECEIVER_ID_LIST:
@@ -133,6 +134,7 @@ int hdcp22_dplink_authenticate(void)
 				UPDATE_LINK_STATE(lk_data, LINK_ST_A9_CONTENT_STREAM_MGT);
 			} else {
 				UPDATE_LINK_STATE(lk_data, LINK_ST_H1_TX_LOW_VALUE_CONTENT);
+				return -EAGAIN;
 			}
 			break;
 		case LINK_ST_A9_CONTENT_STREAM_MGT:
