@@ -25,6 +25,11 @@
 #define TBN_MODULE_NAME "touch_bus_negotiator"
 #define TBN_AOC_CHANNEL_THREAD_NAME "tbn_aoc_channel"
 
+#undef pr_fmt
+#define pr_fmt(fmt) "gti: tbn: " fmt
+#undef dev_fmt
+#define dev_fmt(fmt) "gti: " fmt
+
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_TBN_AOC_CHANNEL_MODE)
 static void handle_tbn_event_response(struct tbn_context *tbn,
 	struct TbnEventResponse *response);
@@ -38,7 +43,7 @@ static irqreturn_t tbn_aoc2ap_irq_thread(int irq, void *ptr)
 {
 	struct tbn_context *tbn = ptr;
 
-	dev_info(tbn->dev, "%s: bus_released:%d bus_requested:%d.\n", __func__,
+	pr_info("%s: bus_released:%d bus_requested:%d.\n", __func__,
 		completion_done(&tbn->bus_released), completion_done(&tbn->bus_requested));
 
 	if (completion_done(&tbn->bus_released) && completion_done(&tbn->bus_requested))
@@ -84,7 +89,7 @@ static int aoc_channel_kthread(void *data)
 	while (!kthread_should_stop()) {
 		if (service_ready != aoc_tbn_service_ready()) {
 			service_ready = !service_ready;
-			dev_info(tbn->dev, "%s: AOC TBN service is %s.\n",
+			pr_info("%s: AOC TBN service is %s.\n",
 				__func__, service_ready ? "ready" : "not ready");
 		}
 
@@ -95,7 +100,7 @@ static int aoc_channel_kthread(void *data)
 
 		len = aoc_tbn_service_read(&resp, sizeof(resp));
 		if (len < 0) {
-			dev_err(tbn->dev, "%s: failed to read message, err: %ld\n",
+			pr_err("%s: failed to read message, err: %ld\n",
 				__func__, len);
 			msleep(1000);
 			continue;
@@ -124,8 +129,7 @@ static void handle_tbn_event_response(struct tbn_context *tbn,
 	mutex_lock(&tbn->event_lock);
 
 	if (response->id != tbn->event.id) {
-		dev_err(tbn->dev,
-			"%s: receive wrong response, id: %d, expected id: %d, "
+		pr_err("%s: receive wrong response, id: %d, expected id: %d, "
 			"bus_released:%d bus_requested:%d.\n",
 			__func__, response->id, tbn->event.id,
 			completion_done(&tbn->bus_released),
@@ -134,7 +138,7 @@ static void handle_tbn_event_response(struct tbn_context *tbn,
 	}
 
 	if (response->err != 0) {
-		dev_err(tbn->dev, "%s: send tbn event failed, err %d!\n",
+		pr_err("%s: send tbn event failed, err %d!\n",
 			__func__, response->err);
 		tbn->event_resp.err = response->err;
 	} else {
@@ -146,7 +150,7 @@ static void handle_tbn_event_response(struct tbn_context *tbn,
 	} else if (response->operation == TBN_OPERATION_AP_RELEASE_BUS) {
 		complete_all(&tbn->bus_released);
 	} else {
-		dev_err(tbn->dev, "%s: response unknown operation, op: %d!\n",
+		pr_err("%s: response unknown operation, op: %d!\n",
 			__func__, response->operation);
 	}
 
@@ -160,7 +164,7 @@ static void send_tbn_event(struct tbn_context *tbn, enum TbnOperation operation)
 	int retry = 3;
 
 	if (!aoc_tbn_service_ready()) {
-		dev_err(tbn_context->dev, "%s: AOC TBN service is not ready.\n",
+		pr_err("%s: AOC TBN service is not ready.\n",
 			__func__);
 		return;
 	}
@@ -175,7 +179,7 @@ static void send_tbn_event(struct tbn_context *tbn, enum TbnOperation operation)
 		if (len == sizeof(tbn->event)) {
 			break;
 		}
-		dev_err(tbn_context->dev, "%s: failed to send TBN event, retry: %d.\n",
+		pr_err("%s: failed to send TBN event, retry: %d.\n",
 			__func__, retry);
 		retry--;
 	}
@@ -194,7 +198,7 @@ static int tbn_handshaking(struct tbn_context *tbn, enum TbnOperation operation)
 	int ret = 0;
 
 	if (!tbn || tbn->registered_mask == 0) {
-		dev_err(tbn_context->dev, "%s: tbn is not ready to serve.\n", __func__);
+		pr_err("%s: tbn is not ready to serve.\n", __func__);
 		return -EINVAL;
 	}
 
@@ -211,7 +215,7 @@ static int tbn_handshaking(struct tbn_context *tbn, enum TbnOperation operation)
 		timeout = TBN_RELEASE_BUS_TIMEOUT_MS;
 		msg = "release";
 	} else {
-		dev_err(tbn_context->dev, "%s: request unknown operation, op: %d.\n",
+		pr_err("%s: request unknown operation, op: %d.\n",
 			__func__, operation);
 		return -EINVAL;
 	}
@@ -235,12 +239,12 @@ static int tbn_handshaking(struct tbn_context *tbn, enum TbnOperation operation)
 				ret = 0;
 			else
 				ret = -ETIMEDOUT;
-			dev_err(tbn->dev, "AP %s bus ... timeout!, ap2aoc_gpio(B:%d,A:%d)"
+			pr_err("AP %s bus ... timeout!, ap2aoc_gpio(B:%d,A:%d)"
 				" aoc2ap_gpio(B:%d,A:%d), ret=%d\n",
 				msg, ap2aoc_val_org, ap2aoc_val, aoc2ap_val_org,
 				aoc2ap_val, ret);
 		} else
-			dev_info(tbn->dev, "AP %s bus ... SUCCESS!\n", msg);
+			pr_info("AP %s bus ... SUCCESS!\n", msg);
 		disable_irq_nosync(tbn->aoc2ap_irq);
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_TBN_AOC_CHANNEL_MODE)
 	} else if (tbn->mode == TBN_MODE_AOC_CHANNEL) {
@@ -252,20 +256,20 @@ static int tbn_handshaking(struct tbn_context *tbn, enum TbnOperation operation)
 		send_tbn_event(tbn, operation);
 		if (wait_for_completion_timeout(wait_for_completion,
 			msecs_to_jiffies(timeout)) == 0) {
-			dev_err(tbn->dev, "AP %s bus ... timeout!\n", msg);
+			pr_err("AP %s bus ... timeout!\n", msg);
 			complete_all(wait_for_completion);
 			ret = -ETIMEDOUT;
 		} else {
 			if (tbn->event_resp.err == 0) {
-				dev_info(tbn->dev, "AP %s bus ... SUCCESS!\n", msg);
+				pr_info("AP %s bus ... SUCCESS!\n", msg);
 			} else {
-				dev_info(tbn->dev, "AP %s bus ... failed!\n", msg);
+				pr_info("AP %s bus ... failed!\n", msg);
 				ret = -EBUSY;
 			}
 		}
 #endif
 	} else if (tbn->mode == TBN_MODE_MOCK) {
-		dev_info(tbn->dev, "AP %s bus ... SUCCESS!\n", msg);
+		pr_info("AP %s bus ... SUCCESS!\n", msg);
 	} else {
 		ret = -EINVAL;
 	}
@@ -284,7 +288,7 @@ int tbn_request_bus_with_result(u32 dev_mask, bool *lptw_triggered)
 
 	if ((dev_mask & tbn_context->registered_mask) == 0) {
 		mutex_unlock(&tbn_context->dev_mask_mutex);
-		dev_err(tbn_context->dev, "%s: dev_mask %#x is invalid.\n",
+		pr_err("%s: dev_mask %#x is invalid.\n",
 			__func__, dev_mask);
 		return -EINVAL;
 	}
@@ -323,14 +327,13 @@ int tbn_release_bus(u32 dev_mask)
 
 	if ((dev_mask & tbn_context->registered_mask) == 0) {
 		mutex_unlock(&tbn_context->dev_mask_mutex);
-		dev_err(tbn_context->dev, "%s: dev_mask %#x is invalid.\n",
+		pr_err("%s: dev_mask %#x is invalid.\n",
 			__func__, dev_mask);
 		return -EINVAL;
 	}
 
 	if (tbn_context->requested_dev_mask == 0) {
-		dev_warn(tbn_context->dev,
-			 "%s: Bus already released, dev_mask %#x.\n",
+		pr_warn("%s: Bus already released, dev_mask %#x.\n",
 			 __func__, dev_mask);
 		mutex_unlock(&tbn_context->dev_mask_mutex);
 		return 0;
@@ -442,12 +445,12 @@ static int tbn_probe(struct platform_device *pdev)
 			err = devm_gpio_request_one(tbn->dev, tbn->ap2aoc_gpio,
 				GPIOF_OUT_INIT_LOW, "tbn,ap2aoc_gpio");
 			if (err) {
-				dev_err(tbn->dev, "%s: Unable to request ap2aoc_gpio %d, err %d!\n",
+				pr_err("%s: Unable to request ap2aoc_gpio %d, err %d!\n",
 					__func__, tbn->ap2aoc_gpio, err);
 				goto failed;
 			}
 		} else {
-			dev_err(tbn->dev, "%s: invalid ap2aoc_gpio %d!\n",
+			pr_err("%s: invalid ap2aoc_gpio %d!\n",
 				__func__, tbn->ap2aoc_gpio);
 			err = -EPROBE_DEFER;
 			goto failed;
@@ -458,7 +461,7 @@ static int tbn_probe(struct platform_device *pdev)
 			err = devm_gpio_request_one(tbn->dev, tbn->aoc2ap_gpio,
 				GPIOF_DIR_IN, "tbn,aoc2ap_gpio");
 			if (err) {
-				dev_err(tbn->dev, "%s: Unable to request aoc2ap_gpio %d, err %d!\n",
+				pr_err("%s: Unable to request aoc2ap_gpio %d, err %d!\n",
 					__func__, tbn->aoc2ap_gpio, err);
 				goto failed;
 			}
@@ -469,21 +472,19 @@ static int tbn_probe(struct platform_device *pdev)
 				IRQF_TRIGGER_RISING |
 				IRQF_ONESHOT, "tbn", tbn);
 			if (err) {
-				dev_err(tbn->dev,
-					"%s: Unable to request_threaded_irq, err %d!\n",
+				pr_err("%s: Unable to request_threaded_irq, err %d!\n",
 					__func__, err);
 				goto failed;
 			}
 			disable_irq_nosync(tbn->aoc2ap_irq);
 		} else {
-			dev_err(tbn->dev, "%s: invalid aoc2ap_gpio %d!\n",
+			pr_err("%s: invalid aoc2ap_gpio %d!\n",
 				__func__, tbn->aoc2ap_gpio);
 			err = -EPROBE_DEFER;
 			goto failed;
 		}
 
-		dev_info(tbn->dev,
-			"%s: gpios(aoc2ap: %d ap2aoc: %d)\n",
+		pr_info("%s: gpios(aoc2ap: %d ap2aoc: %d)\n",
 			__func__, tbn->aoc2ap_gpio, tbn->ap2aoc_gpio);
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_TBN_AOC_CHANNEL_MODE)
 	} else if (tbn->mode == TBN_MODE_AOC_CHANNEL) {
@@ -505,7 +506,7 @@ static int tbn_probe(struct platform_device *pdev)
 			"tbn_wq", WQ_UNBOUND | WQ_HIGHPRI | WQ_CPU_INTENSIVE, 1);
 		if (!tbn->event_wq) {
 			err = -ENOMEM;
-			dev_err(tbn->dev, "Failed to create work thread for tbn!\n");
+			pr_err("Failed to create work thread for tbn!\n");
 			goto failed;
 		}
 
@@ -514,7 +515,7 @@ static int tbn_probe(struct platform_device *pdev)
 	} else if (tbn->mode == TBN_MODE_MOCK) {
 		err = 0;
 	} else {
-		dev_err(tbn->dev, "bus negotiator: invalid mode: %d\n", tbn->mode);
+		pr_err("bus negotiator: invalid mode: %d\n", tbn->mode);
 		err = -EINVAL;
 		goto failed;
 	}
@@ -526,7 +527,7 @@ static int tbn_probe(struct platform_device *pdev)
 	complete_all(&tbn->bus_requested);
 	complete_all(&tbn->bus_released);
 
-	dev_info(tbn->dev, "bus negotiator initialized: %pK, mode: %d\n", tbn, tbn->mode);
+	pr_info("bus negotiator initialized: %pK, mode: %d\n", tbn, tbn->mode);
 
 failed:
 	if (err)
