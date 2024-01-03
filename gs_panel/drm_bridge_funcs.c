@@ -605,7 +605,7 @@ static int gs_panel_bridge_atomic_check(struct drm_bridge *bridge,
 		 * Use higher BTS can avoid the issue. Also consider the clock from RRS
 		 * and select the higher one.
 		 */
-		if ((gs_conn_state->pending_update_flags & GS_HBM_FLAG_OP_RATE_UPDATE) &&
+		if ((gs_conn_state->pending_update_flags & GS_FLAG_OP_RATE_UPDATE) &&
 		    gs_conn_state->operation_rate > ctx->op_hz) {
 			target_mode->clock =
 				gs_bts_fps_to_drm_mode_clock(target_mode, ctx->peak_bts_fps);

@@ -265,6 +265,11 @@ static int gs_panel_connector_set_property(struct gs_drm_connector *gs_connector
 		gs_state->dimming_on = val;
 		dev_dbg(ctx->dev, "%s: dimming_on(%s)\n", __func__,
 			gs_state->dimming_on ? "true" : "false");
+	} else if (property == p->operation_rate) {
+		gs_state->pending_update_flags |= GS_FLAG_OP_RATE_UPDATE;
+		gs_state->operation_rate = val;
+		gs_state->update_operation_rate_to_bts = true;
+		dev_dbg(ctx->dev, "%s: operation_rate(%u)\n", __func__, gs_state->operation_rate);
 	} else if (property == p->mipi_sync) {
 		gs_state->mipi_sync = val;
 		dev_dbg(ctx->dev, "%s: mipi_sync(0x%lx)\n", __func__, gs_state->mipi_sync);
@@ -402,7 +407,7 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 		/* TODO(b/261073288) PANEL_ATRACE_END("set_dimming"); */
 	}
 
-	if (conn_state->pending_update_flags & GS_HBM_FLAG_OP_RATE_UPDATE)
+	if (conn_state->pending_update_flags & GS_FLAG_OP_RATE_UPDATE)
 		gs_panel_set_op_hz(ctx, conn_state->operation_rate);
 
 	if (mipi_sync)

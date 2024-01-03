@@ -1248,7 +1248,7 @@ u32 panel_calc_linear_luminance(const u32 value, const u32 coef_x_1k, const int 
 #define GS_HBM_FLAG_BL_UPDATE BIT(1)
 #define GS_HBM_FLAG_LHBM_UPDATE BIT(2)
 #define GS_HBM_FLAG_DIMMING_UPDATE BIT(3)
-#define GS_HBM_FLAG_OP_RATE_UPDATE BIT(4)
+#define GS_FLAG_OP_RATE_UPDATE BIT(4)
 
 #define GS_IS_HBM_ON(mode) ((mode) >= GS_HBM_ON_IRC_ON && (mode) < GS_HBM_STATE_MAX)
 #define GS_IS_HBM_ON_IRC_OFF(mode) (((mode) == GS_HBM_ON_IRC_OFF))
