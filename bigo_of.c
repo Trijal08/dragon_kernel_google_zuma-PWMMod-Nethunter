@@ -23,7 +23,7 @@ static int bigo_of_get_resource(struct bigo_core *core)
 	struct resource *res;
 	int rc = 0;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "bw");
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "regs");
 	if (IS_ERR_OR_NULL(res)) {
 		rc = PTR_ERR(res);
 		pr_err("Failed to find bw register base: %d\n", rc);
@@ -42,15 +42,15 @@ static int bigo_of_get_resource(struct bigo_core *core)
 	core->paddr = (phys_addr_t)res->start;
 
 #if IS_ENABLED(ENABLE_SLC)
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ssmt_bw_pid");
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ssmt_pid");
 	if (IS_ERR_OR_NULL(res)) {
 		rc = PTR_ERR(res);
-		pr_err("Failed to find ssmt_bo register base: %d\n", rc);
+		pr_err("Failed to find ssmt register base: %d\n", rc);
 		goto err;
 	}
 	core->slc.ssmt_pid_base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR_OR_NULL(core->slc.ssmt_pid_base)) {
-		pr_warn("Failed to map ssmt_bo register base: %ld\n",
+		pr_warn("Failed to map ssmt register base: %ld\n",
 			PTR_ERR(core->slc.ssmt_pid_base));
 		core->slc.ssmt_pid_base = NULL;
 	}
@@ -65,11 +65,10 @@ static int bigo_of_get_resource(struct bigo_core *core)
 
 	rc = of_property_read_u32(core->dev->of_node, "ip_ver", &core->ip_ver);
 	if (rc < 0) {
-		core->ip_ver = 0;
-		pr_info("ip_ver is not specified, default to A0\n");
+		core->ip_ver = 1;
+		pr_debug("ip_ver is not specified\n");
 		rc = 0;
 	}
-
 err:
 	return rc;
 }
@@ -101,7 +100,7 @@ static int bigo_of_parse_opp_table(struct bigo_core *core)
 	struct bigo_opp *opp;
 
 	struct device_node *opp_np =
-		of_parse_phandle(core->dev->of_node, "bigw-opp-table", 0);
+		of_parse_phandle(core->dev->of_node, "vpu-opp-table", 0);
 	if (!opp_np) {
 		return -ENOENT;
 		goto err_add_table;
@@ -140,7 +139,7 @@ static int bigo_of_parse_bw_table(struct bigo_core *core)
 	struct bigo_bw *bw;
 
 	struct device_node *bw_np =
-		of_parse_phandle(core->dev->of_node, "bigw-bw-table", 0);
+		of_parse_phandle(core->dev->of_node, "vpu-bw-table", 0);
 	if (!bw_np) {
 		return -ENOENT;
 		goto err_add_table;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Driver for BigWave video accelerator
+ * Driver for BigWave/BigOcean video accelerator
  *
  * Copyright 2022 Google LLC.
  *
@@ -31,14 +31,20 @@
 #include "bigo_prioq.h"
 
 #define BIGO_DEVCLASS_NAME "video_codec"
-#define BIGO_CHRDEV_NAME "bigwave"
 
 #define DEFAULT_WIDTH 3840
 #define DEFAULT_HEIGHT 2160
 #define DEFAULT_FPS 60
 #define BIGO_SMC_ID 0xd
 #define BIGO_MAX_INST_NUM 16
+
+#if IS_ENABLED(CONFIG_SOC_ZUMA)
 #define BIGO_HBD_BIT BIT(21)
+#define BIGO_CHRDEV_NAME "bigwave"
+#else
+#define BIGO_HBD_BIT BIT(17)
+#define BIGO_CHRDEV_NAME "bigocean"
+#endif
 
 #define BIGO_IDLE_TIMEOUT_MS 1000
 
@@ -424,8 +430,11 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 			bigo_mark_qos_dirty(core);
 		}
 
-                inst->is_decoder_usage = !!(((uint8_t*)job->regs)[BIGO_REG_STAT]&BIGO_STAT_MODE);
-
+#if IS_ENABLED(CONFIG_SOC_ZUMA)
+		inst->is_decoder_usage = !!(((uint8_t*)job->regs)[BIGO_REG_STAT] & BIGO_STAT_MODE);
+#else
+		inst->is_decoder_usage = true;
+#endif
 		if(enqueue_prioq(core, inst)) {
 			pr_err("Failed enqueue frame\n");
 			return -EFAULT;
@@ -575,8 +584,10 @@ static irqreturn_t bigo_isr(int irq, void *arg)
 	spin_lock_irqsave(&core->status_lock, flags);
 	core->stat_with_irq = bigo_stat;
 	spin_unlock_irqrestore(&core->status_lock, flags);
+#if IS_ENABLED(CONFIG_SOC_ZUMA)
 	bigo_stat &= ~BIGO_STAT_MODE;
 	bigo_stat &= ~BIGO_STAT_CODING_MODE;
+#endif
 	bigo_stat &= ~BIGO_STAT_IRQMASK;
 	bigo_core_writel(core, BIGO_REG_STAT, bigo_stat);
 	complete(&core->frame_done);
@@ -724,7 +735,6 @@ static int bigo_worker_thread(void *data)
 	}
 	return 0;
 }
-
 #if IS_ENABLED(CONFIG_EXYNOS_ITMON)
 static int bigo_itmon_notifier(struct notifier_block *nb, unsigned long action,
 				void *nb_data)
@@ -865,7 +875,8 @@ static int bigo_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id bigo_dt_match[] = {
-	{ .compatible = "google,bigwave" },
+	{ .compatible = "google,bigwave"},
+	{ .compatible = "google,bigocean"},
 	{}
 };
 
@@ -873,7 +884,7 @@ static struct platform_driver bigo_driver = {
 	.probe = bigo_probe,
 	.remove = bigo_remove,
 	.driver = {
-		.name = "bigwave",
+		.name = BIGO_CHRDEV_NAME,
 		.owner = THIS_MODULE,
 		.of_match_table = bigo_dt_match,
 #if IS_ENABLED(CONFIG_PM)
