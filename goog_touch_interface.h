@@ -815,6 +815,11 @@ struct gti_pm {
  * @fw_coord_filter_enabled: the current setting of coordinate filter.
  * @default_coord_filter_enabled: the default setting of coordinate filter.
  * @lptw_triggered: LPTW is triggered or not.
+ * @lptw_suppress_coords_enabled: enable flag for suppressing the coords after lptw.
+ * @lptw_track_finger: flag for tracking the suppressed fingers.
+ * @lptw_x: x-axis center of the lptw area.
+ * @lptw_y: y-axis center of the lptw area.
+ * @lptw_suppress_coords_work: delayed work for suppressing finger.
  * @ignore_force_active: Ignore the force_active sysfs request.
  * @offload_id: id that used by touch offload.
  * @heatmap_buf: heatmap buffer that used by v4l2.
@@ -825,6 +830,7 @@ struct gti_pm {
  * @slot_bit_active: bitmap of active slot during GTI lifecycle.
  * @slot_bit_last_active: bitmap of last active slot when reporting offload inputs.
  * @slot_bit_offload_active: bitmap of active slot from offload.
+ * @slot_bit_lptw_track: bitmap of lptw suppressed fingers.
  * @dev_id: dev_t used for google interface driver.
  * @panel_id: id of the display panel.
  * @charger_state: indicates a USB charger is connected.
@@ -907,6 +913,11 @@ struct goog_touch_interface {
 	bool fw_coord_filter_enabled;
 	bool default_coord_filter_enabled;
 	bool lptw_triggered;
+	bool lptw_suppress_coords_enabled;
+	bool lptw_track_finger;
+	u32 lptw_x;
+	u32 lptw_y;
+	struct delayed_work lptw_suppress_coords_work;
 	bool ignore_force_active;
 	bool gesture_config_enabled;
 	bool manual_heatmap_from_irq;
@@ -922,6 +933,7 @@ struct goog_touch_interface {
 	unsigned long slot_bit_active;
 	unsigned long slot_bit_last_active;
 	unsigned long slot_bit_offload_active;
+	unsigned long slot_bit_lptw_track;
 	dev_t dev_id;
 	int panel_id;
 	char fw_name[64];

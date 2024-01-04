@@ -2855,6 +2855,17 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 			GOOG_ERR(gti, "Failed to set gesture configs!\n");
 	}
 
+	/*
+	 * Enable continuous_report when lptw_track_finger is set otherwise it's
+	 * possible there is no coordinate report if coordinate doesn't change.
+	 */
+	if (gti->lptw_suppress_coords_enabled) {
+		gti->cmd.continuous_report_cmd.setting = GTI_CONTINUOUS_REPORT_ENABLE;
+		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_CONTINUOUS_REPORT);
+		if (ret)
+			GOOG_LOGW(gti, "unexpected return(%d)!", ret);
+	}
+
 	error = goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_FW_SETTINGS);
 	if (error < 0)
 		GOOG_DBG(gti, "Error while releasing FW_SETTINGS wakelock: %d!\n", error);
@@ -2892,6 +2903,9 @@ void goog_offload_input_report(void *handle,
 		ktime_to_ns(ktime_sub(ktime, report->timestamp)));
 	ATRACE_BEGIN(trace_tag);
 
+	if (gti->lptw_suppress_coords_enabled && gti->lptw_track_finger)
+		cancel_delayed_work_sync(&gti->lptw_suppress_coords_work);
+
 	goog_input_lock(gti);
 
 	input_ktime = goog_input_get_timestamp(gti);
@@ -2923,6 +2937,17 @@ void goog_offload_input_report(void *handle,
 				break;
 			}
 			set_bit(i, &slot_bit_active);
+
+			if (gti->lptw_suppress_coords_enabled) {
+				if (gti->lptw_track_finger)
+					set_bit(i, &gti->slot_bit_lptw_track);
+
+				if (test_bit(i, &gti->slot_bit_lptw_track)) {
+					GOOG_DBG(gti, "Skip reporting lptw tracking slot %d", i);
+					continue;
+				}
+			}
+
 			input_mt_slot(gti->vendor_input_dev, i);
 			touch_down = 1;
 			input_report_key(gti->vendor_input_dev, BTN_TOUCH, touch_down);
@@ -2944,6 +2969,13 @@ void goog_offload_input_report(void *handle,
 					report->coords[i].rotation);
 		} else {
 			clear_bit(i, &slot_bit_active);
+			if (gti->lptw_suppress_coords_enabled &&
+					test_and_clear_bit(i, &gti->slot_bit_lptw_track)) {
+				if (gti->slot_bit_lptw_track == 0)
+					GOOG_INFO(gti, "All lptw tracking slots released");
+				continue;
+			}
+
 			input_mt_slot(gti->vendor_input_dev, i);
 			input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE, 0);
 			/*
@@ -2975,6 +3007,13 @@ void goog_offload_input_report(void *handle,
 
 	if (touch_down)
 		goog_v4l2_read(gti, report->timestamp);
+
+	if (gti->lptw_suppress_coords_enabled) {
+		if (gti->lptw_track_finger)
+			GOOG_INFO(gti, "LPTW track slot bit %#lx", gti->slot_bit_lptw_track);
+
+		gti->lptw_track_finger = false;
+	}
 
 	error = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_OFFLOAD_REPORT, true);
 	if (error < 0) {
@@ -3819,9 +3858,52 @@ void goog_init_input(struct goog_touch_interface *gti)
 	}
 }
 
+static void goog_lptw_suppress_coords_work(struct work_struct *work)
+{
+	struct goog_touch_interface *gti;
+	struct delayed_work *delayed_work;
+	delayed_work = container_of(work, struct delayed_work, work);
+	gti = container_of(delayed_work, struct goog_touch_interface, lptw_suppress_coords_work);
+
+	GOOG_INFO(gti, "Report LPTW cancel coord.");
+	gti->lptw_track_finger = false;
+
+	goog_input_lock(gti);
+
+	/* Finger down. */
+	input_mt_slot(gti->vendor_input_dev, 0);
+	input_report_key(gti->vendor_input_dev, BTN_TOUCH, 1);
+	input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_FINGER, 1);
+	input_report_abs(gti->vendor_input_dev, ABS_MT_POSITION_X, gti->lptw_x);
+	input_report_abs(gti->vendor_input_dev, ABS_MT_POSITION_Y, gti->lptw_y);
+	input_report_abs(gti->vendor_input_dev, ABS_MT_TOUCH_MAJOR, 200);
+	input_report_abs(gti->vendor_input_dev, ABS_MT_TOUCH_MINOR, 200);
+	input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE, 1);
+	input_report_abs(gti->vendor_input_dev, ABS_MT_ORIENTATION, 0);
+	input_sync(gti->vendor_input_dev);
+
+	/* Report MT_TOOL_PALM for canceling the touch event. */
+	input_mt_slot(gti->vendor_input_dev, 0);
+	input_report_key(gti->vendor_input_dev, BTN_TOUCH, 1);
+	input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_PALM, 1);
+	input_sync(gti->vendor_input_dev);
+
+	/* Release touches. */
+	input_mt_slot(gti->vendor_input_dev, 0);
+	input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE, 0);
+	input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_FINGER, 0);
+	input_report_abs(gti->vendor_input_dev, ABS_MT_TRACKING_ID, -1);
+	input_report_key(gti->vendor_input_dev, BTN_TOUCH, 0);
+	input_sync(gti->vendor_input_dev);
+
+	goog_input_unlock(gti);
+}
+
 void goog_init_options(struct goog_touch_interface *gti,
 		struct gti_optional_configuration *options)
 {
+	u32 coords[2];
+
 	/* Initialize the common features. */
 	gti->mf_mode = GTI_MF_MODE_DEFAULT;
 	gti->screen_protector_mode_setting = GTI_SCREEN_PROTECTOR_MODE_DISABLE;
@@ -3835,6 +3917,21 @@ void goog_init_options(struct goog_touch_interface *gti,
 		gti->coord_filter_enabled = of_property_read_bool(np, "goog,coord-filter-enabled");
 		gti->manual_heatmap_from_irq = of_property_read_bool(np,
 				"goog,manual-heatmap-from-irq");
+		gti->lptw_suppress_coords_enabled = of_property_read_bool(np,
+				"goog,lptw-suppress-coords-enabled");
+		if (gti->lptw_suppress_coords_enabled) {
+			if (of_property_read_u32_array(np, "goog,lptw-coords", coords, 2)) {
+				GOOG_LOGW(gti, "goog,lptw-coords not found\n");
+				coords[0] = 200;
+				coords[1] = 200;
+			} else {
+				gti->lptw_x = coords[0];
+				gti->lptw_y = coords[1];
+			}
+			INIT_DELAYED_WORK(&gti->lptw_suppress_coords_work,
+					goog_lptw_suppress_coords_work);
+		}
+
 		gti->panel_id = goog_get_panel_id(np);
 		if (gti->panel_id >= 0) {
 			goog_get_firmware_name(np, gti->panel_id, gti->fw_name, sizeof(gti->fw_name));
@@ -4127,6 +4224,13 @@ static void goog_pm_resume(struct gti_pm *pm)
 
 	if (pm->resume)
 		pm->resume(gti->vendor_dev);
+
+	if (gti->lptw_suppress_coords_enabled && gti->lptw_triggered) {
+		gti->lptw_track_finger = true;
+		gti->slot_bit_lptw_track = 0;
+		queue_delayed_work(gti->pm.event_wq, &gti->lptw_suppress_coords_work,
+				msecs_to_jiffies(10));
+	}
 
 	/*
 	 * Reinitialize the mf_state to the default, then goog_update_motion_filter()
