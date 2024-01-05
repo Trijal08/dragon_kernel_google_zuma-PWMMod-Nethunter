@@ -13,6 +13,9 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <samsung/exynos_drm_connector.h>
+#if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
+#include <qbt_handler.h>
+#endif
 
 #if IS_ENABLED(CONFIG_GS_DRM_PANEL_UNIFIED)
 #include <gs_drm/gs_drm_connector.h>
@@ -40,6 +43,9 @@ static void goog_lookup_touch_report_rate(struct goog_touch_interface *gti);
 static int goog_precheck_heatmap(struct goog_touch_interface *gti);
 static void goog_set_display_state(struct goog_touch_interface *gti,
 	enum gti_display_state_setting display_state);
+#if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
+void goog_notify_lptw_triggered(struct TbnLptwEvent* lptw, void* data);
+#endif
 
 /*-----------------------------------------------------------------------------
  * GTI/proc: forward declarations, structures and functions.
@@ -3564,6 +3570,9 @@ void goog_register_tbn(struct goog_touch_interface *gti)
 			gti->tbn_enabled = false;
 		} else {
 			GOOG_INFO(gti, "tbn_register_mask = %#x.\n", gti->tbn_register_mask);
+#if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
+			register_tbn_lptw_callback(goog_notify_lptw_triggered, gti);
+#endif
 		}
 	}
 }
@@ -4427,6 +4436,15 @@ int goog_get_lptw_triggered(struct goog_touch_interface *gti)
 	return gti->lptw_triggered;
 }
 EXPORT_SYMBOL_GPL(goog_get_lptw_triggered);
+
+#if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
+void goog_notify_lptw_triggered(struct TbnLptwEvent* lptw, void* data)
+{
+	struct goog_touch_interface *gti = (struct goog_touch_interface *)data;
+	GOOG_INFO(gti, "Notify lptw event");
+	qbt_lptw_report_event(lptw->x, lptw->y, 1);
+}
+#endif
 
 static irqreturn_t gti_irq_handler(int irq, void *data)
 {

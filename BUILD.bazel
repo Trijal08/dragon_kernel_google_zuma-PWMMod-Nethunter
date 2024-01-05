@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 load("//build/kernel/kleaf:kernel.bzl", "kernel_module")
 
 filegroup(
@@ -23,6 +24,25 @@ filegroup(
     ],
 )
 
+string_flag(
+    name = "touch_udfps_notification",
+    build_setting_default = "disabled",
+)
+
+config_setting(
+    name = "touch_udfps_notification_enabled",
+    flag_values = {
+        ":touch_udfps_notification": "enabled",
+    },
+)
+
+config_setting(
+    name = "touch_udfps_notification_disabled",
+    flag_values = {
+        ":touch_udfps_notification": "disabled",
+    },
+)
+
 kernel_module(
     name = "touch.common",
     srcs = glob([
@@ -34,6 +54,7 @@ kernel_module(
         "//private/google-modules/display/common:headers",
         "//private/google-modules/display/samsung:headers",
         "//private/google-modules/display/samsung/include:headers",
+        "//private/google-modules/fingerprint/qcom/qfs4008:headers",
         "//private/google-modules/soc/gs:gs_soc_headers",
     ],
     outs = [
@@ -53,5 +74,10 @@ kernel_module(
         "//private/google-modules/display/common/gs_drm",
         "//private/google-modules/display/samsung:display.samsung",
         "//private/google-modules/soc/gs:gs_soc_module",
-    ],
+    ] + select({
+        "//private/google-modules/touch/common:touch_udfps_notification_enabled": [
+            "//private/google-modules/fingerprint/qcom/qfs4008:qbt_handler",
+        ],
+        "//private/google-modules/touch/common:touch_udfps_notification_disabled": [],
+    }),
 )
