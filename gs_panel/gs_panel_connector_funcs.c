@@ -277,10 +277,17 @@ static int gs_panel_connector_set_property(struct gs_drm_connector *gs_connector
 	return 0;
 }
 
+static int gs_panel_connector_late_register(struct gs_drm_connector *gs_connector)
+{
+	gs_panel_node_attach(gs_connector);
+	return 0;
+}
+
 static const struct gs_drm_connector_funcs gs_drm_connector_funcs = {
 	.atomic_print_state = gs_panel_connector_print_state,
 	.atomic_get_property = gs_panel_connector_get_property,
 	.atomic_set_property = gs_panel_connector_set_property,
+	.late_register = gs_panel_connector_late_register,
 };
 
 /* gs_drm_connector_helper_funcs */
@@ -555,17 +562,9 @@ int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *dr
 		return ret;
 	}
 
-	/* Register */
-	ret = drm_connector_register(connector);
-	if (ret) {
-		dev_err(dev, "Error registering drm_connector (%d)\n", ret);
-		return ret;
-	}
-
 	/* Reset, mark as connected */
 	connector->funcs->reset(connector);
 	connector->status = connector_status_connected;
-	connector->state->self_refresh_aware = true;
 
 	return 0;
 }

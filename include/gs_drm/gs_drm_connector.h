@@ -152,6 +152,7 @@ struct gs_drm_connector_funcs {
 	int (*atomic_get_property)(struct gs_drm_connector *gs_connector,
 				   const struct gs_drm_connector_state *gs_state,
 				   struct drm_property *property, uint64_t *val);
+	int (*late_register)(struct gs_drm_connector *gs_connector);
 };
 
 struct gs_drm_connector_helper_funcs {

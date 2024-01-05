@@ -1088,6 +1088,7 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	return 0;
 
 err_panel:
+	drm_bridge_remove(&ctx->bridge);
 	drm_panel_remove(&ctx->base);
 	dev_err(dev, "failed to probe gs common panel driver (%d)\n", ret);
 

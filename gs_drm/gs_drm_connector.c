@@ -163,6 +163,17 @@ static void gs_drm_connector_print_state(struct drm_printer *p,
 		funcs->atomic_print_state(p, gs_connector_state);
 }
 
+static int gs_drm_connector_late_register(struct drm_connector *connector)
+{
+	struct gs_drm_connector *gs_connector = to_gs_connector(connector);
+	const struct gs_drm_connector_funcs *funcs = gs_connector->funcs;
+
+	if (funcs && funcs->late_register)
+		return funcs->late_register(gs_connector);
+
+	return -EINVAL;
+}
+
 static const struct drm_connector_funcs base_drm_connector_funcs = {
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.reset = gs_drm_connector_reset,
@@ -172,6 +183,7 @@ static const struct drm_connector_funcs base_drm_connector_funcs = {
 	.atomic_get_property = gs_drm_connector_get_property,
 	.atomic_set_property = gs_drm_connector_set_property,
 	.atomic_print_state = gs_drm_connector_print_state,
+	.late_register = gs_drm_connector_late_register,
 };
 
 bool is_gs_drm_connector(const struct drm_connector *connector)
