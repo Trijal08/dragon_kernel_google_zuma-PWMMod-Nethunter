@@ -193,6 +193,11 @@ static void gs_panel_bridge_enable(struct drm_bridge *bridge,
 	}
 	ctx->panel_state = is_lp_mode ? GPANEL_STATE_LP : GPANEL_STATE_NORMAL;
 
+	/* TODO(b/318876121) get clock data from dsim, or remove this feature */
+	if (gs_panel_has_func(ctx, update_ffc) && !ctx->idle_data.self_refresh_active) {
+		ctx->desc->gs_panel_func->update_ffc(ctx, 0);
+	}
+
 	if (ctx->idle_data.self_refresh_active) {
 		dev_dbg(ctx->dev, "self refresh state : %s\n", __func__);
 
@@ -410,6 +415,9 @@ static void gs_panel_bridge_disable(struct drm_bridge *bridge,
 		ctx->idle_data.self_refresh_active = true;
 		panel_update_idle_mode_locked(ctx, false);
 		mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+
+		if (gs_panel_has_func(ctx, pre_update_ffc))
+			ctx->desc->gs_panel_func->pre_update_ffc(ctx);
 	} else {
 		if (gs_conn_state->blanked_mode) {
 			/* blanked mode takes precedence over normal modeset */

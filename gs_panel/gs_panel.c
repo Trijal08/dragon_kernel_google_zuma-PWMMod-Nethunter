@@ -1036,6 +1036,10 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	INIT_WORK(&ctx->state_notify, state_notify_worker);
 	INIT_WORK(&ctx->brightness_notify, brightness_notify_worker);
 
+	/* DSI HS Clock */
+	if (ctx->desc->default_dsi_hs_clk)
+		ctx->dsi_hs_clk = ctx->desc->default_dsi_hs_clk;
+
 	/* Initialize mutexes */
 	/*TODO(b/267170999): all*/
 	mutex_init(&ctx->mode_lock);

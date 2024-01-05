@@ -484,6 +484,20 @@ struct gs_panel_funcs {
 	 * normal mode.
 	 */
 	void (*run_normal_mode_work)(struct gs_panel *gs_panel);
+
+	/**
+	 * @update_ffc
+	 *
+	 * This callback is used to update FFC (Frame Frequency Control) for panel.
+	 */
+	void (*update_ffc)(struct gs_panel *gs_panel, unsigned int hs_clk);
+
+	/**
+	 * @pre_update_ffc
+	 *
+	 * This callback is used to do something before updating FFC for panel.
+	 */
+	void (*pre_update_ffc)(struct gs_panel *gs_panel);
 };
 
 /* PANEL DESC */
@@ -635,6 +649,8 @@ struct gs_panel_desc {
 	const struct gs_panel_funcs *gs_panel_func;
 	const u32 reset_timing_ms[PANEL_RESET_TIMING_COUNT];
 	const struct gs_panel_reg_ctrl_desc *reg_ctrl_desc;
+	/** @default_dsi_hs_clk: default MIPI DSI HS clock (Hz) */
+	u32 default_dsi_hs_clk;
 };
 
 /* PRIV DATA */
@@ -942,6 +958,9 @@ struct gs_panel {
 	enum gs_hbm_mode hbm_mode;
 	/* LHBM struct */
 	struct gs_local_hbm lhbm;
+
+	/** @dsi_hs_clk: current MIPI DSI HS clock (Hz) */
+	u32 dsi_hs_clk;
 };
 
 /* FUNCTIONS */
