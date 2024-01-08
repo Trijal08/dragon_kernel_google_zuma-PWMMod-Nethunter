@@ -147,6 +147,7 @@ enum hsspi_state {
  */
 struct hsspi {
 	spinlock_t lock; /* protect work_list, layers and state */
+	spinlock_t flags_lock; /* protect flags */
 	struct list_head work_list;
 	struct hsspi_layer *layers[UL_MAX_IDX];
 	enum hsspi_state state;
@@ -229,10 +230,20 @@ int hsspi_unregister(struct hsspi *hsspi, struct hsspi_layer *layer);
  * hsspi_set_spi_slave_ready() - tell the hsspi that the ss_ready is active
  * @hsspi: pointer to a &struct hsspi
  *
- * This function is called in the ss_ready irq handler. It notices the
+ * This function is called in the driver's init. It notices the
  * HSSPI driver that the QM is ready for transfer.
  */
 void hsspi_set_spi_slave_ready(struct hsspi *hsspi);
+
+/**
+ * hsspi_set_spi_slave_ready_irq() - tell the hsspi that the ss_ready is active
+ * in irq context,
+ * @hsspi: pointer to a &struct hsspi
+ *
+ * This function is called in the ss_ready irq handler. It notices the
+ * HSSPI driver that the QM is ready for transfer.
+ */
+void hsspi_set_spi_slave_ready_irq(struct hsspi *hsspi);
 
 /**
  * hsspi_clear_spi_slave_ready() - tell the hsspi that the ss_ready has

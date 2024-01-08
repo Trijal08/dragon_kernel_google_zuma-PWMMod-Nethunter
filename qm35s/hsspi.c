@@ -141,9 +141,27 @@ static bool is_txrx_waiting(struct hsspi *hsspi)
 static int hsspi_wait_ss_ready(struct hsspi *hsspi)
 {
 	int ret;
+	unsigned long flags;
 
 	hsspi->waiting_ss_rdy = true;
 
+	/**
+	 * The following block allows to handle the case where
+	 * the HSSPI_FLAGS_SS_READY is set but the SOC went into
+	 * sleep (S3 or S4) and the exton interrupt has not been
+	 * caught yet.
+	 *
+	 * In that case, the SOC is not ready and this function
+	 * would return 0 immediately leading to a potential
+	 * comms issue if we initiate the transfer when the SOC
+	 * is preparing its SPI xfer.
+	 *
+	 * So, if this happens, HSSPI_FLAGS_SS_BUSY will be low
+	 * and depending on the ss-rdy gpio state, we know if
+	 * the SOC is ready. If not, we'll wait for the timeout
+	 * (and wake the SOC if necessary before waiting).
+	 */
+	spin_lock_irqsave(&hsspi->flags_lock, flags);
 	if (!test_bit(HSSPI_FLAGS_SS_BUSY, hsspi->flags)) {
 		/* The ss_ready went low, so the fw is not busy anymore,
 		 * if the ss_ready is high, we can proceed, else,
@@ -151,9 +169,12 @@ static int hsspi_wait_ss_ready(struct hsspi *hsspi)
 		 * we need to wait for it to be ready again.
 		 */
 		clear_bit(HSSPI_FLAGS_SS_READY, hsspi->flags);
+		spin_unlock_irqrestore(&hsspi->flags_lock, flags);
 		if (gpiod_get_value(hsspi->gpio_ss_rdy)) {
 			return 0;
 		}
+	} else {
+		spin_unlock_irqrestore(&hsspi->flags_lock, flags);
 	}
 
 	/* Check if the QM went to sleep and wake it up if it did */
@@ -507,6 +528,7 @@ int hsspi_init(struct hsspi *hsspi, struct spi_device *spi)
 	memset(hsspi, 0, sizeof(*hsspi));
 
 	spin_lock_init(&hsspi->lock);
+	spin_lock_init(&hsspi->flags_lock);
 	INIT_LIST_HEAD(&hsspi->work_list);
 
 	hsspi->state = HSSPI_STOPPED;
@@ -636,11 +658,6 @@ int hsspi_unregister(struct hsspi *hsspi, struct hsspi_layer *layer)
 	return 0;
 }
 
-void hsspi_clear_spi_slave_busy(struct hsspi *hsspi)
-{
-	clear_bit(HSSPI_FLAGS_SS_BUSY, hsspi->flags);
-}
-
 void hsspi_set_spi_slave_busy(struct hsspi *hsspi)
 {
 	set_bit(HSSPI_FLAGS_SS_BUSY, hsspi->flags);
@@ -648,7 +665,21 @@ void hsspi_set_spi_slave_busy(struct hsspi *hsspi)
 
 void hsspi_set_spi_slave_ready(struct hsspi *hsspi)
 {
+	unsigned long flags;
+	spin_lock_irqsave(&hsspi->flags_lock, flags);
+	clear_bit(HSSPI_FLAGS_SS_BUSY, hsspi->flags);
 	set_bit(HSSPI_FLAGS_SS_READY, hsspi->flags);
+	spin_unlock_irqrestore(&hsspi->flags_lock, flags);
+
+	wake_up_interruptible(&hsspi->wq_ready);
+}
+
+void hsspi_set_spi_slave_ready_irq(struct hsspi *hsspi)
+{
+	spin_lock(&hsspi->flags_lock);
+	clear_bit(HSSPI_FLAGS_SS_BUSY, hsspi->flags);
+	set_bit(HSSPI_FLAGS_SS_READY, hsspi->flags);
+	spin_unlock(&hsspi->flags_lock);
 
 	wake_up_interruptible(&hsspi->wq_ready);
 }
