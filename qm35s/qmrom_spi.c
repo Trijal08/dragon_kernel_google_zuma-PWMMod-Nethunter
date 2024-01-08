@@ -167,6 +167,18 @@ void qmrom_spi_release_firmware(const struct firmware *fw)
 int qmrom_spi_wait_for_ready_line(void *handle, unsigned int timeout_ms)
 {
 	struct qm35_ctx *qm35_ctx = (struct qm35_ctx *)handle;
+	unsigned long flags;
+	spin_lock_irqsave(&qm35_ctx->lock, flags);
+	if (gpiod_get_value(qm35_ctx->gpio_ss_rdy) == 0 &&
+	    qm35_ctx->qmrom_qm_ready) {
+		/*
+		 * qmrom_qm_ready should be cleared if ready line is low
+		 * did we run into a glitch on ss-rdy? or did the soc
+		 * crash?
+		 */
+		qm35_ctx->qmrom_qm_ready = false;
+	}
+	spin_unlock_irqrestore(&qm35_ctx->lock, flags);
 
 	wait_event_interruptible_timeout(qm35_ctx->qmrom_wq_ready,
 					 qm35_ctx->qmrom_qm_ready,

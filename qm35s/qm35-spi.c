@@ -215,6 +215,13 @@ static long uci_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 
 		qm35_hsspi_stop(qm35_hdl);
 
+		if (NO_UWB_HAL) {
+			on = true;
+			dev_warn(
+				&qm35_hdl->spi->dev,
+				"qm35_regulators_set always ON due to NO_UWB_HAL");
+		}
+
 		if (REGULATORS_ENABLED(qm35_hdl))
 			qm35_regulators_set(qm35_hdl, on);
 
@@ -384,10 +391,11 @@ static irqreturn_t qm35_ss_rdy_handler(int irq, void *data)
 		gpiod_set_value(qm35_hdl->gpio_wakeup, 0);
 
 	if (!qm35_hdl->flashing) {
-		hsspi_clear_spi_slave_busy(&qm35_hdl->hsspi);
-		hsspi_set_spi_slave_ready(&qm35_hdl->hsspi);
+		hsspi_set_spi_slave_ready_irq(&qm35_hdl->hsspi);
 	} else {
+		spin_lock(&qm35_hdl->lock);
 		qm35_hdl->qmrom_qm_ready = true;
+		spin_unlock(&qm35_hdl->lock);
 		wake_up_interruptible(&qm35_hdl->qmrom_wq_ready);
 	}
 
@@ -834,11 +842,6 @@ static void qm35_regulators_set(struct qm35_ctx *qm35_hdl, bool on)
 	bool is_enabled;
 	int ret;
 
-	if (NO_UWB_HAL) {
-		on = true;
-		on_str = "enable";
-	}
-
 	spin_lock(&qm35_hdl->lock);
 
 	is_enabled = qm35_hdl->regulators_enabled;
@@ -1013,6 +1016,8 @@ static int qm35_probe(struct spi_device *spi)
 	} else {
 		qm35_regulators_set(qm35_ctx, true);
 		usleep_range(100000, 100000);
+		qm35_reset(qm35_ctx, QM_RESET_LOW_MS, true);
+		msleep(QM_BOOT_MS);
 		qm35_hsspi_start(qm35_ctx);
 	}
 
