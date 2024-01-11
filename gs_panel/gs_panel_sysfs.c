@@ -632,17 +632,66 @@ static ssize_t state_show(struct device *dev, struct device_attribute *attr, cha
 	return rc;
 }
 
+static ssize_t acl_mode_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	ssize_t ret;
+	u32 acl_mode;
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		return -EAGAIN;
+	}
+
+	if (!gs_panel_has_func(ctx, set_acl_mode)) {
+		dev_err(ctx->dev, "ACL is not supported\n");
+		return -ENOTSUPP;
+	}
+
+	ret = kstrtouint(buf, 0, &acl_mode);
+	if (ret || (acl_mode > ACL_ENHANCED)) {
+		dev_err(dev, "invalid acl mode\n");
+		return ret;
+	}
+
+	mutex_lock(&ctx->mode_lock);
+	ctx->acl_mode = acl_mode;
+	ctx->desc->gs_panel_func->set_acl_mode(ctx, acl_mode);
+	mutex_unlock(&ctx->mode_lock);
+
+	return count;
+}
+
+static ssize_t acl_mode_show(struct device *dev,
+			       struct device_attribute *attr, char *buf)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		return -EAGAIN;
+	}
+
+	return sysfs_emit(buf, "%d\n", ctx->acl_mode);
+}
+
 static DEVICE_ATTR_RW(hbm_mode);
 static DEVICE_ATTR_RW(dimming_on);
 static DEVICE_ATTR_RW(local_hbm_mode);
 static DEVICE_ATTR_RW(local_hbm_max_timeout);
 static DEVICE_ATTR_RO(state);
+static DEVICE_ATTR_RW(acl_mode);
 
 static struct attribute *bl_device_attrs[] = {
 	&dev_attr_hbm_mode.attr,
 	&dev_attr_dimming_on.attr,
 	&dev_attr_local_hbm_mode.attr,
 	&dev_attr_local_hbm_max_timeout.attr,
+	&dev_attr_acl_mode.attr,
 	&dev_attr_state.attr,
 	NULL,
 };
