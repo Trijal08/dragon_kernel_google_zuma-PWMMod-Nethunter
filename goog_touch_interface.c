@@ -2355,6 +2355,12 @@ int goog_process_vendor_cmd(struct goog_touch_interface *gti, enum gti_cmd_type 
 				"enabled" : "disabled");
 		ret = gti->options.set_palm_mode(private_data, &gti->cmd.palm_cmd);
 		break;
+	case GTI_CMD_SET_PANEL_SPEED_MODE:
+		GOOG_INFO(gti, "Set panel speed mode: %s",
+				gti->cmd.panel_speed_mode_cmd.setting == GTI_PANEL_SPEED_MODE_NS ?
+				"NS" : "HS");
+		ret = gti->options.set_panel_speed_mode(private_data, &gti->cmd.panel_speed_mode_cmd);
+		break;
 	case GTI_CMD_SET_REPORT_RATE:
 		GOOG_INFO(gti, "Set touch report rate as %d Hz", gti->cmd.report_rate_cmd.setting);
 		ret = gti->options.set_report_rate(private_data, &gti->cmd.report_rate_cmd);
@@ -3721,6 +3727,12 @@ static int goog_set_palm_mode_nop(
 	return -ESRCH;
 }
 
+static int goog_set_panel_speed_mode_nop(
+		void *private_data, struct gti_panel_speed_mode_cmd *cmd)
+{
+	return -ESRCH;
+}
+
 static int goog_set_report_rate_nop(
 		void *private_data, struct gti_report_rate_cmd *cmd)
 {
@@ -3858,6 +3870,7 @@ void goog_init_options(struct goog_touch_interface *gti,
 	gti->options.set_heatmap_enabled = goog_set_heatmap_enabled_nop;
 	gti->options.set_irq_mode = goog_set_irq_mode_nop;
 	gti->options.set_palm_mode = goog_set_palm_mode_nop;
+	gti->options.set_panel_speed_mode = goog_set_panel_speed_mode_nop;
 	gti->options.set_report_rate = goog_set_report_rate_nop;
 	gti->options.set_scan_mode = goog_set_scan_mode_nop;
 	gti->options.set_screen_protector_mode = goog_set_screen_protector_mode_nop;
@@ -3917,6 +3930,8 @@ void goog_init_options(struct goog_touch_interface *gti,
 			gti->options.set_irq_mode = options->set_irq_mode;
 		if (options->set_palm_mode)
 			gti->options.set_palm_mode = options->set_palm_mode;
+		if (options->set_panel_speed_mode)
+			gti->options.set_panel_speed_mode = options->set_panel_speed_mode;
 		if (options->set_report_rate)
 			gti->options.set_report_rate = options->set_report_rate;
 		if (options->set_scan_mode)

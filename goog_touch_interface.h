@@ -130,6 +130,7 @@ enum gti_cmd_type : u32 {
 	GTI_CMD_SET_HEATMAP_ENABLED,
 	GTI_CMD_SET_IRQ_MODE,
 	GTI_CMD_SET_PALM_MODE,
+	GTI_CMD_SET_PANEL_SPEED_MODE,
 	GTI_CMD_SET_REPORT_RATE,
 	GTI_CMD_SET_SCAN_MODE,
 	GTI_CMD_SET_SCREEN_PROTECTOR_MODE,
@@ -206,6 +207,11 @@ enum gti_mf_state : u32 {
 enum gti_palm_setting : u32 {
 	GTI_PALM_DISABLE = 0,
 	GTI_PALM_ENABLE,
+};
+
+enum gti_panel_speed_mode_setting : u32 {
+	GTI_PANEL_SPEED_MODE_NS = 0,
+	GTI_PANEL_SPEED_MODE_HS,
 };
 
 enum gti_ping_mode : u32 {
@@ -531,6 +537,10 @@ struct gti_palm_cmd {
 	enum gti_palm_setting setting;
 };
 
+struct gti_panel_speed_mode_cmd {
+	enum gti_panel_speed_mode_setting setting;
+};
+
 struct gti_ping_cmd {
 	enum gti_ping_mode setting;
 };
@@ -581,6 +591,7 @@ struct gti_sensor_data_cmd {
  * @heatmap_cmd: command to set heatmap enabled.
  * @irq_cmd: command to set/get irq mode.
  * @palm_cmd: command to set/get palm mode.
+ * @panel_speed_mode_cmd: command to set panel speed mode.
  * @ping_cmd: command to ping T-IC.
  * @report_rate_cmd: command to change touch report rate.
  * @reset_cmd: command to reset T-IC.
@@ -605,6 +616,7 @@ struct gti_union_cmd_data {
 	struct gti_heatmap_cmd heatmap_cmd;
 	struct gti_irq_cmd irq_cmd;
 	struct gti_palm_cmd palm_cmd;
+	struct gti_panel_speed_mode_cmd panel_speed_mode_cmd;
 	struct gti_ping_cmd ping_cmd;
 	struct gti_report_rate_cmd report_rate_cmd;
 	struct gti_reset_cmd reset_cmd;
@@ -671,6 +683,7 @@ struct gti_fw_status_data {
  * @set_heatmap_enabled: vendor driver operation to apply the heatmap setting.
  * @set_irq_mode: vendor driver operation to apply the irq setting.
  * @set_palm_mode: vendor driver operation to apply the palm setting.
+ * @set_panel_speed_mode: vendor driver operation to apply the panel speed mode setting.
  * @set_report_rate: driver operation to set touch report rate.
  * @set_scan_mode: vendor driver operation to set scan mode.
  * @set_screen_protector_mode: vendor driver operation to set screen protector mode.
@@ -708,6 +721,7 @@ struct gti_optional_configuration {
 	int (*set_heatmap_enabled)(void *private_data, struct gti_heatmap_cmd *cmd);
 	int (*set_irq_mode)(void *private_data, struct gti_irq_cmd *cmd);
 	int (*set_palm_mode)(void *private_data, struct gti_palm_cmd *cmd);
+	int (*set_panel_speed_mode)(void *private_data, struct gti_panel_speed_mode_cmd *cmd);
 	int (*set_report_rate)(void *private_data, struct gti_report_rate_cmd *cmd);
 	int (*set_scan_mode)(void *private_data, struct gti_scan_cmd *cmd);
 	int (*set_screen_protector_mode)(void *private_data,
