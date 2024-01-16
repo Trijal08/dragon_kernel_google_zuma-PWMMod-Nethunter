@@ -13,6 +13,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <samsung/exynos_drm_connector.h>
+#include <trace/hooks/systrace.h>
 #if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
 #include <qbt_handler.h>
 #endif
@@ -23,13 +24,6 @@
 
 #include "goog_touch_interface.h"
 #include "touch_bus_negotiator.h"
-#if IS_ENABLED(CONFIG_VH_SYSTRACE)
-#include <trace/hooks/systrace.h>
-#else
-#define ATRACE_BEGIN(f)
-#define ATRACE_END()
-#endif
-
 
 static struct class *gti_class;
 static u8 gti_dev_num;
@@ -210,10 +204,10 @@ static int goog_proc_dump_show(struct seq_file *m, void *v)
 	hc_cnt = min_t(u64, gti->irq_index, GTI_DEBUG_HEALTHCHECK_KFIFO_LEN);
 	input_cnt = min_t(u64, gti->released_index, GTI_DEBUG_INPUT_KFIFO_LEN);
 
-	ret = mutex_lock_interruptible(&gti->input_process_lock);
+	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
 	if (ret) {
 		seq_puts(m, "error: has been interrupted!\n");
-		GOOG_WARN(gti, "error: has been interrupted!\n");
+		GOOG_LOGW(gti, "error: has been interrupted!\n");
 		return ret;
 	}
 
