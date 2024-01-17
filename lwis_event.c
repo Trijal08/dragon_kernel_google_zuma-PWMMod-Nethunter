@@ -28,7 +28,7 @@
 #define lwis_dev_err_ratelimited(dev, fmt, ...)                                                    \
 	{                                                                                          \
 		static int64_t timestamp = 0;                                                      \
-		if (ktime_to_ns(lwis_get_time()) - timestamp > 200000000LL) {                      \
+		if (ktime_to_ns(lwis_get_time()) - timestamp > 2000000000LL) {                     \
 			dev_err(dev, fmt, ##__VA_ARGS__);                                          \
 			timestamp = ktime_to_ns(lwis_get_time());                                  \
 		}                                                                                  \
