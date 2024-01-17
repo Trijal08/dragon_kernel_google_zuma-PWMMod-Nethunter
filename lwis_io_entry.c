@@ -36,11 +36,17 @@ int lwis_io_entry_poll(struct lwis_device *lwis_dev, struct lwis_io_entry *entry
 		if (ret == 0) {
 			break;
 		}
+
 		if (ktime_to_ms(lwis_get_time()) - start > timeout_ms) {
+			ret = lwis_io_entry_read_assert(lwis_dev, entry);
+			if (ret == 0) {
+				break;
+			}
 			dev_err(lwis_dev->dev, "Polling timed out: block %d offset 0x%llx\n",
 				entry->read_assert.bid, entry->read_assert.offset);
 			return -ETIMEDOUT;
 		}
+
 		if (is_short) {
 			/* Sleep for 10us */
 			usleep_range(10, 10);
