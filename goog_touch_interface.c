@@ -204,7 +204,7 @@ static int goog_proc_dump_show(struct seq_file *m, void *v)
 	hc_cnt = min_t(u64, gti->irq_index, GTI_DEBUG_HEALTHCHECK_KFIFO_LEN);
 	input_cnt = min_t(u64, gti->released_index, GTI_DEBUG_INPUT_KFIFO_LEN);
 
-	ret = mutex_lock_interruptible(&gti->input_heatmap_lock);
+	ret = mutex_lock_interruptible(&gti->input_process_lock);
 	if (ret) {
 		seq_puts(m, "error: has been interrupted!\n");
 		GOOG_LOGW(gti, "error: has been interrupted!\n");
