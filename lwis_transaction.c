@@ -22,7 +22,7 @@
 #include "lwis_device.h"
 #include "lwis_event.h"
 #include "lwis_fence.h"
-#include "lwis_i2c_bus_manager.h"
+#include "lwis_bus_manager.h"
 #include "lwis_io_entry.h"
 #include "lwis_ioreg.h"
 #include "lwis_util.h"
@@ -245,7 +245,7 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 						   /*use_read_barrier=*/false,
 						   /*use_write_barrier=*/true);
 	}
-	lwis_i2c_bus_manager_lock_i2c_bus(lwis_dev);
+	lwis_bus_manager_lock_bus(lwis_dev);
 	for (i = start_idx; i < end_idx; i++) {
 		entry = &info->io_entries[i];
 		if (entry->type == LWIS_IO_ENTRY_WRITE ||
@@ -371,7 +371,7 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 		resp->completion_index = i;
 	}
 
-	lwis_i2c_bus_manager_unlock_i2c_bus(lwis_dev);
+	lwis_bus_manager_unlock_bus(lwis_dev);
 	if (lwis_transaction_debug) {
 		process_duration_ns = ktime_to_ns(lwis_get_time() - process_timestamp);
 	}
@@ -982,7 +982,7 @@ static int add_transaction_to_queue_locked(struct lwis_client *client,
 	struct lwis_transaction_info_v4 *info = &transaction->info;
 	if (info->is_high_priority_transaction) {
 		list_add(&transaction->process_queue_node, &client->transaction_process_queue);
-		ret = lwis_i2c_bus_manager_add_high_priority_client(client);
+		ret = lwis_bus_manager_add_high_priority_client(client);
 		if (ret) {
 			dev_err(client->lwis_dev->dev, "Failed to add high priority transaction");
 			return ret;

@@ -37,7 +37,7 @@
 #include "lwis_regulator.h"
 #include "lwis_transaction.h"
 #include "lwis_util.h"
-#include "lwis_i2c_bus_manager.h"
+#include "lwis_bus_manager.h"
 
 #define IOCTL_TO_ENUM(x) _IOC_NR(x)
 #define IOCTL_ARG_SIZE(x) _IOC_SIZE(x)
@@ -196,7 +196,7 @@ static int synchronous_process_io_entries(struct lwis_device *lwis_dev, int num_
 {
 	int ret = 0, i = 0;
 
-	lwis_i2c_bus_manager_lock_i2c_bus(lwis_dev);
+	lwis_bus_manager_lock_bus(lwis_dev);
 	/* Use write memory barrier at the beginning of I/O entries if the access protocol
 	 * allows it */
 	if (lwis_dev->vops.register_io_barrier != NULL) {
@@ -246,7 +246,7 @@ exit:
 						   /*use_read_barrier=*/true,
 						   /*use_write_barrier=*/false);
 	}
-	lwis_i2c_bus_manager_unlock_i2c_bus(lwis_dev);
+	lwis_bus_manager_unlock_bus(lwis_dev);
 	return ret;
 }
 
@@ -438,11 +438,11 @@ static int cmd_get_device_info(struct lwis_device *lwis_dev, struct lwis_cmd_pkt
 	/* Send kworker thread pid to userspace so that they can be added to the camera vendor
 	 * group for correct performance settings. */
 	if (lwis_dev->type == DEVICE_TYPE_I2C) {
-		/* For I2C devices, transactions are being run in the i2c manager thread */
+		/* For I2C devices, transactions are being run in the bus manager thread */
 		struct lwis_i2c_device *i2c_dev;
 		i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
 		k_info.info.transaction_worker_thread_pid =
-			i2c_dev->i2c_bus_manager->i2c_bus_worker_thread->pid;
+			i2c_dev->i2c_bus_manager->bus_worker_thread->pid;
 	} else if (lwis_dev->type == DEVICE_TYPE_TOP) {
 		/* For top device, the event subscription thread is the main worker thread */
 		struct lwis_top_device *top_dev;

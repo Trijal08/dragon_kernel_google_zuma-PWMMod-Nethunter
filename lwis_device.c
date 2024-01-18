@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Google LWIS I2C Bus Manager
+ * Google LWIS Base Device Driver
  *
  * Copyright 2018 Google LLC.
  */
@@ -41,7 +41,7 @@
 #include "lwis_util.h"
 #include "lwis_version.h"
 #include "lwis_trace.h"
-#include "lwis_i2c_bus_manager.h"
+#include "lwis_bus_manager.h"
 
 #ifdef CONFIG_OF
 #include "lwis_dt.h"
@@ -85,11 +85,11 @@ static void transaction_work_func(struct kthread_work *work)
 	lwis_process_worker_queue(client);
 }
 
-static void i2c_process_work_func(struct kthread_work *work)
+static void io_bus_process_work_func(struct kthread_work *work)
 {
-	/* i2c_work stores the context of the lwis_client submitting the transfer request */
-	struct lwis_client *client = container_of(work, struct lwis_client, i2c_work);
-	lwis_i2c_bus_manager_process_worker_queue(client);
+	/* io_bus_work stores the context of the lwis_client submitting the transfer request */
+	struct lwis_client *client = container_of(work, struct lwis_client, io_bus_work);
+	lwis_bus_manager_process_worker_queue(client);
 }
 
 /*
@@ -144,7 +144,7 @@ static int lwis_open(struct inode *node, struct file *fp)
 	lwis_allocator_init(lwis_dev);
 
 	kthread_init_work(&lwis_client->transaction_work, transaction_work_func);
-	kthread_init_work(&lwis_client->i2c_work, i2c_process_work_func);
+	kthread_init_work(&lwis_client->io_bus_work, io_bus_process_work_func);
 
 	/* Start transaction processor task */
 	lwis_transaction_init(lwis_client);
@@ -165,7 +165,7 @@ static int lwis_open(struct inode *node, struct file *fp)
 	lwis_client->flush_state = NOT_FLUSHING;
 	spin_unlock_irqrestore(&lwis_client->flush_lock, flags);
 
-	if (lwis_i2c_bus_manager_connect_client(lwis_client)) {
+	if (lwis_bus_manager_connect_client(lwis_client)) {
 		dev_err(lwis_dev->dev, "Failed to connect lwis client to I2C bus manager\n");
 		return -EINVAL;
 	}
@@ -245,7 +245,7 @@ static int release_client(struct lwis_client *lwis_client)
 	}
 	spin_unlock_irqrestore(&lwis_dev->lock, flags);
 
-	lwis_i2c_bus_manager_disconnect_client(lwis_client);
+	lwis_bus_manager_disconnect_client(lwis_client);
 
 	/*
 	 * It is safe to destroy the top device worker thread when top
@@ -624,9 +624,9 @@ static bool is_transaction_worker_active(struct lwis_client *client)
 
 void lwis_queue_device_worker(struct lwis_client *client)
 {
-	struct lwis_i2c_bus_manager *i2c_bus_manager = lwis_i2c_bus_manager_get(client->lwis_dev);
-	if (i2c_bus_manager) {
-		kthread_queue_work(&i2c_bus_manager->i2c_bus_worker, &client->i2c_work);
+	struct lwis_bus_manager *bus_manager = lwis_bus_manager_get(client->lwis_dev);
+	if (bus_manager) {
+		kthread_queue_work(&bus_manager->bus_worker, &client->io_bus_work);
 	} else {
 		if (is_transaction_worker_active(client)) {
 			kthread_queue_work(&client->lwis_dev->transaction_worker,
@@ -637,9 +637,9 @@ void lwis_queue_device_worker(struct lwis_client *client)
 
 void lwis_flush_device_worker(struct lwis_client *client)
 {
-	struct lwis_i2c_bus_manager *i2c_bus_manager = lwis_i2c_bus_manager_get(client->lwis_dev);
-	if (i2c_bus_manager) {
-		lwis_i2c_bus_manager_flush_i2c_worker(client->lwis_dev);
+	struct lwis_bus_manager *bus_manager = lwis_bus_manager_get(client->lwis_dev);
+	if (bus_manager) {
+		lwis_bus_manager_flush_worker(client->lwis_dev);
 	} else {
 		if (is_transaction_worker_active(client)) {
 			kthread_flush_worker(&client->lwis_dev->transaction_worker);
@@ -1667,7 +1667,7 @@ void lwis_base_unprobe(struct lwis_device *unprobe_lwis_dev)
 				lwis_dev->irq_gpios_info.gpios = NULL;
 			}
 
-			lwis_i2c_bus_manager_disconnect(lwis_dev);
+			lwis_bus_manager_disconnect_device(lwis_dev);
 
 			/* Destroy device */
 			if (!IS_ERR_OR_NULL(lwis_dev->dev)) {
