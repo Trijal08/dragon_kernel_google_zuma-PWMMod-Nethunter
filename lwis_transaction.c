@@ -845,17 +845,33 @@ static int check_transaction_param_locked(struct lwis_client *client,
 		}
 	}
 
-	/* Make sure sw events exist in event table. */
-	if (IS_ERR_OR_NULL(lwis_device_event_state_find_or_create(lwis_dev,
-								  info->emit_success_event_id)) ||
-	    IS_ERR_OR_NULL(
-		    lwis_client_event_state_find_or_create(client, info->emit_success_event_id)) ||
-	    IS_ERR_OR_NULL(
-		    lwis_device_event_state_find_or_create(lwis_dev, info->emit_error_event_id)) ||
-	    IS_ERR_OR_NULL(
-		    lwis_client_event_state_find_or_create(client, info->emit_error_event_id))) {
-		dev_err(lwis_dev->dev, "Cannot create sw events for transaction");
+	/* Make sure either an output success/error event OR a completion fence is specified */
+	if ((info->emit_success_event_id == LWIS_EVENT_ID_NONE ||
+	     info->emit_error_event_id == LWIS_EVENT_ID_NONE) &&
+	    info->completion_fence_fd < 0) {
+		dev_err(lwis_dev->dev,
+			"No transaction events or completion fence specified for transaction");
 		return -EINVAL;
+	}
+
+	/* Make sure sw events exist in event table. */
+	if (info->emit_success_event_id != LWIS_EVENT_ID_NONE) {
+		if (IS_ERR_OR_NULL(lwis_device_event_state_find_or_create(
+			    lwis_dev, info->emit_success_event_id)) ||
+		    IS_ERR_OR_NULL(lwis_client_event_state_find_or_create(
+			    client, info->emit_success_event_id))) {
+			dev_err(lwis_dev->dev, "Cannot create success event for transaction");
+			return -EINVAL;
+		}
+	}
+	if (info->emit_error_event_id != LWIS_EVENT_ID_NONE) {
+		if (IS_ERR_OR_NULL(lwis_device_event_state_find_or_create(
+			    lwis_dev, info->emit_error_event_id)) ||
+		    IS_ERR_OR_NULL(lwis_client_event_state_find_or_create(
+			    client, info->emit_error_event_id))) {
+			dev_err(lwis_dev->dev, "Cannot create error event for transaction");
+			return -EINVAL;
+		}
 	}
 
 	return 0;
