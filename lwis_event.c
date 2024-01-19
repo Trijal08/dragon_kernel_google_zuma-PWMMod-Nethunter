@@ -234,9 +234,14 @@ struct lwis_device_event_state *lwis_device_event_state_find_or_create(struct lw
 	struct lwis_device_event_state *new_state;
 	/* Flags for IRQ disable */
 	unsigned long flags;
+	struct lwis_device_event_state *state;
+
+	if (unlikely(event_id == LWIS_EVENT_ID_NONE)) {
+		return ERR_PTR(-EINVAL);
+	}
 
 	/* Try to find a state first, if it already exists */
-	struct lwis_device_event_state *state = lwis_device_event_state_find(lwis_dev, event_id);
+	state = lwis_device_event_state_find(lwis_dev, event_id);
 
 	/* If it doesn't, we'll have to create one */
 	if (unlikely(state == NULL)) {
