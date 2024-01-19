@@ -12,7 +12,6 @@
 
 #include "lwis_dt.h"
 
-#include <linux/dma-iommu.h>
 #include <linux/kernel.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
@@ -1405,12 +1404,8 @@ int lwis_ioreg_device_parse_dt(struct lwis_ioreg_device *ioreg_dev)
 		}
 	}
 
-	if (of_property_read_bool(dev_node, "lwis,iommu-best-fit-algo")) {
-		ret = iommu_dma_enable_best_fit_algo(ioreg_dev->base_dev.dev);
-		if (ret) {
-			dev_warn(ioreg_dev->base_dev.dev, "Cannot enable IOMMU best fit algo\n");
-		}
-	}
+	ioreg_dev->iommu_best_fit_algo =
+		of_property_read_bool(dev_node, "lwis,iommu-best-fit-algo");
 
 	return 0;
 
