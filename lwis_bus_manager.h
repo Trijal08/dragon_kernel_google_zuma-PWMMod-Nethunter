@@ -13,6 +13,8 @@
 #include "lwis_periodic_io.h"
 #include "lwis_transaction.h"
 
+#define LWIS_DEFAULT_DEVICE_GROUP 0
+
 /*
  * enum lwis_device_priority_level:
  * Defines the device priority level

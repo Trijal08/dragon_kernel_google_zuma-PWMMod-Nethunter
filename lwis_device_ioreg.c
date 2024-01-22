@@ -122,24 +122,11 @@ static int lwis_ioreg_device_probe(struct platform_device *plat_dev)
 		return ret;
 	}
 
-	/* Create associated kworker threads */
-	ret = lwis_create_kthread_workers(&ioreg_dev->base_dev);
+	ret = lwis_bus_manager_create(&ioreg_dev->base_dev);
 	if (ret) {
-		dev_err(ioreg_dev->base_dev.dev, "Failed to create lwis_ioreg_kthread");
+		dev_err(ioreg_dev->base_dev.dev, "Error in ioreg bus manager creation\n");
 		lwis_base_unprobe(&ioreg_dev->base_dev);
 		return ret;
-	}
-
-	if (ioreg_dev->base_dev.transaction_thread_priority != 0) {
-		ret = lwis_set_kthread_priority(&ioreg_dev->base_dev,
-						ioreg_dev->base_dev.transaction_worker_thread,
-						ioreg_dev->base_dev.transaction_thread_priority);
-		if (ret) {
-			dev_err(ioreg_dev->base_dev.dev,
-				"Failed to set LWIS IOREG transaction kthread priority (%d)", ret);
-			lwis_base_unprobe(&ioreg_dev->base_dev);
-			return ret;
-		}
 	}
 
 	dev_info(ioreg_dev->base_dev.dev, "IOREG Device Probe: Success\n");

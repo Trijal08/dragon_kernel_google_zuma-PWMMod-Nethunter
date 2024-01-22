@@ -161,7 +161,7 @@ void lwis_transaction_free(struct lwis_device *lwis_dev, struct lwis_transaction
 
 static int process_transaction(struct lwis_client *client, struct lwis_transaction **lwis_tx,
 			       struct list_head *pending_events, struct list_head *pending_fences,
-			       bool skip_err, bool check_transaction_limit)
+			       bool skip_err, bool check_transaction_limit, bool run_in_irq_context)
 {
 	int i;
 	int ret = 0;
@@ -245,7 +245,14 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 						   /*use_read_barrier=*/false,
 						   /*use_write_barrier=*/true);
 	}
-	lwis_bus_manager_lock_bus(lwis_dev);
+
+	/*
+	 * Some devices like IOREG devices can process the transaction in IRQ context.
+	 * In these cases, do not schedule the bus/thread manager for further optimization.
+	 */
+	if (!run_in_irq_context) {
+		lwis_bus_manager_lock_bus(lwis_dev);
+	}
 	for (i = start_idx; i < end_idx; i++) {
 		entry = &info->io_entries[i];
 		if (entry->type == LWIS_IO_ENTRY_WRITE ||
@@ -371,7 +378,10 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 		resp->completion_index = i;
 	}
 
-	lwis_bus_manager_unlock_bus(lwis_dev);
+	if (!run_in_irq_context) {
+		lwis_bus_manager_unlock_bus(lwis_dev);
+	}
+
 	if (lwis_transaction_debug) {
 		process_duration_ns = ktime_to_ns(lwis_get_time() - process_timestamp);
 	}
@@ -616,7 +626,8 @@ void lwis_process_transactions_in_queue(struct lwis_client *client,
 		} else {
 			spin_unlock_irqrestore(&client->transaction_lock, flags);
 			process_transaction(client, &transaction, &pending_events, &pending_fences,
-					    /*skip_err=*/false, check_transaction_limit);
+					    /*skip_err=*/false, check_transaction_limit,
+					    /*run_in_irq_context=*/false);
 
 			/*
 			 * Delete the high priority transaction from the queue
@@ -781,7 +792,8 @@ int lwis_transaction_client_cleanup(struct lwis_client *client)
 					    /*pending_events=*/NULL,
 					    /*pending_fences=*/NULL,
 					    /*skip_err=*/true,
-					    /*check_transaction_limit=*/false);
+					    /*check_transaction_limit=*/false,
+					    /*run_in_irq_context=*/false);
 			spin_lock_irqsave(&client->transaction_lock, flags);
 		}
 	}
@@ -1102,7 +1114,8 @@ static void defer_transaction_locked(struct lwis_client *client,
 	if (transaction->info.run_in_event_context) {
 		spin_unlock_irqrestore(&client->transaction_lock, *flags);
 		process_transaction(client, &transaction, pending_events, pending_fences,
-				    /*skip_err=*/false, /*check_transaction_limit=*/false);
+				    /*skip_err=*/false, /*check_transaction_limit=*/false,
+				    /*run_in_irq_context=*/true);
 		spin_lock_irqsave(&client->transaction_lock, *flags);
 	} else {
 		add_transaction_to_queue_locked(client, transaction);

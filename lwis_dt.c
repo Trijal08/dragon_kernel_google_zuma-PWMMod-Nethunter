@@ -1181,6 +1181,42 @@ static void parse_transaction_process_limit(struct lwis_device *lwis_dev)
 			     &lwis_dev->transaction_process_limit);
 }
 
+static void parse_ioreg_device_group(struct lwis_ioreg_device *ioreg_dev)
+{
+	struct device_node *dev_node;
+
+	dev_node = ioreg_dev->base_dev.k_dev->of_node;
+	ioreg_dev->device_group = LWIS_DEFAULT_DEVICE_GROUP;
+
+	of_property_read_u32(dev_node, "device-group", &ioreg_dev->device_group);
+}
+
+static void parse_ioreg_device_priority(struct lwis_ioreg_device *ioreg_dev)
+{
+	struct device_node *dev_node;
+	int ret;
+
+	dev_node = ioreg_dev->base_dev.k_dev->of_node;
+
+	ret = of_property_read_u32(dev_node, "ioreg-device-priority", &ioreg_dev->device_priority);
+
+	if (ret) {
+		ioreg_dev->device_priority = DEVICE_HIGH_PRIORITY;
+		return;
+	}
+
+	/* Validate the device priority specified in the device tree */
+	if ((ioreg_dev->device_priority < DEVICE_HIGH_PRIORITY) ||
+	    (ioreg_dev->device_priority > DEVICE_LOW_PRIORITY)) {
+		dev_err(ioreg_dev->base_dev.dev, "Invalid ioreg-device-priority value %d\n",
+			ioreg_dev->device_priority);
+		ioreg_dev->device_priority = DEVICE_HIGH_PRIORITY;
+		return;
+	}
+
+	return;
+}
+
 int lwis_base_parse_dt(struct lwis_device *lwis_dev)
 {
 	struct device *dev;
@@ -1401,6 +1437,9 @@ int lwis_ioreg_device_parse_dt(struct lwis_ioreg_device *ioreg_dev)
 			goto error_ioreg;
 		}
 	}
+
+	parse_ioreg_device_priority(ioreg_dev);
+	parse_ioreg_device_group(ioreg_dev);
 
 	return 0;
 

@@ -438,11 +438,17 @@ static int cmd_get_device_info(struct lwis_device *lwis_dev, struct lwis_cmd_pkt
 	/* Send kworker thread pid to userspace so that they can be added to the camera vendor
 	 * group for correct performance settings. */
 	if (lwis_dev->type == DEVICE_TYPE_I2C) {
-		/* For I2C devices, transactions are being run in the bus manager thread */
+		/* For I2C devices, transactions are being run in the I2C bus manager thread */
 		struct lwis_i2c_device *i2c_dev;
 		i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
 		k_info.info.transaction_worker_thread_pid =
 			i2c_dev->i2c_bus_manager->bus_worker_thread->pid;
+	} else if (lwis_dev->type == DEVICE_TYPE_IOREG) {
+		/* For IOREG devices, transactions are being run in the IOREG bus manager thread */
+		struct lwis_ioreg_device *ioreg_dev;
+		ioreg_dev = container_of(lwis_dev, struct lwis_ioreg_device, base_dev);
+		k_info.info.transaction_worker_thread_pid =
+			ioreg_dev->ioreg_bus_manager->bus_worker_thread->pid;
 	} else if (lwis_dev->type == DEVICE_TYPE_TOP) {
 		/* For top device, the event subscription thread is the main worker thread */
 		struct lwis_top_device *top_dev;

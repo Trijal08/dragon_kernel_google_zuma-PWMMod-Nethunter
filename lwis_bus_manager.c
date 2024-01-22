@@ -10,6 +10,7 @@
 #include "lwis_device.h"
 #include "lwis_bus_manager.h"
 #include "lwis_device_i2c.h"
+#include "lwis_device_ioreg.h"
 #include "lwis_bus_scheduler.h"
 
 bool lwis_bus_manager_debug;
@@ -146,18 +147,33 @@ static void delete_bus_manager_id_in_list(int bus_handle, int32_t bus_type)
 	struct list_head *bus_manager_list_node;
 	struct list_head *bus_manager_list_tmp_node;
 
+	if ((bus_type != DEVICE_TYPE_I2C) && (bus_type != DEVICE_TYPE_IOREG)) {
+		return;
+	}
+
 	mutex_lock(&bus_manager_list_lock);
 	list_for_each_safe (bus_manager_list_node, bus_manager_list_tmp_node,
 			    &bus_manager_list.bus_manager_list_head) {
 		bus_manager_identifier_node =
 			list_entry(bus_manager_list_node, struct lwis_bus_manager_identifier,
 				   bus_manager_list_node);
-		if ((bus_manager_identifier_node->bus_manager_handle == bus_handle) &&
-		    (bus_manager_identifier_node->bus_type == bus_type)) {
-			list_del(&bus_manager_identifier_node->bus_manager_list_node);
-			kfree(bus_manager_identifier_node);
-			bus_manager_identifier_node = NULL;
-			break;
+
+		if (bus_type == DEVICE_TYPE_I2C) {
+			if ((bus_manager_identifier_node->bus_manager_handle == bus_handle) &&
+			    (bus_manager_identifier_node->bus_type == DEVICE_TYPE_I2C)) {
+				list_del(&bus_manager_identifier_node->bus_manager_list_node);
+				kfree(bus_manager_identifier_node);
+				bus_manager_identifier_node = NULL;
+				break;
+			}
+		} else if (bus_type == DEVICE_TYPE_IOREG) {
+			if ((bus_manager_identifier_node->bus_manager_handle == bus_handle) &&
+			    (bus_manager_identifier_node->bus_type == DEVICE_TYPE_IOREG)) {
+				list_del(&bus_manager_identifier_node->bus_manager_list_node);
+				kfree(bus_manager_identifier_node);
+				bus_manager_identifier_node = NULL;
+				break;
+			}
 		}
 	}
 	mutex_unlock(&bus_manager_list_lock);
@@ -181,10 +197,19 @@ static struct lwis_bus_manager *find_bus_manager(int bus_handle, int32_t type)
 		bus_manager_identifier =
 			list_entry(bus_manager_list_node, struct lwis_bus_manager_identifier,
 				   bus_manager_list_node);
-		if ((bus_manager_identifier->bus_manager_handle == bus_handle) &&
-		    (bus_manager_identifier->bus_type == type)) {
-			bus_manager = bus_manager_identifier->bus_manager;
-			break;
+
+		if (type == DEVICE_TYPE_I2C) {
+			if ((bus_manager_identifier->bus_manager_handle == bus_handle) &&
+			    (bus_manager_identifier->bus_type == DEVICE_TYPE_I2C)) {
+				bus_manager = bus_manager_identifier->bus_manager;
+				break;
+			}
+		} else if (type == DEVICE_TYPE_IOREG) {
+			if ((bus_manager_identifier->bus_manager_handle == bus_handle) &&
+			    (bus_manager_identifier->bus_type == DEVICE_TYPE_IOREG)) {
+				bus_manager = bus_manager_identifier->bus_manager;
+				break;
+			}
 		}
 	}
 	mutex_unlock(&bus_manager_list_lock);
@@ -268,9 +293,17 @@ static int set_thread_priority(struct lwis_bus_manager *bus_manager, struct lwis
  */
 static void set_bus_manager_name(struct lwis_bus_manager *bus_manager)
 {
-	if (bus_manager->bus_type == DEVICE_TYPE_I2C) {
-		scnprintf(bus_manager->bus_name, LWIS_MAX_NAME_STRING_LEN, "I2C_Bus_%d",
+	switch (bus_manager->bus_type) {
+	case DEVICE_TYPE_I2C:
+		scnprintf(bus_manager->bus_name, LWIS_MAX_NAME_STRING_LEN, "I2C_Bus_%X",
 			  bus_manager->bus_id);
+		break;
+	case DEVICE_TYPE_IOREG:
+		scnprintf(bus_manager->bus_name, LWIS_MAX_NAME_STRING_LEN, "IOREG_Bus_%X",
+			  bus_manager->bus_id);
+		break;
+	default:
+		break;
 	}
 }
 
@@ -312,12 +345,6 @@ static int connect_device_to_bus_manager(struct lwis_bus_manager *bus_manager,
 {
 	int ret = 0;
 	struct lwis_connected_device *connect_lwis_device;
-
-	if (!lwis_check_device_type(lwis_dev, DEVICE_TYPE_I2C)) {
-		dev_err(lwis_dev->dev,
-			"Failed trying to connect non I2C device to a I2C bus manager\n");
-		return -EINVAL;
-	}
 
 	connect_lwis_device = kzalloc(sizeof(struct lwis_connected_device), GFP_KERNEL);
 	if (!connect_lwis_device) {
@@ -423,16 +450,24 @@ int lwis_bus_manager_create(struct lwis_device *lwis_dev)
 	int i;
 	struct lwis_bus_manager *bus_manager;
 	struct lwis_i2c_device *i2c_dev;
+	struct lwis_ioreg_device *ioreg_dev;
 	int bus_handle;
 	int32_t bus_type;
 
 	/* Create Bus Manager for Specific Device Types */
-	if (lwis_check_device_type(lwis_dev, DEVICE_TYPE_I2C)) {
+	switch (lwis_dev->type) {
+	case DEVICE_TYPE_I2C:
 		i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
 		bus_handle = i2c_dev->adapter->nr;
 		bus_type = lwis_dev->type;
-	} else {
-		/* Only I2C device types have Bus Manager support enabled. */
+		break;
+	case DEVICE_TYPE_IOREG:
+		ioreg_dev = container_of(lwis_dev, struct lwis_ioreg_device, base_dev);
+		bus_handle = ioreg_dev->device_group;
+		bus_type = lwis_dev->type;
+		break;
+	default:
+		/* Managed Device Types: I2C and IOREG */
 		return 0;
 	}
 
@@ -498,8 +533,15 @@ int lwis_bus_manager_create(struct lwis_device *lwis_dev)
 		 bus_manager->bus_name, lwis_dev->name, bus_manager->number_of_connected_devices);
 
 	/* Assign created/found bus manager to specific device type */
-	if (lwis_check_device_type(lwis_dev, DEVICE_TYPE_I2C)) {
+	switch (lwis_dev->type) {
+	case DEVICE_TYPE_I2C:
 		i2c_dev->i2c_bus_manager = bus_manager;
+		break;
+	case DEVICE_TYPE_IOREG:
+		ioreg_dev->ioreg_bus_manager = bus_manager;
+		break;
+	default:
+		break;
 	}
 
 	return ret;
@@ -525,6 +567,7 @@ void lwis_bus_manager_disconnect_device(struct lwis_device *lwis_dev)
 	struct lwis_connected_device *connected_lwis_device;
 	struct list_head *connected_device_node, *connected_device_tmp_node;
 	struct lwis_i2c_device *i2c_dev;
+	struct lwis_ioreg_device *ioreg_dev;
 
 	bus_manager = lwis_bus_manager_get(lwis_dev);
 	if (!bus_manager) {
@@ -540,6 +583,9 @@ void lwis_bus_manager_disconnect_device(struct lwis_device *lwis_dev)
 		if (lwis_check_device_type(lwis_dev, DEVICE_TYPE_I2C)) {
 			i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
 			i2c_dev->i2c_bus_manager = NULL;
+		} else if (lwis_check_device_type(lwis_dev, DEVICE_TYPE_IOREG)) {
+			ioreg_dev = container_of(lwis_dev, struct lwis_ioreg_device, base_dev);
+			ioreg_dev->ioreg_bus_manager = NULL;
 		}
 
 		if (connected_lwis_device->connected_device == lwis_dev) {
@@ -590,12 +636,23 @@ void lwis_bus_manager_unlock_bus(struct lwis_device *lwis_dev)
 struct lwis_bus_manager *lwis_bus_manager_get(struct lwis_device *lwis_dev)
 {
 	struct lwis_i2c_device *i2c_dev;
+	struct lwis_ioreg_device *ioreg_dev;
 
-	if (lwis_check_device_type(lwis_dev, DEVICE_TYPE_I2C)) {
+	switch (lwis_dev->type) {
+	case DEVICE_TYPE_I2C:
 		i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
 		if (i2c_dev) {
 			return i2c_dev->i2c_bus_manager;
 		}
+		break;
+	case DEVICE_TYPE_IOREG:
+		ioreg_dev = container_of(lwis_dev, struct lwis_ioreg_device, base_dev);
+		if (ioreg_dev) {
+			return ioreg_dev->ioreg_bus_manager;
+		}
+		break;
+	default:
+		break;
 	}
 	return NULL;
 }
@@ -753,6 +810,7 @@ static int get_device_priority_and_bus_manager(struct lwis_client *client, int *
 					       struct lwis_bus_manager **bus_manager)
 {
 	struct lwis_i2c_device *i2c_dev;
+	struct lwis_ioreg_device *ioreg_dev;
 
 	/*
 	 * 1. This device type check ensures that the devices that do
@@ -760,10 +818,16 @@ static int get_device_priority_and_bus_manager(struct lwis_client *client, int *
 	 * bus manager being null when trying to open the lwis client.
 	 * 2. Gets the device priority based on the device type.
 	 */
-	if (lwis_check_device_type(client->lwis_dev, DEVICE_TYPE_I2C)) {
+	switch (client->lwis_dev->type) {
+	case DEVICE_TYPE_I2C:
 		i2c_dev = container_of(client->lwis_dev, struct lwis_i2c_device, base_dev);
 		*device_priority = i2c_dev->device_priority;
-	} else {
+		break;
+	case DEVICE_TYPE_IOREG:
+		ioreg_dev = container_of(client->lwis_dev, struct lwis_ioreg_device, base_dev);
+		*device_priority = ioreg_dev->device_priority;
+		break;
+	default:
 		return 0;
 	}
 
@@ -862,9 +926,10 @@ int lwis_bus_manager_add_high_priority_client(struct lwis_client *client)
 	bool add_node = true;
 
 	/*
-	 * Bus manager will be NULL for non-I2C devices.
+	 * Bus manager will be NULL for non-I2C and non-IOREG devices.
 	 * Returning success here if bus manager is NULL will ensure that
-	 * non-I2C devices are not added to the Bus high priority transaction queue.
+	 * non-I2C and non-IOREG devices are not added to the Bus
+	 * high priority transaction queue.
 	 */
 	if (!bus_manager) {
 		return 0;

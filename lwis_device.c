@@ -166,7 +166,7 @@ static int lwis_open(struct inode *node, struct file *fp)
 	spin_unlock_irqrestore(&lwis_client->flush_lock, flags);
 
 	if (lwis_bus_manager_connect_client(lwis_client)) {
-		dev_err(lwis_dev->dev, "Failed to connect lwis client to I2C bus manager\n");
+		dev_err(lwis_dev->dev, "Failed to connect lwis client to bus manager\n");
 		return -EINVAL;
 	}
 
