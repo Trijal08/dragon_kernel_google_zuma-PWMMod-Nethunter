@@ -99,7 +99,7 @@ static struct lwis_transaction *pending_transaction_peek(struct lwis_client *cli
 }
 
 static void save_transaction_to_history(struct lwis_client *client,
-					struct lwis_transaction_info_v3 *trans_info,
+					struct lwis_transaction_info_v4 *trans_info,
 					int64_t process_timestamp, int64_t process_duration_ns)
 {
 	client->debug_info.transaction_hist[client->debug_info.cur_transaction_hist_idx].info =
@@ -169,7 +169,7 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 	struct lwis_io_entry *entry = NULL;
 	struct lwis_device *lwis_dev = client->lwis_dev;
 	struct lwis_transaction *transaction = *lwis_tx;
-	struct lwis_transaction_info_v3 *info = &transaction->info;
+	struct lwis_transaction_info_v4 *info = &transaction->info;
 	struct lwis_transaction_response_header *resp = transaction->resp;
 	size_t resp_size;
 	uint8_t *read_buf;
@@ -463,7 +463,7 @@ static void cancel_transaction(struct lwis_device *lwis_dev, struct lwis_transac
 {
 	int pending_status;
 	struct lwis_transaction *transaction = *lwis_tx;
-	struct lwis_transaction_info_v3 *info = &transaction->info;
+	struct lwis_transaction_info_v4 *info = &transaction->info;
 	struct lwis_transaction_response_header resp;
 	resp.id = info->id;
 	resp.error_code = error_code;
@@ -836,7 +836,7 @@ static int check_transaction_param_locked(struct lwis_client *client,
 					  bool is_level_triggered)
 {
 	struct lwis_device_event_state *event_state;
-	struct lwis_transaction_info_v3 *info = &transaction->info;
+	struct lwis_transaction_info_v4 *info = &transaction->info;
 	struct lwis_device *lwis_dev = client->lwis_dev;
 
 	if (!client) {
@@ -936,7 +936,7 @@ static int prepare_transaction_fences_locked(struct lwis_client *client,
 
 static int prepare_response_locked(struct lwis_client *client, struct lwis_transaction *transaction)
 {
-	struct lwis_transaction_info_v3 *info = &transaction->info;
+	struct lwis_transaction_info_v4 *info = &transaction->info;
 	int i;
 	size_t resp_size;
 	size_t read_buf_size = 0;
@@ -979,7 +979,7 @@ static int add_transaction_to_queue_locked(struct lwis_client *client,
 					   struct lwis_transaction *transaction)
 {
 	int ret;
-	struct lwis_transaction_info_v3 *info = &transaction->info;
+	struct lwis_transaction_info_v4 *info = &transaction->info;
 	if (info->is_high_priority_transaction) {
 		list_add(&transaction->process_queue_node, &client->transaction_process_queue);
 		ret = lwis_i2c_bus_manager_add_high_priority_client(client);
@@ -998,7 +998,7 @@ static int queue_transaction_locked(struct lwis_client *client,
 				    struct lwis_transaction *transaction)
 {
 	struct lwis_transaction_event_list *event_list;
-	struct lwis_transaction_info_v3 *info = &transaction->info;
+	struct lwis_transaction_info_v4 *info = &transaction->info;
 
 	int ret;
 
@@ -1027,7 +1027,7 @@ static int queue_transaction_locked(struct lwis_client *client,
 int lwis_transaction_submit_locked(struct lwis_client *client, struct lwis_transaction *transaction)
 {
 	int ret;
-	struct lwis_transaction_info_v3 *info = &transaction->info;
+	struct lwis_transaction_info_v4 *info = &transaction->info;
 
 	ret = check_transaction_param_locked(client, transaction,
 					     /*is_level_triggered=*/info->is_level_triggered);
@@ -1308,6 +1308,14 @@ static int cancel_waiting_transaction_locked(struct lwis_client *client, int64_t
 	hash_for_each_possible_safe (client->pending_transactions, transaction, tmp,
 				     pending_map_node, id) {
 		if (transaction->info.id == id) {
+			for (i = 0; i < transaction->info.num_nested_transactions; ++i) {
+				if (cancel_waiting_transaction_locked(
+					    client, transaction->info.nested_transaction_ids[i])) {
+					dev_err(client->lwis_dev->dev,
+						"Nested transaction with id %llu not found",
+						transaction->info.nested_transaction_ids[i]);
+				}
+			}
 			transaction->resp->error_code = -ECANCELED;
 			return 0;
 		}
