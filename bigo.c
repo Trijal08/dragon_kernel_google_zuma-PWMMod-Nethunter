@@ -414,7 +414,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 
 		if (copy_regs_from_user(core, &desc, user_desc, job)) {
 			pr_err("Failed to copy regs from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 
 		hbd = (((u32*)job->regs)[3]) & BIGO_HBD_BIT;
@@ -428,7 +429,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 
 		if(enqueue_prioq(core, inst)) {
 			pr_err("Failed enqueue frame\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 
 		ret = wait_for_completion_timeout(
@@ -455,7 +457,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_MAP:
 		if (copy_from_user(&mapping, user_desc, sizeof(mapping))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		rc = bigo_map(core, inst, &mapping);
 		if (rc)
@@ -468,7 +471,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_UNMAP:
 		if (copy_from_user(&mapping, user_desc, sizeof(mapping))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		rc = bigo_unmap(inst, &mapping);
 		if (rc)
@@ -478,7 +482,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 		struct bigo_buf_sync sync;
 		if (copy_from_user(&sync, user_desc, sizeof(sync))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		rc = bigo_dma_sync(&sync);
 		if (rc)
@@ -494,7 +499,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_CONFIG_FRMSIZE:
 		if (copy_from_user(&frmsize, user_desc, sizeof(frmsize))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		bigo_config_frmsize(inst, &frmsize);
 		break;
@@ -519,7 +525,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 		struct bigo_ioc_misc misc;
 		if (copy_from_user(&misc, user_desc, sizeof(misc))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		switch (misc.cmd) {
 			case BIGO_GET_PADDING_SIZE: {
