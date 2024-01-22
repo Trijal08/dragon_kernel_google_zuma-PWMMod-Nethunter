@@ -170,12 +170,14 @@ int hdcp22_dplink_handle_irq(void) {
 
 	if (HDCP_2_2_DP_RXSTATUS_LINK_FAILED(rxstatus)) {
 		hdcp_info("integrity check fail.\n");
+		hdcp22_dplink_abort();
 		hdcp_tee_disable_enc();
-		return 0;
+		return -EFAULT;
 	} else if (HDCP_2_2_DP_RXSTATUS_REAUTH_REQ(rxstatus)) {
 		hdcp_info("reauth requested.\n");
+		hdcp22_dplink_abort();
 		hdcp_tee_disable_enc();
-		return -EAGAIN;
+		return -EFAULT;
 	} else if (HDCP_2_2_DP_RXSTATUS_PAIRING(rxstatus)) {
 		hdcp_info("pairing avaible\n");
 		lkd.pairing_ready = 1;
