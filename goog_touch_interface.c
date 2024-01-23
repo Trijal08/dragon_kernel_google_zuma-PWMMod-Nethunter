@@ -2505,7 +2505,7 @@ int goog_get_driver_status(struct goog_touch_interface *gti,
 	return goog_process_vendor_cmd(gti, GTI_CMD_GET_CONTEXT_DRIVER);
 }
 
-void goog_offload_populate_coordinate_channel(struct goog_touch_interface *gti,
+int goog_offload_populate_coordinate_channel(struct goog_touch_interface *gti,
 		struct touch_offload_frame *frame, int channel)
 {
 	int i;
@@ -2513,7 +2513,7 @@ void goog_offload_populate_coordinate_channel(struct goog_touch_interface *gti,
 
 	if (channel < 0 || channel >= MAX_CHANNELS) {
 		GOOG_LOGE(gti, "Invalid channel: %d\n", channel);
-		return;
+		return -EINVAL;
 	}
 
 	dc = (struct TouchOffloadDataCoord *)frame->channel_data[channel];
@@ -2530,16 +2530,18 @@ void goog_offload_populate_coordinate_channel(struct goog_touch_interface *gti,
 		dc->coords[i].rotation = gti->offload.coords[i].rotation;
 		dc->coords[i].status = gti->offload.coords[i].status;
 	}
+
+	return 0;
 }
 
-void goog_offload_populate_mutual_channel(struct goog_touch_interface *gti,
+int goog_offload_populate_mutual_channel(struct goog_touch_interface *gti,
 		struct touch_offload_frame *frame, int channel, u8 *buffer, u32 size)
 {
 	struct TouchOffloadData2d *mutual;
 
 	if (channel < 0 || channel >= MAX_CHANNELS) {
 		GOOG_LOGE(gti, "Invalid channel: %d\n", channel);
-		return;
+		return -EINVAL;
 	}
 
 	mutual = (struct TouchOffloadData2d *)frame->channel_data[channel];
@@ -2548,18 +2550,24 @@ void goog_offload_populate_mutual_channel(struct goog_touch_interface *gti,
 	mutual->header.channel_type = frame->channel_type[channel];
 	mutual->header.channel_size =
 		TOUCH_OFFLOAD_FRAME_SIZE_2D(mutual->rx_size, mutual->tx_size);
-
+	if (IS_ERR_OR_NULL(buffer) ||
+		size != TOUCH_OFFLOAD_DATA_SIZE_2D(mutual->rx_size, mutual->tx_size)) {
+		GOOG_LOGW(gti, "invalid buffer %p or size %u!\n", buffer, size);
+		return -EINVAL;
+	}
 	memcpy(mutual->data, buffer, size);
+
+	return 0;
 }
 
-void goog_offload_populate_self_channel(struct goog_touch_interface *gti,
+int goog_offload_populate_self_channel(struct goog_touch_interface *gti,
 		struct touch_offload_frame *frame, int channel, u8 *buffer, u32 size)
 {
 	struct TouchOffloadData1d *self;
 
 	if (channel < 0 || channel >= MAX_CHANNELS) {
 		GOOG_LOGE(gti, "Invalid channel: %d\n", channel);
-		return;
+		return -EINVAL;
 	}
 
 	self = (struct TouchOffloadData1d *)frame->channel_data[channel];
@@ -2568,8 +2576,14 @@ void goog_offload_populate_self_channel(struct goog_touch_interface *gti,
 	self->header.channel_type = frame->channel_type[channel];
 	self->header.channel_size =
 		TOUCH_OFFLOAD_FRAME_SIZE_1D(self->rx_size, self->tx_size);
-
+	if (IS_ERR_OR_NULL(buffer) ||
+		size != TOUCH_OFFLOAD_DATA_SIZE_1D(self->rx_size, self->tx_size)) {
+		GOOG_LOGW(gti, "invalid buffer %p or size %u!\n", buffer, size);
+		return -EINVAL;
+	}
 	memcpy(self->data, buffer, size);
+
+	return 0;
 }
 
 static void goog_offload_populate_driver_status_channel(
@@ -2683,8 +2697,6 @@ void goog_offload_populate_frame(struct goog_touch_interface *gti,
 	u32 channel_type;
 	int i;
 	int ret;
-	u16 tx = gti->offload.caps.tx_size;
-	u16 rx = gti->offload.caps.rx_size;
 	struct gti_sensor_data_cmd *cmd = &gti->cmd.sensor_data_cmd;
 
 	scnprintf(trace_tag, sizeof(trace_tag), "%s: IDX=%llu IN_TS=%lld.\n",
@@ -2725,37 +2737,44 @@ void goog_offload_populate_frame(struct goog_touch_interface *gti,
 			ATRACE_END();
 		} else if (channel_type == TOUCH_DATA_TYPE_COORD) {
 			ATRACE_BEGIN("populate coord");
-			goog_offload_populate_coordinate_channel(gti, frame, i);
+			ret = goog_offload_populate_coordinate_channel(gti, frame, i);
 			ATRACE_END();
 		} else if (channel_type & TOUCH_SCAN_TYPE_MUTUAL) {
 			ATRACE_BEGIN("populate mutual data");
 			cmd->type = GTI_SENSOR_DATA_TYPE_MS;
-
 			ret = goog_get_sensor_data(gti, cmd, reset_data);
-			if (ret == 0 && cmd->buffer &&
-				cmd->size == TOUCH_OFFLOAD_DATA_SIZE_2D(rx, tx)) {
-				goog_offload_populate_mutual_channel(gti, frame, i,
-					cmd->buffer, cmd->size);
-				/* Backup strength data for v4l2. */
-				if (channel_type & TOUCH_DATA_TYPE_STRENGTH)
-					memcpy(gti->heatmap_buf, cmd->buffer, cmd->size);
+			if (ret) {
+				GOOG_LOGW(gti, "fail to get data(type %#x, ret %d)!\n",
+					cmd->type, ret);
+				cmd->buffer = NULL;
 			}
+			ret = goog_offload_populate_mutual_channel(gti, frame, i,
+				cmd->buffer, cmd->size);
+			/* Backup strength data for v4l2. */
+			if (ret == 0 && (channel_type & TOUCH_DATA_TYPE_STRENGTH))
+				memcpy(gti->heatmap_buf, cmd->buffer, cmd->size);
 			ATRACE_END();
 		} else if (channel_type & TOUCH_SCAN_TYPE_SELF) {
 			ATRACE_BEGIN("populate self data");
 			cmd->type = GTI_SENSOR_DATA_TYPE_SS;
-
 			ret = goog_get_sensor_data(gti, cmd, reset_data);
-			if (ret == 0 && cmd->buffer &&
-				cmd->size == TOUCH_OFFLOAD_DATA_SIZE_1D(rx, tx)) {
-				goog_offload_populate_self_channel(gti, frame, i,
-					cmd->buffer, cmd->size);
+			if (ret) {
+				GOOG_LOGW(gti, "fail to get data(type %#x, ret %d)!\n",
+					cmd->type, ret);
+				cmd->buffer = NULL;
 			}
+			ret = goog_offload_populate_self_channel(gti, frame, i,
+				cmd->buffer, cmd->size);
 			ATRACE_END();
 		} else {
 			GOOG_ERR(gti, "unrecognized channel_type %#x.\n", channel_type);
 		}
 
+		/*
+		 * TODO:
+		 * Handle the error return for respective channel type and recycle
+		 * the offload frame gracefully.
+		 */
 		if (ret) {
 			GOOG_DBG(gti, "skip to populate data(type %#x, ret %d)!\n",
 				channel_type, ret);
