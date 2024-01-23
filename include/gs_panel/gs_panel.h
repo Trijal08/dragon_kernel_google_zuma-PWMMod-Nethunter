@@ -619,10 +619,33 @@ struct panel_reg_ctrl {
 #define IS_VALID_PANEL_REG_ID(id) (((id) > PANEL_REG_ID_INVALID) && ((id) < PANEL_REG_ID_MAX))
 #define PANEL_REG_COUNT (PANEL_REG_ID_MAX - 1)
 
+/**
+ * struct gs_panel_reg_ctrl_desc - An ordered set of regulators per purpose
+ *
+ * Each array of struct panel_reg_ctrl is a description of which regulators, in
+ * order, are activated/deactivated for the relevant power operation.
+ * Each entry in the array is a pair of "which regulator" matched with "how long
+ * to delay after enable/disable".
+ *
+ * The panel driver may then define for each operation (enable, post-enable,
+ * pre-disable, and disable) which regulators are activated/deactivated in the
+ * given order. As an example, if a struct gs_panel_reg_ctrl_desc is defined
+ * with these members:
+ * .reg_ctrl_enable = { {PANEL_REG_ID_VDDI, 1}, {PANEL_REG_ID_VCI, 10},},
+ * .reg_ctrl_post_enable = {{PANEL_REG_ID_VDDD, 1},},
+ * then the "enable" process will turn on the VDDI regulator, wait 1ms,
+ * then turn on the VCI regulator, then wait 10ms.
+ * Later, during the "post_enable" process, it will enable the VDDD regulator,
+ * and then wait an additional 1ms.
+ */
 struct gs_panel_reg_ctrl_desc {
+	/** @reg_ctrl_enable: panel enable regulator sequence */
 	const struct panel_reg_ctrl reg_ctrl_enable[PANEL_REG_COUNT];
+	/** @reg_ctrl_enable: panel post-enable regulator sequence */
 	const struct panel_reg_ctrl reg_ctrl_post_enable[PANEL_REG_COUNT];
+	/** @reg_ctrl_enable: panel pre-disable regulator sequence */
 	const struct panel_reg_ctrl reg_ctrl_pre_disable[PANEL_REG_COUNT];
+	/** @reg_ctrl_enable: panel disable regulator sequence */
 	const struct panel_reg_ctrl reg_ctrl_disable[PANEL_REG_COUNT];
 };
 
