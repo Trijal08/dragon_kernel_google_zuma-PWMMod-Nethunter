@@ -91,6 +91,12 @@ static int lwis_i2c_device_disable(struct lwis_device *lwis_dev)
 	struct lwis_i2c_device *i2c_dev;
 	i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
 
+	if (IS_ERR_OR_NULL(i2c_dev->state_pinctrl)) {
+		dev_err(lwis_dev->dev, "i2c state_pinctrl is invalid (%lu)\n",
+			PTR_ERR(i2c_dev->state_pinctrl));
+		i2c_dev->state_pinctrl = NULL;
+	}
+
 #if IS_ENABLED(CONFIG_INPUT_STMVL53L1)
 	if (is_shared_i2c_with_stmvl53l1(i2c_dev->state_pinctrl)) {
 		/* Disable the shared i2c bus */
@@ -201,6 +207,7 @@ static int i2c_device_setup(struct lwis_i2c_device *i2c_dev)
 	if (IS_ERR_OR_NULL(pinctrl)) {
 		dev_err(i2c_dev->base_dev.dev, "Cannot instantiate pinctrl instance (%lu)\n",
 			PTR_ERR(pinctrl));
+		i2c_dev->state_pinctrl = NULL;
 		return PTR_ERR(pinctrl);
 	}
 

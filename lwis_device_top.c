@@ -25,6 +25,10 @@
 #include "lwis_event.h"
 #include "lwis_util.h"
 
+#include "lwis_device.h"
+#include "lwis_event.h"
+#include "lwis_util.h"
+
 #ifdef CONFIG_OF
 #include "lwis_dt.h"
 #endif
