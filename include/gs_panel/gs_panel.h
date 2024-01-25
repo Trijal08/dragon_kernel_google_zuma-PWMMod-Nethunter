@@ -63,9 +63,11 @@ struct brightness_capability {
 	struct brightness_attribute hbm;
 };
 
-#define GS_PANEL_REFRESH_CTRL_FI BIT(0)
-#define GS_PANEL_REFRESH_CTRL_IDLE BIT(1)
-#define GS_PANEL_REFRESH_CTRL_MASK (GS_PANEL_REFRESH_CTRL_FI | GS_PANEL_REFRESH_CTRL_IDLE)
+#define GS_PANEL_REFRESH_CTRL_FI_FRAME_COUNT_MAX BIT(7)
+#define GS_PANEL_REFRESH_CTRL_FI_FRAME_COUNT_MASK (GS_PANEL_REFRESH_CTRL_FI_FRAME_COUNT_MAX -1)
+#define GS_PANEL_REFRESH_CTRL_FI_PEAK_RATE BIT(8)
+#define GS_PANEL_REFRESH_CTRL_FI_REFRESH_RATE_MASK ((GS_PANEL_REFRESH_CTRL_FI_PEAK_RATE -1) << 7)
+#define GS_PANEL_REFRESH_CTRL_FI_AUTO BIT(31)
 
 /**
  * enum gs_panel_feature - features supported by this panel
@@ -73,6 +75,8 @@ struct brightness_capability {
  * @FEAT_EARLY_EXIT: early exit from a long frame
  * @FEAT_OP_NS: normal speed (not high speed)
  * @FEAT_FRAME_AUTO: automatic (not manual) frame control
+ * @FEAT_ZA: zonal attenuation
+ * @FEAT_FI_AUTO: automatic frame insertion control
  * @FEAT_MAX: placeholder, counter for number of features
  *
  * The following features are correlated, if one or more of them change, the others need
@@ -84,6 +88,7 @@ enum gs_panel_feature {
 	FEAT_OP_NS,
 	FEAT_FRAME_AUTO,
 	FEAT_ZA,
+	FEAT_FI_AUTO,
 	FEAT_MAX,
 };
 

@@ -238,7 +238,11 @@ static ssize_t refresh_ctrl_store(struct device *dev, struct device_attribute *a
 		return -EINVAL;
 
 	ret = kstrtou32(buf, 0, &ctrl);
-	if (ret || !(ctrl & GS_PANEL_REFRESH_CTRL_MASK)) {
+
+	if (ret || (ctrl > GS_PANEL_REFRESH_CTRL_FI_AUTO) ||
+		((ctrl & GS_PANEL_REFRESH_CTRL_FI_FRAME_COUNT_MASK) &&
+		(ctrl & GS_PANEL_REFRESH_CTRL_FI_REFRESH_RATE_MASK))) {
+		dev_err(ctx->dev, "%s: invalid command combination: 0x%X\n", __func__, ctrl);
 		return -EINVAL;
 	}
 
