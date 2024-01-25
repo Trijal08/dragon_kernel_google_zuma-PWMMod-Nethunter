@@ -633,6 +633,56 @@ void gs_panel_set_dimming(struct gs_panel *ctx, bool dimming_on)
 
 /* Regulators */
 
+static const struct panel_reg_ctrl default_ctrl_disable[PANEL_REG_COUNT] = {
+	{ PANEL_REG_ID_VDDR, 0 },
+	{ PANEL_REG_ID_VDDR_EN, 0 },
+	{ PANEL_REG_ID_VDDD, 0 },
+	{ PANEL_REG_ID_VDDI, 0 },
+	{ PANEL_REG_ID_VCI, 0 },
+};
+
+static const struct panel_reg_ctrl default_ctrl_enable[PANEL_REG_COUNT] = {
+	{ PANEL_REG_ID_VDDI, 5 },
+	{ PANEL_REG_ID_VDDD, 0 },
+	{ PANEL_REG_ID_VCI, 0 },
+	{ PANEL_REG_ID_VDDR_EN, 2 },
+	{ PANEL_REG_ID_VDDR, 0 },
+};
+
+/**
+ * get_enable_reg_ctrl_or_default() - Gets panel-specific or default enable reg_ctrl
+ * @ctx: Panel handle
+ *
+ * Return: If the panel driver has a specific panel_reg_ctrl entry for enable
+ * sequence, returns that. Otherwise, uses the default above.
+ */
+static const struct panel_reg_ctrl *get_enable_reg_ctrl_or_default(struct gs_panel *ctx)
+{
+	if (ctx->desc->reg_ctrl_desc &&
+	    IS_VALID_PANEL_REG_ID(ctx->desc->reg_ctrl_desc->reg_ctrl_enable[0].id)) {
+		return ctx->desc->reg_ctrl_desc->reg_ctrl_enable;
+	} else {
+		return default_ctrl_enable;
+	}
+}
+
+/**
+ * get_disable_reg_ctrl_or_default() - Gets panel-specific or default disable reg_ctrl
+ * @ctx: Panel handle
+ *
+ * Return: If the panel driver has a specific panel_reg_ctrl entry for disable
+ * sequence, returns that. Otherwise, uses the default above.
+ */
+static const struct panel_reg_ctrl *get_disable_reg_ctrl_or_default(struct gs_panel *ctx)
+{
+	if (ctx->desc->reg_ctrl_desc &&
+	    IS_VALID_PANEL_REG_ID(ctx->desc->reg_ctrl_desc->reg_ctrl_disable[0].id)) {
+		return ctx->desc->reg_ctrl_desc->reg_ctrl_disable;
+	} else {
+		return default_ctrl_disable;
+	}
+}
+
 static int _gs_panel_reg_ctrl(struct gs_panel *ctx, const struct panel_reg_ctrl *reg_ctrl,
 			      bool enable)
 {
@@ -693,20 +743,6 @@ static void gs_panel_pre_power_off(struct gs_panel *ctx)
 
 static int _gs_panel_set_power(struct gs_panel *ctx, bool on)
 {
-	const struct panel_reg_ctrl default_ctrl_disable[PANEL_REG_COUNT] = {
-		{ PANEL_REG_ID_VDDR, 0 },
-		{ PANEL_REG_ID_VDDR_EN, 0 },
-		{ PANEL_REG_ID_VDDD, 0 },
-		{ PANEL_REG_ID_VDDI, 0 },
-		{ PANEL_REG_ID_VCI, 0 },
-	};
-	const struct panel_reg_ctrl default_ctrl_enable[PANEL_REG_COUNT] = {
-		{ PANEL_REG_ID_VDDI, 5 },
-		{ PANEL_REG_ID_VDDD, 0 },
-		{ PANEL_REG_ID_VCI, 0 },
-		{ PANEL_REG_ID_VDDR_EN, 2 },
-		{ PANEL_REG_ID_VDDR, 0 },
-	};
 	const struct panel_reg_ctrl *reg_ctrl;
 
 	if (on) {
@@ -714,24 +750,14 @@ static int _gs_panel_set_power(struct gs_panel *ctx, bool on)
 			gpiod_set_value(ctx->gpio.enable_gpio, 1);
 			usleep_range(10000, 11000);
 		}
-		if (ctx->desc->reg_ctrl_desc &&
-		    IS_VALID_PANEL_REG_ID(ctx->desc->reg_ctrl_desc->reg_ctrl_enable[0].id)) {
-			reg_ctrl = ctx->desc->reg_ctrl_desc->reg_ctrl_enable;
-		} else {
-			reg_ctrl = default_ctrl_enable;
-		}
+		reg_ctrl = get_enable_reg_ctrl_or_default(ctx);
 	} else {
 		gs_panel_pre_power_off(ctx);
 		if (!IS_ERR_OR_NULL(ctx->gpio.reset_gpio))
 			gpiod_set_value(ctx->gpio.reset_gpio, 0);
 		if (!IS_ERR_OR_NULL(ctx->gpio.enable_gpio))
 			gpiod_set_value(ctx->gpio.enable_gpio, 0);
-		if (ctx->desc->reg_ctrl_desc &&
-		    IS_VALID_PANEL_REG_ID(ctx->desc->reg_ctrl_desc->reg_ctrl_disable[0].id)) {
-			reg_ctrl = ctx->desc->reg_ctrl_desc->reg_ctrl_disable;
-		} else {
-			reg_ctrl = default_ctrl_disable;
-		}
+		reg_ctrl = get_disable_reg_ctrl_or_default(ctx);
 	}
 
 	return _gs_panel_reg_ctrl(ctx, reg_ctrl, on);
