@@ -89,6 +89,16 @@
 #define MIN_DELAY_END_TEST	(1 * S_IN_NS)
 #define MAX_DELAY_END_TEST	(15 * S_IN_NS)
 
+/* Must wait at least 1s before beginning reset operation and cannot stay in this state
+ * longer than 15s.
+ */
+#define MIN_DELAY_INIT_RESET	(1 * S_IN_NS)
+#define MAX_DELAY_INIT_RESET	(15 * S_IN_NS)
+#define MIN_DELAY_RUN_RESET	(1 * S_IN_NS)
+#define MAX_DELAY_RUN_RESET	(15 * S_IN_NS)
+#define MIN_DELAY_END_RESET	(1 * S_IN_NS)
+#define MAX_DELAY_END_RESET	(15 * S_IN_NS)
+
 /*-----------------------------------------------------------------------------
  * enums.
  */
@@ -378,6 +388,7 @@ enum gti_noise_mode_level : u8 {
 enum gti_ical_res : u32 {
 	ICAL_RES_SUCCESS = 0,
 	ICAL_RES_FAIL = 0x80000000,
+	ICAL_RES_FAIL_INVALID_BUS_ACCESS = 0x80000001,
 	ICAL_RES_NA = 0xFFFFFFFF,
 };
 
@@ -389,6 +400,9 @@ enum gti_ical_state : u32 {
 	ICAL_STATE_INIT_TEST = 201,
 	ICAL_STATE_RUN_TEST = 202,
 	ICAL_STATE_END_TEST = 203,
+	ICAL_STATE_INIT_RESET = 301,
+	ICAL_STATE_RUN_RESET = 302,
+	ICAL_STATE_END_RESET = 303,
 	ICAL_STATE_NA = 0xFFFFFFFF,
 };
 

@@ -1440,33 +1440,34 @@ static ssize_t vrr_enabled_store(struct device *dev,
 /* -----------------------------------------------------------------------
  * Interactive calibration states
  *
- * State "IDLE"/ 0 - idle, no calibration underway => return to this state after
+ * State "IDLE"/ 0 - idle, no operation underway => return to this state after
  * an error and after certain timeouts have elapsed
  *
- * State "INIT_X" / 101 / 201 - calibration or test is beginning. The client
+ * State "INIT_X" / X01 (101, 201, ...) - operation is beginning. The client
  * has displayed warnings and will begin transitioning itself to the
  * "screen off" / "do not touch" state
  *
- * State "RUN_X" / 102 / 202 - screen is off and nothing is touching the
- * screen. Calibration can begin immediately when this state is entered
+ * State "RUN_X" / X02 (102, 202, ...) - screen is off and nothing is touching
+ * the screen. Operation can begin immediately when this state is entered
  *
- * State "END_X" / 103 / 203 - the client has waited the designated time and
- * will assume calibration/test is complete, will read the status of this state
- * as the final calibration status. Transition back to the IDLE state will
+ * State "END_X" / X03 (103, 203, ...) - the client has waited the designated
+ * time and will assume operation is complete, will read the status of this
+ * state as the final operation status. Transition back to the IDLE state will
  * occur automatically.
  */
 bool ical_state_idle(struct goog_touch_interface *gti, u32 next_state,
 			 u64 elapsed)
 {
-	/* Valid next-states are 'INIT_CAL', 'INIT_TEST', or 'IDLE' */
+	/* Valid next-states are 'INIT_X', or 'IDLE' */
 	if (next_state == ICAL_STATE_IDLE) {
 		gti->ical_result = ICAL_RES_SUCCESS;
-		gti->ical_func_result = 0;
+		gti->ical_func_result = ICAL_RES_SUCCESS;
 		/* Do not update the ical timestamp */
 		return false;
 	} else if ((next_state == ICAL_STATE_INIT_CAL ||
-		    next_state == ICAL_STATE_INIT_TEST) &&
-		   elapsed > MIN_DELAY_IDLE) {
+			next_state == ICAL_STATE_INIT_TEST ||
+			next_state == ICAL_STATE_INIT_RESET) &&
+			elapsed > MIN_DELAY_IDLE) {
 		gti->ical_state = next_state;
 		gti->ical_result = ICAL_RES_SUCCESS;
 	} else {
@@ -1483,7 +1484,16 @@ bool ical_state_idle(struct goog_touch_interface *gti, u32 next_state,
 void ical_state_init_cal(struct goog_touch_interface *gti, u32 next_state,
 			 u64 elapsed)
 {
+	int pm_ret = 0;
 	u32 ret;
+
+	pm_ret = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS, true);
+	if (pm_ret < 0 && gti->tbn_enabled) {
+		GOOG_ERR(gti, "ical - error: invalid touch bus access!\n");
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_FAIL_INVALID_BUS_ACCESS;
+		return;
+	}
 
 	/* only valid next-state is 'RUN_CAL', as long as time elapsed
 	 * is within range. When 'RUN_CAL' is received calibration begins.
@@ -1512,6 +1522,7 @@ void ical_state_init_cal(struct goog_touch_interface *gti, u32 next_state,
 			gti->ical_state = ICAL_STATE_RUN_CAL;
 			gti->ical_result = ICAL_RES_SUCCESS;
 		} else {
+			GOOG_ERR(gti, "ical - GTI_CMD_CALIBRATE fail(%d)\n", ret);
 			gti->ical_state = ICAL_STATE_IDLE;
 			gti->ical_result = ICAL_RES_FAIL;
 		}
@@ -1524,6 +1535,10 @@ void ical_state_init_cal(struct goog_touch_interface *gti, u32 next_state,
 		gti->ical_state = ICAL_STATE_IDLE;
 		gti->ical_result = ICAL_RES_FAIL;
 	}
+
+	if (pm_ret == 0)
+		goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_SYSFS);
+
 }
 
 void ical_state_run_cal(struct goog_touch_interface *gti, u32 next_state,
@@ -1575,10 +1590,19 @@ void ical_state_end_cal(struct goog_touch_interface *gti, u32 next_state,
 void ical_state_init_test(struct goog_touch_interface *gti, u32 next_state,
 			  u64 elapsed)
 {
+	int pm_ret = 0;
 	u32 ret;
 
+	pm_ret = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS, true);
+	if (pm_ret < 0 && gti->tbn_enabled) {
+		GOOG_ERR(gti, "ical - error: invalid touch bus access!\n");
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_FAIL_INVALID_BUS_ACCESS;
+		return;
+	}
+
 	/* only valid next-state is 'RUN_TEST', as long as time elapsed
-	 * is within range. When '202' is received calibration begins.
+	 * is within range. When 'RUN_TEST' is received test begins.
 	 */
 	if (next_state == ICAL_STATE_RUN_TEST &&
 	    elapsed > MIN_DELAY_INIT_TEST && elapsed < MAX_DELAY_INIT_TEST) {
@@ -1614,6 +1638,7 @@ void ical_state_init_test(struct goog_touch_interface *gti, u32 next_state,
 			gti->ical_state = ICAL_STATE_RUN_TEST;
 			gti->ical_result = ICAL_RES_SUCCESS;
 		} else  {
+			GOOG_ERR(gti, "ical - GTI_CMD_SELFTEST fail(%d)\n", ret);
 			gti->ical_state = ICAL_STATE_IDLE;
 			gti->ical_result = ICAL_RES_FAIL;
 		}
@@ -1626,6 +1651,10 @@ void ical_state_init_test(struct goog_touch_interface *gti, u32 next_state,
 		gti->ical_state = ICAL_STATE_IDLE;
 		gti->ical_result = ICAL_RES_FAIL;
 	}
+
+	if (pm_ret == 0)
+		goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_SYSFS);
+
 }
 
 void ical_state_run_test(struct goog_touch_interface *gti, u32 next_state,
@@ -1671,6 +1700,96 @@ void ical_state_end_test(struct goog_touch_interface *gti, u32 next_state,
 	gti->ical_state = ICAL_STATE_IDLE;
 }
 
+void ical_state_init_reset(struct goog_touch_interface *gti, u32 next_state,
+			  u64 elapsed)
+{
+	int pm_ret = 0;
+	u32 ret;
+
+	pm_ret = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS, true);
+	if (pm_ret < 0 && gti->tbn_enabled) {
+		GOOG_ERR(gti, "ical - error: invalid touch bus access!\n");
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_FAIL_INVALID_BUS_ACCESS;
+		return;
+	}
+
+	/* only valid next-state is 'RUN_RESET', as long as time elapsed
+	 * is within range. When 'RUN_RESET' is received reset begins.
+	 */
+	if (next_state == ICAL_STATE_RUN_RESET &&
+	    elapsed > MIN_DELAY_INIT_RESET && elapsed < MAX_DELAY_INIT_RESET) {
+		/* Begin reset */
+		gti->cmd.reset_cmd.setting = GTI_RESET_MODE_AUTO;
+		ret = goog_process_vendor_cmd(gti, GTI_CMD_RESET);
+		if (ret == 0) {
+			GOOG_INFO(gti, "ical - RESET_DONE\n");
+			gti->ical_state = ICAL_STATE_RUN_RESET;
+			gti->ical_func_result = ICAL_RES_SUCCESS;
+			gti->ical_result = ICAL_RES_SUCCESS;
+		} else  {
+			GOOG_ERR(gti, "ical - GTI_CMD_RESET fail(%d)\n", ret);
+			gti->ical_state = ICAL_STATE_IDLE;
+			gti->ical_func_result = ICAL_RES_NA;
+			gti->ical_result = ICAL_RES_FAIL;
+		}
+	} else {
+		GOOG_ERR(gti,
+			 "ical - error: invalid transition or time! %u => %u, min=%lluns, t=%lluns, max=%lluns\n",
+			 gti->ical_state, next_state,
+			 MIN_DELAY_INIT_RESET, elapsed,
+			 MAX_DELAY_INIT_RESET);
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_FAIL;
+	}
+
+	if (pm_ret == 0)
+		goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_SYSFS);
+
+}
+
+void ical_state_run_reset(struct goog_touch_interface *gti, u32 next_state,
+			  u64 elapsed)
+{
+	/* only valid next-state is 'END_RESET', as long as time elapsed
+	 * is within ranged.
+	 */
+	if (next_state == ICAL_STATE_END_RESET &&
+	    elapsed > MIN_DELAY_RUN_RESET && elapsed < MAX_DELAY_RUN_RESET) {
+		/* Check and evaluate reset here */
+		gti->ical_state = ICAL_STATE_END_RESET;
+		gti->ical_result = ICAL_RES_SUCCESS;
+	} else {
+		GOOG_ERR(gti,
+			 "ical - error: invalid transition or time! %u => %u, min=%lluns, t=%lluns, max=%lluns\n",
+			 gti->ical_state, next_state,
+			 MIN_DELAY_RUN_RESET, elapsed,
+			 MAX_DELAY_RUN_RESET);
+		gti->ical_state = ICAL_STATE_IDLE;
+		gti->ical_result = ICAL_RES_FAIL;
+	}
+}
+
+void ical_state_end_reset(struct goog_touch_interface *gti, u32 next_state,
+			  u64 elapsed)
+{
+	/* Nothing to do but accept a transition back to IDLE.
+	 * Necessary because the interface only executes when called
+	 */
+	if (next_state == ICAL_STATE_IDLE &&
+	    elapsed > MIN_DELAY_END_RESET && elapsed < MAX_DELAY_END_RESET) {
+		gti->ical_result = ICAL_RES_SUCCESS;
+	} else {
+		GOOG_ERR(gti,
+			 "ical - error: invalid transition or time! %u => %u, min=%lluns, t=%lluns, max=%lluns\n",
+			 gti->ical_state, next_state,
+			 MIN_DELAY_END_RESET, elapsed,
+			 MAX_DELAY_END_RESET);
+		gti->ical_result = ICAL_RES_FAIL;
+	}
+	gti->ical_state = ICAL_STATE_IDLE;
+}
+
 /* Advance the interactive calibration state machine */
 static ssize_t interactive_calibrate_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
@@ -1685,6 +1804,8 @@ static ssize_t interactive_calibrate_store(struct device *dev,
 		GOOG_ERR(gti, "error: invalid input!\n");
 		return size;
 	}
+
+	GOOG_INFO(gti, "ical - [%u] start\n", next_state);
 
 	switch (gti->ical_state) {
 	case ICAL_STATE_IDLE:
@@ -1722,6 +1843,21 @@ static ssize_t interactive_calibrate_store(struct device *dev,
 		gti->ical_timestamp_ns = entry_time;
 		break;
 
+	case ICAL_STATE_INIT_RESET:
+		ical_state_init_reset(gti, next_state, elapsed);
+		gti->ical_timestamp_ns = entry_time;
+		break;
+
+	case ICAL_STATE_RUN_RESET:
+		ical_state_run_reset(gti, next_state, elapsed);
+		gti->ical_timestamp_ns = entry_time;
+		break;
+
+	case ICAL_STATE_END_RESET:
+		ical_state_end_reset(gti, next_state, elapsed);
+		gti->ical_timestamp_ns = entry_time;
+		break;
+
 	default:
 		GOOG_ERR(gti, "ical - unknown/invalid current state = %u, but will go back to 0.\n",
 			 gti->ical_state);
@@ -1740,9 +1876,11 @@ static ssize_t interactive_calibrate_show(struct device *dev,
 	ssize_t buf_idx = 0;
 	struct goog_touch_interface *gti = dev_get_drvdata(dev);
 
-	buf_idx += scnprintf(buf + buf_idx, PAGE_SIZE,
-		"%d - %d\n", gti->ical_result, gti->ical_func_result);
-	GOOG_INFO(gti, "%s", buf);
+	buf_idx += sysfs_emit_at(buf, buf_idx, "%d - %d\n",
+		gti->ical_result, gti->ical_func_result);
+
+	GOOG_INFO(gti, "ical - [%u](%d, %d) return\n",
+		gti->ical_state, gti->ical_result, gti->ical_func_result);
 
 	return buf_idx;
 }
