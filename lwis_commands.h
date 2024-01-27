@@ -331,26 +331,6 @@ struct lwis_transaction_trigger_condition {
 #define LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE (-1LL)
 #define LWIS_EVENT_COUNTER_EVERY_TIME (-2LL)
 
-struct lwis_transaction_info {
-	// Input
-	int64_t trigger_event_id;
-	int64_t trigger_event_counter;
-	size_t num_io_entries;
-	struct lwis_io_entry *io_entries;
-	bool run_in_event_context;
-	// Use reserved to keep the original interface
-	bool reserved;
-	int64_t emit_success_event_id;
-	int64_t emit_error_event_id;
-	bool is_level_triggered;
-	// Output
-	int64_t id;
-	// Only will be set if trigger_event_id is specified.
-	// Otherwise, the value is -1.
-	int64_t current_trigger_event_counter;
-	int64_t submission_timestamp_ns;
-};
-
 struct lwis_transaction_info_v2 {
 	// Input
 	int64_t trigger_event_id;
@@ -564,12 +544,10 @@ enum lwis_cmd_id {
 	LWIS_CMD_ID_EVENT_CONTROL_SET = 0x40100,
 	LWIS_CMD_ID_EVENT_DEQUEUE = 0x40200,
 
-	LWIS_CMD_ID_TRANSACTION_SUBMIT = 0x50000,
-	LWIS_CMD_ID_TRANSACTION_SUBMIT_V2,
+	LWIS_CMD_ID_TRANSACTION_SUBMIT_V2 = 0x50001,
 	LWIS_CMD_ID_TRANSACTION_SUBMIT_V3,
 	LWIS_CMD_ID_TRANSACTION_CANCEL = 0x50100,
-	LWIS_CMD_ID_TRANSACTION_REPLACE = 0x50200,
-	LWIS_CMD_ID_TRANSACTION_REPLACE_V2,
+	LWIS_CMD_ID_TRANSACTION_REPLACE_V2 = 0x50201,
 	LWIS_CMD_ID_TRANSACTION_REPLACE_V3,
 
 	LWIS_CMD_ID_PERIODIC_IO_SUBMIT = 0x60000,
@@ -662,11 +640,6 @@ struct lwis_cmd_event_control_set {
 struct lwis_cmd_event_dequeue {
 	struct lwis_cmd_pkt header;
 	struct lwis_event_info info;
-};
-
-struct lwis_cmd_transaction_info {
-	struct lwis_cmd_pkt header;
-	struct lwis_transaction_info info;
 };
 
 struct lwis_cmd_transaction_info_v2 {
