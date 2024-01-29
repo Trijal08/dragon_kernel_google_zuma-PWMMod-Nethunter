@@ -1164,7 +1164,7 @@ static int construct_transaction_from_cmd(struct lwis_client *client, uint32_t c
 	struct lwis_transaction *k_transaction;
 	struct lwis_device *lwis_dev = client->lwis_dev;
 
-	k_transaction = kmalloc(sizeof(*k_transaction), GFP_KERNEL);
+	k_transaction = kzalloc(sizeof(struct lwis_transaction), GFP_KERNEL);
 	if (!k_transaction) {
 		return -ENOMEM;
 	}
@@ -1938,7 +1938,7 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 		mutex_unlock(&lwis_client->lock);
 		break;
 	default:
-		dev_err_ratelimited(lwis_dev->dev, "Unknown command id 0x%x\n", header->cmd_id);
+		dev_warn_ratelimited(lwis_dev->dev, "Unknown command id 0x%x\n", header->cmd_id);
 		header->ret_code = -ENOSYS;
 		ret = copy_pkt_to_user(lwis_dev, user_msg, (void *)header, sizeof(*header));
 	}
