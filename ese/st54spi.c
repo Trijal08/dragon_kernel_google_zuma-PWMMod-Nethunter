@@ -69,6 +69,9 @@ static DECLARE_BITMAP(minors, N_SPI_MINORS);
 
 #define ST54SPI_IOC_RD_POWER _IOR(SPI_IOC_MAGIC, 99, __u32)
 #define ST54SPI_IOC_WR_POWER _IOW(SPI_IOC_MAGIC, 99, __u32)
+#define ST54SPI_GET_CHIP_EN_VALUE _IOR(SPI_IOC_MAGIC, 98, __u32)
+#define ST54SPI_SET_CHIP_EN_VALUE _IOW(SPI_IOC_MAGIC, 98, __u32)
+#define ST54SPI_CHIP_EN_PULSE_RESET _IO(SPI_IOC_MAGIC, 97)
 
 /* Bit masks for spi_device.mode management.  Note that incorrect
  * settings for some settings can cause *lots* of trouble for other
@@ -104,17 +107,22 @@ struct st54spi_data {
 	/* GPIO for SE_POWER_REQ / SE_nRESET */
 	struct gpio_desc *gpiod_se_reset;
 
+	/* GPIO for SE_CHIP_EN */
+	struct gpio_desc *gpiod_se_chip_en;
+
 	int power_gpio_mode;
 	int power_gpio;
 	int nfcc_needs_poweron;
 	int sehal_needs_poweron;
 	int se_is_poweron;
+	struct pinctrl *pinctrl;
 };
 
 #define POWER_MODE_NONE -1
 #define POWER_MODE_ST54H 0
 #define POWER_MODE_ST54J 1
 #define POWER_MODE_ST54J_COMBO 2
+#define POWER_MODE_ST54L 3
 
 static LIST_HEAD(device_list);
 static DEFINE_MUTEX(device_list_lock);
@@ -125,7 +133,7 @@ MODULE_PARM_DESC(bufsiz, "data bytes in biggest supported SPI message");
 
 #define VERBOSE 0
 
-#define DRIVER_VERSION "2.2.0"
+#define DRIVER_VERSION "2.3.0"
 
 /*-------------------------------------------------------------------------*/
 
@@ -148,6 +156,31 @@ static ssize_t st54spi_sync(struct st54spi_data *st54spi,
 		status = message->actual_length;
 
 	return status;
+}
+
+static void st54spi_pinctrl_configure(struct st54spi_data *st54spi, bool enable)
+{
+	struct pinctrl_state *state;
+	int rc;
+	if (st54spi->pinctrl == NULL) {
+		return;
+	}
+	dev_dbg(&st54spi->spi->dev, "configure pinctrl: %d\n", enable);
+	if (IS_ERR(st54spi->pinctrl)) {
+		dev_err(&st54spi->spi->dev, "could not get pinctrl\n");
+		return;
+	}
+	if (enable)
+		state = pinctrl_lookup_state(st54spi->pinctrl, "func");
+	else
+		state = pinctrl_lookup_state(st54spi->pinctrl, "default");
+	if (IS_ERR_OR_NULL(state)) {
+		dev_err(&st54spi->spi->dev, "failed to get pinctrl state\n");
+		return;
+	}
+	rc = pinctrl_select_state(st54spi->pinctrl, state);
+	if (unlikely(rc))
+		dev_err(&st54spi->spi->dev, "failed to set pinctrl state\n");
 }
 
 static inline ssize_t st54spi_sync_write(struct st54spi_data *st54spi,
@@ -232,11 +265,13 @@ static ssize_t st54spi_write(struct file *filp, const char __user *buf,
 	dev_dbg(&st54spi->spi->dev, "st54spi Write: %zu bytes\n", count);
 
 	mutex_lock(&st54spi->buf_lock);
+	st54spi_pinctrl_configure(st54spi, true);
 	missing = copy_from_user(st54spi->tx_buffer, buf, count);
 	if (missing == 0)
 		status = st54spi_sync_write(st54spi, count);
 	else
 		status = -EFAULT;
+	st54spi_pinctrl_configure(st54spi, false);
 	mutex_unlock(&st54spi->buf_lock);
 
 	dev_dbg(&st54spi->spi->dev, "st54spi Write: status: %zd\n", status);
@@ -428,6 +463,13 @@ static void st54spi_power_on(struct st54spi_data *st54spi)
 		dev_info(&st54spi->spi->dev, "%s : st54 set nReset to Low\n",
 			 __func__);
 		usleep_range(3000, 4000);
+	} else if (st54spi->power_gpio_mode == POWER_MODE_ST54L) {
+		gpiod_set_value(st54spi->gpiod_se_reset, 0);
+		usleep_range(5000, 5500);
+		gpiod_set_value(st54spi->gpiod_se_reset, 1);
+		dev_info(&st54spi->spi->dev, "%s : st54 set nReset to High\n",
+			__func__);
+		usleep_range(10000, 11000);
 	}
 	st54spi->se_is_poweron = 1;
 }
@@ -605,6 +647,36 @@ static long st54spi_ioctl(struct file *filp, unsigned int cmd,
 			st54spi_power_set(st54spi, tmp ? 1 : 0);
 			dev_dbg(&st54spi->spi->dev, "SE_POWER_REQ set: %d\n",
 				 tmp);
+		}
+		break;
+	case ST54SPI_GET_CHIP_EN_VALUE:
+		if (!IS_ERR(st54spi->gpiod_se_chip_en)) {
+			retval = gpiod_get_value(st54spi->gpiod_se_chip_en);
+			dev_dbg(&st54spi->spi->dev, "SE_CHIP_ENABLE get: %d\n", retval);
+		} else {
+			retval = -ENODEV;
+		}
+		break;
+	case ST54SPI_SET_CHIP_EN_VALUE:
+		if (!IS_ERR(st54spi->gpiod_se_chip_en)) {
+			dev_dbg(&st54spi->spi->dev, "SE_CHIP_ENABLE set: %lu\n", arg);
+			if ((arg == 0) || (arg == 1)) {
+				gpiod_set_value(st54spi->gpiod_se_chip_en, arg);
+			} else {
+				retval = -ENOIOCTLCMD;
+			}
+		} else {
+			retval = -ENODEV;
+		}
+		break;
+	case ST54SPI_CHIP_EN_PULSE_RESET:
+		if (!IS_ERR(st54spi->gpiod_se_chip_en)) {
+			dev_dbg(&st54spi->spi->dev, "ST54SPI_CHIP_EN_PULSE_RESET\n");
+			gpiod_set_value(st54spi->gpiod_se_chip_en, 0);
+			usleep_range(2000, 3000);
+			gpiod_set_value(st54spi->gpiod_se_chip_en, 1);
+		} else {
+			retval = -ENODEV;
 		}
 		break;
 	default:
@@ -899,6 +971,10 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 		dev_info(dev, "%s: Default power mode: ST54J Combo\n",
 			 __FILE__);
 		pdata->power_gpio_mode = POWER_MODE_ST54J_COMBO;
+	} else if (!strcmp(power_mode, "ST54L")) {
+		dev_info(dev, "%s: Power mode: ST54L\n",
+			 __FILE__);
+		pdata->power_gpio_mode = POWER_MODE_ST54L;
 	} else if (!strcmp(power_mode, "ST54Jse")) {
 		dev_info(dev, "%s: Power mode: ST54J SE-only\n",
 			 __FILE__);
@@ -920,10 +996,16 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 	}
 
 	/* Get the Gpio */
-	if ((pdata->power_gpio_mode == POWER_MODE_ST54J_COMBO) ||
-	    (pdata->power_gpio_mode == POWER_MODE_ST54J)) {
-		pdata->gpiod_se_reset =
-			devm_gpiod_get(dev, "esereset", GPIOD_OUT_LOW);
+	if (pdata->power_gpio_mode == POWER_MODE_ST54J_COMBO ||
+	    pdata->power_gpio_mode == POWER_MODE_ST54J ||
+	    pdata->power_gpio_mode == POWER_MODE_ST54L) {
+		if (pdata->power_gpio_mode == POWER_MODE_ST54L) {
+			pdata->gpiod_se_reset =
+				devm_gpiod_get(dev, "esereset", GPIOD_OUT_HIGH);
+		} else {
+			pdata->gpiod_se_reset =
+				devm_gpiod_get(dev, "esereset", GPIOD_OUT_LOW);
+		}
 		if (IS_ERR(pdata->gpiod_se_reset)) {
 			dev_err(dev,
 				"%s : Unable to request esereset %d\n",
@@ -933,6 +1015,18 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 		}
 	} else {
 		dev_err(dev, "%s: ST54H mode not supported", __FILE__);
+	}
+	if (pdata->power_gpio_mode == POWER_MODE_ST54L) {
+		/* Optional se_chip_en Gpio */
+		pdata->gpiod_se_chip_en =
+			devm_gpiod_get(dev, "ese_chip_enable", GPIOD_OUT_HIGH);
+		pdata->pinctrl = devm_pinctrl_get(dev);
+		if (IS_ERR(pdata->pinctrl)) {
+			dev_err(dev, "could not get pinctrl\n");
+			return -ENODEV;
+		}
+	} else {
+		pdata->pinctrl = NULL;
 	}
 	return r;
 }
