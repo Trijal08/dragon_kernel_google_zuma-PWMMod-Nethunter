@@ -64,6 +64,13 @@ int gs_panel_sysfs_create_files(struct device *dev);
  */
 int gs_panel_sysfs_create_bl_files(struct device *bl_dev);
 
+/* drm_bridge_funcs.c */
+/**
+ * gs_panel_node_attach - Creates debugfs and sysfs entries for panel
+ * @gs_connector: Pointer to gs_connector
+ */
+void gs_panel_node_attach(struct gs_drm_connector *gs_connector);
+
 /* gs_panel_debugfs.c */
 /**
  * gs_panel_create_debugfs_entries - Creates debugfs entries for panel

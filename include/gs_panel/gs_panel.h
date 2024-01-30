@@ -484,6 +484,20 @@ struct gs_panel_funcs {
 	 * normal mode.
 	 */
 	void (*run_normal_mode_work)(struct gs_panel *gs_panel);
+
+	/**
+	 * @update_ffc
+	 *
+	 * This callback is used to update FFC (Frame Frequency Control) for panel.
+	 */
+	void (*update_ffc)(struct gs_panel *gs_panel, unsigned int hs_clk);
+
+	/**
+	 * @pre_update_ffc
+	 *
+	 * This callback is used to do something before updating FFC for panel.
+	 */
+	void (*pre_update_ffc)(struct gs_panel *gs_panel);
 };
 
 /* PANEL DESC */
@@ -605,10 +619,33 @@ struct panel_reg_ctrl {
 #define IS_VALID_PANEL_REG_ID(id) (((id) > PANEL_REG_ID_INVALID) && ((id) < PANEL_REG_ID_MAX))
 #define PANEL_REG_COUNT (PANEL_REG_ID_MAX - 1)
 
+/**
+ * struct gs_panel_reg_ctrl_desc - An ordered set of regulators per purpose
+ *
+ * Each array of struct panel_reg_ctrl is a description of which regulators, in
+ * order, are activated/deactivated for the relevant power operation.
+ * Each entry in the array is a pair of "which regulator" matched with "how long
+ * to delay after enable/disable".
+ *
+ * The panel driver may then define for each operation (enable, post-enable,
+ * pre-disable, and disable) which regulators are activated/deactivated in the
+ * given order. As an example, if a struct gs_panel_reg_ctrl_desc is defined
+ * with these members:
+ * .reg_ctrl_enable = { {PANEL_REG_ID_VDDI, 1}, {PANEL_REG_ID_VCI, 10},},
+ * .reg_ctrl_post_enable = {{PANEL_REG_ID_VDDD, 1},},
+ * then the "enable" process will turn on the VDDI regulator, wait 1ms,
+ * then turn on the VCI regulator, then wait 10ms.
+ * Later, during the "post_enable" process, it will enable the VDDD regulator,
+ * and then wait an additional 1ms.
+ */
 struct gs_panel_reg_ctrl_desc {
+	/** @reg_ctrl_enable: panel enable regulator sequence */
 	const struct panel_reg_ctrl reg_ctrl_enable[PANEL_REG_COUNT];
+	/** @reg_ctrl_enable: panel post-enable regulator sequence */
 	const struct panel_reg_ctrl reg_ctrl_post_enable[PANEL_REG_COUNT];
+	/** @reg_ctrl_enable: panel pre-disable regulator sequence */
 	const struct panel_reg_ctrl reg_ctrl_pre_disable[PANEL_REG_COUNT];
+	/** @reg_ctrl_enable: panel disable regulator sequence */
 	const struct panel_reg_ctrl reg_ctrl_disable[PANEL_REG_COUNT];
 };
 
@@ -635,6 +672,8 @@ struct gs_panel_desc {
 	const struct gs_panel_funcs *gs_panel_func;
 	const u32 reset_timing_ms[PANEL_RESET_TIMING_COUNT];
 	const struct gs_panel_reg_ctrl_desc *reg_ctrl_desc;
+	/** @default_dsi_hs_clk: default MIPI DSI HS clock (Hz) */
+	u32 default_dsi_hs_clk;
 };
 
 /* PRIV DATA */
@@ -942,6 +981,9 @@ struct gs_panel {
 	enum gs_hbm_mode hbm_mode;
 	/* LHBM struct */
 	struct gs_local_hbm lhbm;
+
+	/** @dsi_hs_clk: current MIPI DSI HS clock (Hz) */
+	u32 dsi_hs_clk;
 };
 
 /* FUNCTIONS */
@@ -1248,7 +1290,7 @@ u32 panel_calc_linear_luminance(const u32 value, const u32 coef_x_1k, const int 
 #define GS_HBM_FLAG_BL_UPDATE BIT(1)
 #define GS_HBM_FLAG_LHBM_UPDATE BIT(2)
 #define GS_HBM_FLAG_DIMMING_UPDATE BIT(3)
-#define GS_HBM_FLAG_OP_RATE_UPDATE BIT(4)
+#define GS_FLAG_OP_RATE_UPDATE BIT(4)
 
 #define GS_IS_HBM_ON(mode) ((mode) >= GS_HBM_ON_IRC_ON && (mode) < GS_HBM_STATE_MAX)
 #define GS_IS_HBM_ON_IRC_OFF(mode) (((mode) == GS_HBM_ON_IRC_OFF))

@@ -89,13 +89,39 @@ static const char *gs_panel_get_sysfs_name(struct gs_panel *ctx)
 	return "primary-panel";
 }
 
+void gs_panel_node_attach(struct gs_drm_connector *gs_connector)
+{
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+	struct drm_connector *connector = &gs_connector->base;
+	const char *sysfs_name = gs_panel_get_sysfs_name(ctx);
+	struct drm_bridge *bridge = &ctx->bridge;
+	int ret;
+
+	/* Create sysfs links from connector to panel */
+	ret = sysfs_create_link(&gs_connector->kdev->kobj, &ctx->dev->kobj, "panel");
+	if (ret)
+		dev_warn(ctx->dev, "unable to link connector platform dev to panel (%d)\n", ret);
+
+	ret = sysfs_create_link(&connector->kdev->kobj, &ctx->dev->kobj, "panel");
+	if (ret)
+		dev_warn(ctx->dev, "unable to link connector drm dev to panel (%d)\n", ret);
+
+	/* debugfs entries */
+	gs_panel_create_debugfs_entries(ctx, connector->debugfs_entry);
+
+	ret = sysfs_create_link(&bridge->dev->dev->kobj, &ctx->dev->kobj, sysfs_name);
+	if (ret)
+		dev_warn(ctx->dev, "unable to link %s sysfs (%d)\n", sysfs_name, ret);
+	else
+		dev_dbg(ctx->dev, "succeed to link %s sysfs\n", sysfs_name);
+}
+
 static int gs_panel_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_attach_flags flags)
 {
 	struct gs_panel *ctx = bridge_to_gs_panel(bridge);
 	struct device *dev = ctx->dev;
 	struct gs_drm_connector *gs_connector = get_gs_drm_connector_parent(ctx);
 	struct drm_connector *connector = &gs_connector->base;
-	const char *sysfs_name = gs_panel_get_sysfs_name(ctx);
 	int ret;
 
 	/* Initialize connector, attach properties, and register */
@@ -112,30 +138,12 @@ static int gs_panel_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_att
 	if (gs_panel_has_func(ctx, commit_done))
 		ctx->gs_connector->needs_commit = true;
 
-	/* Create sysfs links from connector to panel */
-	ret = sysfs_create_link(&gs_connector->kdev->kobj, &ctx->dev->kobj, "panel");
-	if (ret)
-		dev_warn(dev, "unable to link connector platform dev to panel (%d)\n", ret);
-
-	ret = sysfs_create_link(&connector->kdev->kobj, &ctx->dev->kobj, "panel");
-	if (ret)
-		dev_warn(dev, "unable to link connector drm dev to panel (%d)\n", ret);
-
-	/* debugfs entries */
-	gs_panel_create_debugfs_entries(ctx, connector->debugfs_entry);
-
 	if (connector->dev->mode_config.poll_enabled)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
 		drm_kms_helper_connector_hotplug_event(connector);
 #else
 		drm_kms_helper_hotplug_event(connector->dev);
 #endif
-
-	ret = sysfs_create_link(&bridge->dev->dev->kobj, &ctx->dev->kobj, sysfs_name);
-	if (ret)
-		dev_warn(dev, "unable to link %s sysfs (%d)\n", sysfs_name, ret);
-	else
-		dev_dbg(dev, "successfully linked %s sysfs\n", sysfs_name);
 
 	return 0;
 }
@@ -184,6 +192,11 @@ static void gs_panel_bridge_enable(struct drm_bridge *bridge,
 		need_update_backlight = true;
 	}
 	ctx->panel_state = is_lp_mode ? GPANEL_STATE_LP : GPANEL_STATE_NORMAL;
+
+	/* TODO(b/318876121) get clock data from dsim, or remove this feature */
+	if (gs_panel_has_func(ctx, update_ffc) && !ctx->idle_data.self_refresh_active) {
+		ctx->desc->gs_panel_func->update_ffc(ctx, 0);
+	}
 
 	if (ctx->idle_data.self_refresh_active) {
 		dev_dbg(ctx->dev, "self refresh state : %s\n", __func__);
@@ -402,6 +415,9 @@ static void gs_panel_bridge_disable(struct drm_bridge *bridge,
 		ctx->idle_data.self_refresh_active = true;
 		panel_update_idle_mode_locked(ctx, false);
 		mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+
+		if (gs_panel_has_func(ctx, pre_update_ffc))
+			ctx->desc->gs_panel_func->pre_update_ffc(ctx);
 	} else {
 		if (gs_conn_state->blanked_mode) {
 			/* blanked mode takes precedence over normal modeset */
@@ -477,11 +493,17 @@ static int gs_drm_connector_check_mode(struct gs_panel *ctx,
 {
 	struct gs_drm_connector_state *gs_connector_state = to_gs_connector_state(connector_state);
 	const struct gs_panel_mode *pmode = gs_panel_get_mode(ctx, &crtc_state->mode);
+	bool is_video_mode;
 
 	if (!pmode) {
 		dev_warn(ctx->dev, "invalid mode %s\n", crtc_state->mode.name);
 		return -EINVAL;
 	}
+
+	is_video_mode = (pmode->gs_mode.mode_flags & MIPI_DSI_MODE_VIDEO) != 0;
+
+	/* self refresh is only supported in command mode */
+	connector_state->self_refresh_aware = !is_video_mode;
 
 	if (crtc_state->connectors_changed || !gs_is_panel_active(ctx))
 		gs_connector_state->seamless_possible = false;
@@ -591,7 +613,7 @@ static int gs_panel_bridge_atomic_check(struct drm_bridge *bridge,
 		 * Use higher BTS can avoid the issue. Also consider the clock from RRS
 		 * and select the higher one.
 		 */
-		if ((gs_conn_state->pending_update_flags & GS_HBM_FLAG_OP_RATE_UPDATE) &&
+		if ((gs_conn_state->pending_update_flags & GS_FLAG_OP_RATE_UPDATE) &&
 		    gs_conn_state->operation_rate > ctx->op_hz) {
 			target_mode->clock =
 				gs_bts_fps_to_drm_mode_clock(target_mode, ctx->peak_bts_fps);

@@ -27,6 +27,10 @@
 #define DRM_MODE_FLAG_TE_FREQ_MASK \
 	(DRM_MODE_FLAG_TE_FREQ_X1 | DRM_MODE_FLAG_TE_FREQ_X2 | DRM_MODE_FLAG_TE_FREQ_X4)
 
+// BTS need takes operation rate into account
+#define DRM_MODE_FLAG_BTS_OP_RATE DRM_MODE_FLAG_NVSYNC
+#define IS_BTS2OPRATE_MODE(t) ((t) & DRM_MODE_FLAG_BTS_OP_RATE)
+
 /**
  * DRM_H_TIMING() - fills in horizontal timing in struct drm_display_mode
  * @HDISPLAY: Horizontal active region

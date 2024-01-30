@@ -56,6 +56,7 @@ struct gs_drm_connector_properties {
 	struct drm_property *panel_orientation;
 	struct drm_property *refresh_on_lp;
 	struct drm_property *rr_switch_duration;
+	struct drm_property *operation_rate;
 };
 
 struct gs_display_partial {
@@ -138,6 +139,9 @@ struct gs_drm_connector_state {
 
 	/** @operation_rate: panel operation rate */
 	unsigned int operation_rate;
+
+	/* @update_operation_rate_to_bts: update panel operation rate to BTS requirement */
+	bool update_operation_rate_to_bts;
 };
 
 #define to_gs_connector_state(connector_state) \
@@ -152,6 +156,7 @@ struct gs_drm_connector_funcs {
 	int (*atomic_get_property)(struct gs_drm_connector *gs_connector,
 				   const struct gs_drm_connector_state *gs_state,
 				   struct drm_property *property, uint64_t *val);
+	int (*late_register)(struct gs_drm_connector *gs_connector);
 };
 
 struct gs_drm_connector_helper_funcs {
