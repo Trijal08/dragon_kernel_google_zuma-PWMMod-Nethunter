@@ -140,7 +140,7 @@ void heatmap_read(struct v4l2_heatmap *v4l2, uint64_t timestamp)
 	vb2_buffer_done(vb2_buf, VB2_BUF_STATE_DONE);
 	spin_unlock(&v4l2->heatmap_lock);
 }
-EXPORT_SYMBOL(heatmap_read);
+EXPORT_SYMBOL_GPL(heatmap_read);
 
 static void heatmap_buffer_queue(struct vb2_buffer *vb)
 {
@@ -392,7 +392,7 @@ err_free_frame_storage:
 err_probe:
 	return error;
 }
-EXPORT_SYMBOL(heatmap_probe);
+EXPORT_SYMBOL_GPL(heatmap_probe);
 
 void heatmap_remove(struct v4l2_heatmap *v4l2)
 {
@@ -408,7 +408,7 @@ void heatmap_remove(struct v4l2_heatmap *v4l2)
 		v4l2->frame = NULL;
 	}
 }
-EXPORT_SYMBOL(heatmap_remove);
+EXPORT_SYMBOL_GPL(heatmap_remove);
 
 MODULE_DESCRIPTION("Touchscreen heatmap video device");
 MODULE_AUTHOR("Siarhei Vishniakou <svv@google.com>");

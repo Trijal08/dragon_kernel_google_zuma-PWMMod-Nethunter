@@ -4,6 +4,12 @@ KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
 M ?= $(shell pwd)
 
 EXTRA_CFLAGS	+= -DDYNAMIC_DEBUG_MODULE
+EXTRA_SYMBOLS	+= $(OUT_DIR)/../private/google-modules/aoc/Module.symvers
+EXTRA_SYMBOLS	+= $(OUT_DIR)/../private/google-modules/display/common/gs_drm/Module.symvers
+EXTRA_SYMBOLS	+= $(OUT_DIR)/../private/google-modules/display/samsung/Module.symvers
+ifneq ("$(wildcard $(OUT_DIR)/../private/google-modules/fingerprint/qcom/qfs4008/Module.symvers)","")
+EXTRA_SYMBOLS   += $(OUT_DIR)/../private/google-modules/fingerprint/qcom/qfs4008/Module.symvers
+endif
 
 include $(KERNEL_SRC)/../private/google-modules/soc/gs/Makefile.include
 
