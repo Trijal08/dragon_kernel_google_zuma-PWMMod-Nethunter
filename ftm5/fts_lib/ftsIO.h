@@ -35,6 +35,8 @@
 #include <linux/spi/spi.h>
 #endif
 
+#define spi_len_dma_align(len, sz) ((len) >= 64) ? ALIGN(len, sz) : (len)
+#define spi_bits_dma_align(len) ((len) >= 64) ? (32) : (8)
 
 int openChannel(void *clt);
 

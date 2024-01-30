@@ -210,7 +210,7 @@
 /** @}*/	/* end of error_commands section */
 
 
-int isI2cError(int error);
+int isBusError(int error);
 int dumpErrorInfo(struct fts_ts_info *info, u8 *outBuf, int size);
 int errorHandler(struct fts_ts_info *info, u8 *event, int size);
 int addErrorIntoList(struct fts_ts_info *info, u8 *event, int size);

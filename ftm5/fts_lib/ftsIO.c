@@ -126,7 +126,12 @@ static int fts_read_internal(struct fts_ts_info *info, u8 *outBuf,
 #else
 	spi_message_init(&msg);
 
-	transfer[0].len = byteToRead;
+	if (info->dma_mode) {
+		transfer[0].len = spi_len_dma_align(byteToRead, 4);
+		transfer[0].bits_per_word = spi_bits_dma_align(byteToRead);
+	} else {
+		transfer[0].len = byteToRead;
+	}
 	transfer[0].delay.value = SPI_DELAY_CS;
 	transfer[0].delay.unit = SPI_DELAY_UNIT_USECS;
 	transfer[0].tx_buf = NULL;
@@ -214,12 +219,22 @@ static int fts_writeRead_internal(struct fts_ts_info *info, u8 *cmd,
 #else
 	spi_message_init(&msg);
 
-	transfer[0].len = cmdLength;
+	if (info->dma_mode) {
+		transfer[0].len = spi_len_dma_align(cmdLength, 4);
+		transfer[0].bits_per_word = spi_bits_dma_align(cmdLength);
+	} else {
+		transfer[0].len = cmdLength;
+	}
 	transfer[0].tx_buf = cmd;
 	transfer[0].rx_buf = NULL;
 	spi_message_add_tail(&transfer[0], &msg);
 
-	transfer[1].len = byteToRead;
+	if (info->dma_mode) {
+		transfer[1].len = spi_len_dma_align(byteToRead, 4);
+		transfer[1].bits_per_word = spi_bits_dma_align(byteToRead);
+	} else {
+		transfer[1].len = byteToRead;
+	}
 	transfer[1].delay.value = SPI_DELAY_CS;
 	transfer[1].delay.unit = SPI_DELAY_UNIT_USECS;
 	transfer[1].tx_buf = NULL;
@@ -293,7 +308,12 @@ static int fts_write_internal(struct fts_ts_info *info, u8 *cmd, int cmdLength,
 #else
 	spi_message_init(&msg);
 
-	transfer[0].len = cmdLength;
+	if (info->dma_mode) {
+		transfer[0].len = spi_len_dma_align(cmdLength, 4);
+		transfer[0].bits_per_word = spi_bits_dma_align(cmdLength);
+	} else {
+		transfer[0].len = cmdLength;
+	}
 	transfer[0].delay.value = SPI_DELAY_CS;
 	transfer[0].delay.unit = SPI_DELAY_UNIT_USECS;
 	transfer[0].tx_buf = cmd;
@@ -389,17 +409,32 @@ static int fts_writeThenWriteRead_internal(struct fts_ts_info *info,
 #else
 	spi_message_init(&msg);
 
-	transfer[0].len = writeCmdLength;
+	if (info->dma_mode) {
+		transfer[0].len = spi_len_dma_align(writeCmdLength, 4);
+		transfer[0].bits_per_word = spi_bits_dma_align(writeCmdLength);
+	} else {
+		transfer[0].len = writeCmdLength;
+	}
 	transfer[0].tx_buf = writeCmd1;
 	transfer[0].rx_buf = NULL;
 	spi_message_add_tail(&transfer[0], &msg);
 
-	transfer[1].len = readCmdLength;
+	if (info->dma_mode) {
+		transfer[1].len = spi_len_dma_align(readCmdLength, 4);
+		transfer[1].bits_per_word = spi_bits_dma_align(readCmdLength);
+	} else {
+		transfer[1].len = readCmdLength;
+	}
 	transfer[1].tx_buf = readCmd1;
 	transfer[1].rx_buf = NULL;
 	spi_message_add_tail(&transfer[1], &msg);
 
-	transfer[2].len = byteToRead;
+	if (info->dma_mode) {
+		transfer[2].len = spi_len_dma_align(byteToRead, 4);
+		transfer[2].bits_per_word = spi_bits_dma_align(byteToRead);
+	} else {
+		transfer[2].len = byteToRead;
+	}
 	transfer[2].delay.value = SPI_DELAY_CS;
 	transfer[2].delay.unit = SPI_DELAY_UNIT_USECS;
 	transfer[2].tx_buf = NULL;

@@ -46,13 +46,18 @@ typedef enum {
 } AddrSize;
 
 /**
- * Enumerator which define the keep_cx meaning
+ * Enumerator which define the keep_cx meaning.
+ * CX_ERASE - For golden calibration touchscreen.
+ * CX_KEEP - Keep cx while updating firmware. CX can be update by FPI.
+ * CX_CHECK_AFE_VER - For partial FPI. (Update ms_cx but keep ss_cx.)
  */
 enum {
-	CX_ERASE,
+	CX_ERASE = 0,
 	CX_KEEP,
 	CX_CHECK_AFE_VER
 };
+
+#define FTS_CX_DEFAULT_MODE CX_KEEP
 
 /********************  NEW API  *********************/
 
@@ -368,7 +373,9 @@ enum {
 #define SPECIAL_TUNING_IOFF	0x02	/* /< Perform Ioff calibration */
 
 /** @}*/
-
+/* bit2 and bit3 are for major data so skip it. */
+#define GET_EVENT_TYPE(event_data)	(event_data & 0xF3)
+#define VALID_EVENT_TYPE(event_data)    ((event_data & 0x03) == 0x03)
 /* EVENT ID */
 /** @defgroup events_group	 FW Event IDs and Types
   * Event IDs and Types pushed by the FW into the FIFO
@@ -420,6 +427,7 @@ enum {
 						 * Validation Status */
 #define EVT_TYPE_STATUS_GOLDEN_RAW_ERR	0x16	/* /< Golden Raw
 						 * Data Abnormal */
+#define EVT_TYPE_STATUS_HIGH_SENSITY	0x19	/* /< Hight Sensitivity* */
 
 /** @} */
 
@@ -564,5 +572,25 @@ enum {
 #define FTS_KEY_5		0x20	/* /< Key 5 bit */
 #define FTS_KEY_6		0x40	/* /< Key 6 bit */
 #define FTS_KEY_7		0x80	/* /< Key 7 bit */
+
+#define CUSTOM_CMD_GRIP_SUPPRESSION	0x03
+#define CUSTOM_CMD_CONTINUOUS_REPORT	0x05
+#define CUSTOM_CMD_REPORT_RATE		0x06
+#define CUSTOM_CMD_PALM_REJECTION	0x0B
+#define CUSTOM_CMD_HIGH_SENSITIVITY	0x0E
+#define CUSTOM_CMD_DISABLE_COORD_FILTER	0x0F
+
+
+/* Custom grip type tune. */
+#define GRIP_FEATURE_ENABLE		0x10
+#define GRIP_TUNE_LEFT_SIZE		0x20
+#define GRIP_TUNE_RIGHT_SIZE		0x21
+#define GRIP_TUNE_TOP_SIZE		0x22
+#define GRIP_TUNE_BOTTOM_SIZE		0x23
+#define GRIP_TUNE_BOTTOM_LEFT_SIZE	0x24
+#define GRIP_TUNE_BOTTOM_RIGHT_SIZE	0x25
+#define GRIP_TUNE_TOP_LEFT_SIZE		0x26
+#define GRIP_TUNE_TOP_RIGHT_SIZE	0x27
+#define GRIP_TUNE_TAP_FEATURE		0x30
 
 #endif

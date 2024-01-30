@@ -70,7 +70,11 @@ int fts_system_reset(struct fts_ts_info *info)
 	int res = -1;
 	int i;
 	u8 data[1] = { SYSTEM_RESET_VALUE };
-
+#ifdef FTS_GPIO6_UNUSED
+	u8 cmd[6] = { FTS_CMD_HW_REG_W, 0x20, 0x00, 0x00,
+			FLASH_ERASE_UNLOCK_CODE0, 0x00 };
+	u64 addr = 0;
+#endif
 	event_to_search = (int)EVT_ID_CONTROLLER_READY;
 
 	dev_info(info->dev, "System resetting...\n");
@@ -106,6 +110,21 @@ int fts_system_reset(struct fts_ts_info *info)
 			(res | ERROR_SYSTEM_RESET_FAIL));
 		return res | ERROR_SYSTEM_RESET_FAIL;
 	} else {
+#ifdef FTS_GPIO6_UNUSED
+		u8ToU64_be(&cmd[1], &addr, ADDR_SIZE_HW_REG);
+		res = fts_writeReadU8UX(info, FTS_CMD_HW_REG_R, ADDR_SIZE_HW_REG, addr,
+				data, 1, DUMMY_HW_REG);
+		if (res < OK) {
+			dev_err(info->dev, "fts_system_reset: ERROR %08X\n", res);
+			return res | ERROR_SYSTEM_RESET_FAIL;
+		}
+		cmd[5] = data[0] | 0x80;
+		res = fts_write(info, cmd, ARRAY_SIZE(cmd));
+		if (res < OK) {
+			dev_err(info->dev, "fts_system_reset: ERROR %08X\n", res);
+			return res | ERROR_SYSTEM_RESET_FAIL;
+		}
+#endif
 		dev_dbg(info->dev, "System reset DONE!\n");
 		info->system_reseted_down = 1;
 		info->system_reseted_up = 1;
@@ -789,21 +808,6 @@ int readSysInfo(struct fts_ts_info *info, int request)
 
 	memcpy(&info->systemInfo, &systemInfo, sizeof(systemInfo));
 
-#if IS_ENABLED(CONFIG_TOUCHSCREEN_HEATMAP)
-	if (info->board->tx_rx_dir_swap) {
-		info->v4l2.width = info->systemInfo.u8_scrRxLen;
-		info->v4l2.height = info->systemInfo.u8_scrTxLen;
-	} else {
-		info->v4l2.width = info->systemInfo.u8_scrTxLen;
-		info->v4l2.height = info->systemInfo.u8_scrRxLen;
-	}
-#endif
-
-#if IS_ENABLED(CONFIG_TOUCHSCREEN_OFFLOAD)
-	info->offload.caps.tx_size = info->systemInfo.u8_scrTxLen;
-	info->offload.caps.rx_size = info->systemInfo.u8_scrRxLen;
-#endif
-
 	dev_info(info->dev, "Parsed %d bytes!\n", index);
 
 
@@ -818,7 +822,7 @@ int readSysInfo(struct fts_ts_info *info, int request)
 	return OK;
 
 FAIL:
-	defaultSysInfo(info, isI2cError(ret));
+	defaultSysInfo(info, isBusError(ret));
 	return ret;
 }
 /** @}*/
@@ -885,24 +889,29 @@ int fts_enableInterrupt(struct fts_ts_info *info, bool enable)
 	unsigned long flag;
 
 	if (info->client == NULL) {
-		dev_err(info->dev, "Cannot get client irq. Error = %08X\n",
-			ERROR_OP_NOT_ALLOW);
+		dev_err(info->dev, "Error: Cannot get client irq.\n");
+		return ERROR_OP_NOT_ALLOW;
+	}
+
+	if (enable == info->irq_enabled) {
+		dev_dbg(info->dev, "Interrupt is already set (enable = %d).\n", enable);
+		return OK;
+	}
+
+	if (enable && !info->resume_bit) {
+		dev_err(info->dev, "Error: Interrupt can't enable in suspend mode.\n");
 		return ERROR_OP_NOT_ALLOW;
 	}
 
 	spin_lock_irqsave(&info->fts_int, flag);
 
-	if (enable == info->irq_enabled)
-		dev_dbg(info->dev, "Interrupt is already set (enable = %d).\n", enable);
-	else {
-		info->irq_enabled = enable;
-		if (enable) {
-			enable_irq(info->client->irq);
-			dev_dbg(info->dev, "Interrupt enabled.\n");
-		} else {
-			disable_irq_nosync(info->client->irq);
-			dev_dbg(info->dev, "Interrupt disabled.\n");
-		}
+	info->irq_enabled = enable;
+	if (enable) {
+		enable_irq(info->client->irq);
+		dev_dbg(info->dev, "Interrupt enabled.\n");
+	} else {
+		disable_irq_nosync(info->client->irq);
+		dev_dbg(info->dev, "Interrupt disabled.\n");
 	}
 
 	spin_unlock_irqrestore(&info->fts_int, flag);

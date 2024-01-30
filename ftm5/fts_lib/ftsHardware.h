@@ -41,18 +41,19 @@
 #define DCHIP_FW_VER_BYTE		2	/* /< number of bytes of the fw
 						 * versions */
 
-/* CHUNKS */
-#define READ_CHUNK			1024	/* /< chunk dimension of
+/* CHUNKS. It can support up to 2048 bytes. Set as 2040 to make sure it still less
+   than 2048 after adding byte_to_skip and 4 bytes alignment. */
+#define READ_CHUNK			2040	/* /< chunk dimension of
 						 * a single i2c read,
 						 * max allowed value is 2kB */
-#define WRITE_CHUNK			1024	/* /< chunk dimension of
+#define WRITE_CHUNK			2040	/* /< chunk dimension of
 						 * a single i2c write,
 						 * max allowed value is 2kB */
-#define MEMORY_CHUNK			1024	/* /< chunk dimenasion of
+#define MEMORY_CHUNK			2040	/* /< chunk dimenasion of
 						 * a single i2c write on mem,
 						 * max allowed value is 2kB */
 
-#define READ_FILTERED_RAW	/* /< To understand
+#undef READ_FILTERED_RAW	/* /< To understand
 				* which type of RAW data to read
 				* OCTA panel needs to read Filtered RAW */
 
@@ -107,7 +108,12 @@
 #define FLASH_ERASE_CODE1		0xC0
 #define FLASH_DMA_CODE1			0xC0
 #define FLASH_ERASE_UNLOCK_CODE0	0xDE
+#define FTS_GPIO6_UNUSED	/* /< uncomment this if GPIO6 is unused */
+#ifdef FTS_GPIO6_UNUSED
+#define FLASH_ERASE_UNLOCK_CODE1	0x83
+#else
 #define FLASH_ERASE_UNLOCK_CODE1	0x03
+#endif
 #define FLASH_ERASE_CODE0		0x6A
 #define FLASH_DMA_CODE0			0x71
 #define FLASH_DMA_CONFIG		0x72
@@ -191,6 +197,8 @@
 					 * if FTI */
 #define FTS_CMD_CONFIG_W	0xA8	/* /< command to write the config memory
 					 * if FTI */
+#define FTS_CMD_CUSTOM_R	0xC0	/* Read custom command */
+#define FTS_CMD_CUSTOM_W	0xC0	/* Write custom command */
 #else
 #define FTS_CMD_HW_REG_R	0xFB	/* /< command to read an hw register if
 					 * FTI */
@@ -205,6 +213,8 @@
 					 * if FTI */
 #define FTS_CMD_CONFIG_W	0xA8	/* /< command to write the config memory
 					 * if FTI */
+#define FTS_CMD_CUSTOM_R	0xC1	/* Read custom command */
+#define FTS_CMD_CUSTOM_W	0xC0	/* Write custom command */
 #endif
 
 /* DUMMY BYTES DATA */

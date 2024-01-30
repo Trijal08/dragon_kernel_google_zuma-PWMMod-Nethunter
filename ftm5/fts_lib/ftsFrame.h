@@ -91,7 +91,7 @@ typedef enum {
 typedef struct {
 	DataHeader header;	/* /< Header which contain basic info of the
 				 * frame */
-	short *node_data;	/* /< Data of the frame */
+	int16_t *node_data;	/* /< Data of the frame */
 	int node_data_size;	/* /< Dimension of the data of the frame */
 } MutualSenseFrame;
 
@@ -101,8 +101,8 @@ typedef struct {
 typedef struct {
 	DataHeader header;	/* /< Header which contain basic info of the
 				 * frame */
-	short *force_data;	/* /< Force Channels Data */
-	short *sense_data;	/* /< Sense Channels Data */
+	int16_t *force_data;	/* /< Force Channels Data */
+	int16_t *sense_data;	/* /< Sense Channels Data */
 } SelfSenseFrame;
 
 

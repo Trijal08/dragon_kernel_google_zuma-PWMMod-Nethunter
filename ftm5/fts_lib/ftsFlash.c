@@ -196,7 +196,8 @@ int flashProcedure(struct fts_ts_info *info, const char *path, int force,
 	if (keep_cx == CX_CHECK_AFE_VER) {
 		if (fw.cx_afe_ver != (uint32_t)info->systemInfo.u8_cxAfeVer) {
 			keep_cx = CX_ERASE;
-			saveMpFlag(info, MP_FLAG_CX_AFE_CHG);
+			if (!info->fw_no_response)
+				saveMpFlag(info, MP_FLAG_CX_AFE_CHG);
 		} else {
 			keep_cx = CX_KEEP;
 		}
@@ -1003,6 +1004,9 @@ int flash_burn(struct fts_ts_info *info, Firmware fw, int force_burn,
 	SysInfo systemInfo;
 	memcpy(&systemInfo, &info->systemInfo, sizeof(systemInfo));
 
+	if (info->fw_no_response)
+		goto skip_reset;
+
 	if (!force_burn) {
 		/* Compare firmware, config, and CX versions */
 		if (fw.fw_ver != (uint32_t)systemInfo.u16_fwVer ||
@@ -1057,6 +1061,7 @@ start:
 
 	msleep(100); /* required by HW for safe flash procedure */
 
+skip_reset:
 	dev_info(info->dev, " 2) HOLD M3 :\n");
 
 	res = hold_m3(info);

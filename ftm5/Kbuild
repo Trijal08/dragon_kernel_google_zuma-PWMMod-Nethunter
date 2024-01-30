@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 
 ccflags-y += -I$(srctree)/../private/google-modules/display
-ccflags-y += -I$(srctree)/../private/google-modules/display/include/uapi
+ccflags-y += -I$(srctree)/../private/google-modules/display/samsung/include/uapi
 ccflags-y += -I$(srctree)/../private/google-modules/touch/common
 ccflags-y += -I$(srctree)/../private/google-modules/touch/common/include
 

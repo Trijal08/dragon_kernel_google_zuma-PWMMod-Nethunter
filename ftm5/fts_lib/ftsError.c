@@ -34,11 +34,11 @@
 
 
 /**
-  * Check if an error code is related to an I2C failure
+  * Check if an error code is related to an Bus failure
   * @param error error code to check
-  * @return 1 if the first level error code is I2C related otherwise 0
+  * @return 1 if the first level error code is Bus related otherwise 0
   */
-int isI2cError(int error)
+int isBusError(int error)
 {
 	if (((error & 0x000000FF) >= (ERROR_BUS_R & 0x000000FF)) &&
 	    ((error & 0x000000FF) <= (ERROR_BUS_O & 0x000000FF)))

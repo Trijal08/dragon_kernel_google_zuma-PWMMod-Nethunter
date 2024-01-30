@@ -732,16 +732,6 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 	info->mess.action = 0;
 	info->mess.msg_size = 0;
 
-	if (fts_set_bus_ref(info, FTS_BUS_REF_SYSFS, true) < 0) {
-		res = ERROR_BUS_WR;
-		dev_err(info->dev, "%s: bus is not accessible.\n", __func__);
-		if (info->driver_test_buff)
-			info->limit = scnprintf(info->driver_test_buff, size,
-						"{ %08X }\n", res);
-		fts_set_bus_ref(info, FTS_BUS_REF_SYSFS, false);
-		goto ERROR;
-	}
-
 	if (count < 2) {
 		res = ERROR_OP_NOT_ALLOW;
 		goto ERROR;
@@ -2855,42 +2845,24 @@ END_DIAGNOSTIC:
 
 		case CMD_FORCE_TOUCH_ACTIVE:
 			/* Single parameter indicates force touch state */
-			if (numberParam == 2) {
+			if (numberParam == 2 || numberParam == 3) {
 				if (cmd[1] > 1) {
 					dev_err(info->dev, "Parameter should be 1 or 0\n");
 					res = ERROR_OP_NOT_ALLOW;
 				} else {
 					dev_info(info->dev, "FTS_BUS_REF_FORCE_ACTIVE: %s\n",
 						cmd[1] ? "ON" : "OFF");
-					fts_set_bus_ref(info,
-						FTS_BUS_REF_FORCE_ACTIVE,
-						cmd[1]);
-					res = OK;
-				}
-			} else if (numberParam == 3){
-				if (cmd[1] > 1) {
-					dev_err(info->dev, "Parameter should be 1 or 0\n");
-					res = ERROR_OP_NOT_ALLOW;
-				} else {
-					dev_info(info->dev, "%s: %s\n",
-						cmd[2] ? "FTS_BUS_REF_BUGREPORT" :
-							"FTS_BUS_REF_FORCE_ACTIVE",
-						cmd[1] ? "ON" : "OFF");
-					fts_set_bus_ref(info,
-						cmd[2] ? FTS_BUS_REF_BUGREPORT :
-							FTS_BUS_REF_FORCE_ACTIVE,
-						cmd[1]);
+#if IS_ENABLED(CONFIG_GOOG_TOUCH_INTERFACE)
+					cmd[1] ? goog_pm_wake_lock(info->gti,
+						GTI_PM_WAKELOCK_TYPE_FORCE_ACTIVE, false) :
+						goog_pm_wake_unlock(info->gti,
+						GTI_PM_WAKELOCK_TYPE_FORCE_ACTIVE);
+#endif
 					res = OK;
 				}
 			} else {
 				dev_err(info->dev, "Wrong number of parameters!\n");
 				res = ERROR_OP_NOT_ALLOW;
-			}
-			if (res == OK) {
-				if (cmd[1])
-					__pm_stay_awake(info->wakesrc);
-				else
-					__pm_relax(info->wakesrc);
 			}
 			break;
 
@@ -3698,8 +3670,6 @@ ERROR:
 	kfree(cmd);
 	kfree(funcToTest);
 	kfree(pbuf);
-
-	fts_set_bus_ref(info, FTS_BUS_REF_SYSFS, false);
 
 exit:
 	return count;
