@@ -163,7 +163,8 @@ enum lwis_io_entry_types {
 	LWIS_IO_ENTRY_POLL,
 	LWIS_IO_ENTRY_READ_ASSERT,
 	LWIS_IO_ENTRY_POLL_SHORT,
-	LWIS_IO_ENTRY_WAIT
+	LWIS_IO_ENTRY_WAIT,
+	LWIS_IO_ENTRY_WRITE_TO_BUFFER
 };
 
 // For io_entry read and write types.
@@ -198,6 +199,23 @@ struct lwis_io_entry_read_assert {
 	uint64_t timeout_ms;
 };
 
+struct pdma_buffer {
+	/* kernel use only */
+	void *io_sys_map;
+	void *dma_buf;
+};
+
+// For io_entry write to buffer.
+struct lwis_io_entry_write_to_buffer {
+	union {
+		int fd;
+		struct pdma_buffer *buffer;
+	};
+	uint64_t offset;
+	size_t size_in_bytes;
+	uint8_t *bytes;
+};
+
 struct lwis_io_entry {
 	int32_t type;
 	union {
@@ -206,6 +224,7 @@ struct lwis_io_entry {
 		struct lwis_io_entry_modify mod;
 		struct lwis_io_entry_read_assert read_assert;
 		uint64_t wait_us;
+		struct lwis_io_entry_write_to_buffer write_to_buffer;
 	};
 };
 
