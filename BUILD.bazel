@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: GPL-2.0
 
 load("//build/kernel/kleaf:kernel.bzl", "kernel_module")
 
@@ -7,8 +7,9 @@ kernel_module(
     srcs = glob([
         "**/*.c",
         "**/*.h",
-        "Kbuild",
     ]) + [
+        "Kbuild",
+        "//private/google-modules/bms/misc:headers",
         "//private/google-modules/soc/gs:gs_soc_headers",
     ],
     outs = [
@@ -20,6 +21,7 @@ kernel_module(
         "//private/google-modules/soc/gs:__pkg__",
     ],
     deps = [
+        "//private/google-modules/bms/misc:bms-misc",
         "//private/google-modules/soc/gs:gs_soc_module",
     ],
 )
