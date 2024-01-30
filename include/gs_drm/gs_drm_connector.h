@@ -35,6 +35,7 @@ enum gs_mipi_sync_mode {
 	GS_MIPI_CMD_SYNC_LHBM = BIT(2),
 	GS_MIPI_CMD_SYNC_GHBM = BIT(3),
 	GS_MIPI_CMD_SYNC_BL = BIT(4),
+	GS_MIPI_CMD_SYNC_OP_RATE = BIT(5),
 };
 
 struct gs_drm_connector;

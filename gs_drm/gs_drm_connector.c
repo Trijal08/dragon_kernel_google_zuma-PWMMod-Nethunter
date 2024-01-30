@@ -208,6 +208,7 @@ static int gs_drm_connector_create_brightness_properties(struct gs_drm_connector
 		{ __builtin_ffs(GS_MIPI_CMD_SYNC_LHBM) - 1, "sync_lhbm" },
 		{ __builtin_ffs(GS_MIPI_CMD_SYNC_GHBM) - 1, "sync_ghbm" },
 		{ __builtin_ffs(GS_MIPI_CMD_SYNC_BL) - 1, "sync_bl" },
+		{ __builtin_ffs(GS_MIPI_CMD_SYNC_OP_RATE) - 1, "sync_op_rate" },
 	};
 
 	prop = drm_property_create(dev, DRM_MODE_PROP_BLOB | DRM_MODE_PROP_IMMUTABLE,
@@ -239,10 +240,15 @@ static int gs_drm_connector_create_brightness_properties(struct gs_drm_connector
 		return -ENOMEM;
 	p->brightness_level = prop;
 
+	prop = drm_property_create_range(dev, 0, "operation_rate", 0, UINT_MAX);
+	if (!prop)
+		return -ENOMEM;
+	p->operation_rate = prop;
+
 	prop = drm_property_create_bitmask(
 		dev, 0, "mipi_sync", mipi_sync_list, ARRAY_SIZE(mipi_sync_list),
 		GS_MIPI_CMD_SYNC_NONE | GS_MIPI_CMD_SYNC_REFRESH_RATE | GS_MIPI_CMD_SYNC_LHBM |
-			GS_MIPI_CMD_SYNC_GHBM | GS_MIPI_CMD_SYNC_BL);
+			GS_MIPI_CMD_SYNC_GHBM | GS_MIPI_CMD_SYNC_BL | GS_MIPI_CMD_SYNC_OP_RATE);
 	if (!prop)
 		return -ENOMEM;
 	p->mipi_sync = prop;
