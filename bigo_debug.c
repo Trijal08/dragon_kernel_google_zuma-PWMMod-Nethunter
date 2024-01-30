@@ -12,6 +12,7 @@
 #include <linux/seq_file.h>
 
 #include "bigo_debug.h"
+#include "bigo_io.h"
 
 static int avail_freq_show(struct seq_file *s, void *unused)
 {
@@ -42,6 +43,7 @@ void bigo_init_debugfs(struct bigo_core *core)
 
 	debugfs->set_freq = 0;
 	debugfs->trigger_ssr = 0;
+	debugfs->timeout = JOB_COMPLETE_TIMEOUT_MS;
 
 	debugfs->root = debugfs_create_dir("bigo", NULL);
 	debugfs_create_file("avail_freqs", 0400, debugfs->root, core,
@@ -49,6 +51,8 @@ void bigo_init_debugfs(struct bigo_core *core)
 	debugfs_create_u32("set_freq", 0200, debugfs->root, &debugfs->set_freq);
 	debugfs_create_u32("trigger_ssr", 0600, debugfs->root,
 			&debugfs->trigger_ssr);
+	debugfs_create_u32("timeout", 0644, debugfs->root,
+			&debugfs->timeout);
 }
 
 void bigo_uninit_debugfs(struct bigo_core *core)

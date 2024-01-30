@@ -17,9 +17,7 @@
 #include "bigo_pm.h"
 #include "bigo_io.h"
 
-#define LARGE_LOAD_MIF_FLOOR 1539000
-
-static inline u32 bigo_get_total_load(struct bigo_core *core)
+static inline u32 bigo_get_total_load(struct bigo_core *core, bool use_bpp)
 {
 	struct bigo_inst *inst;
 	u32 load = 0;
@@ -31,7 +29,10 @@ static inline u32 bigo_get_total_load(struct bigo_core *core)
 	list_for_each_entry(inst, &core->instances, list) {
 		if (inst->idle)
 			continue;
-		curr_load = inst->width * inst->height * inst->fps / 1024;
+		curr_load = (u64)inst->width * inst->height * inst->fps / 1024;
+		if (use_bpp) {
+			curr_load *= inst->bpp;
+		}
 		if (curr_load < core->pm.max_load - load) {
 			load += curr_load;
 		} else {
@@ -44,6 +45,90 @@ static inline u32 bigo_get_total_load(struct bigo_core *core)
 	load = min(load, core->pm.max_load);
 	return load;
 }
+
+static inline u32 bigo_get_target_freq(struct bigo_core *core, u32 load)
+{
+	struct bigo_opp *opp;
+
+	list_for_each_entry(opp, &core->pm.opps, list) {
+		if (opp->load_pps >= load)
+			break;
+	}
+	return opp->freq_khz;
+}
+
+static inline struct bigo_bw *bigo_get_target_bw(struct bigo_core *core, u32 load)
+{
+	struct bigo_bw *bw;
+
+	list_for_each_entry(bw, &core->pm.bw, list) {
+		if (bw->load_pps >= load)
+			break;
+	}
+	return bw;
+}
+
+#if IS_ENABLED(CONFIG_SOC_ZUMA)
+
+#define BIGW_A0_CSR_PROG_FREQ 166000
+
+static inline void bigo_set_freq(struct bigo_core *core, u32 freq)
+{
+	if (core->debugfs.set_freq)
+		freq = core->debugfs.set_freq;
+
+	/* HW bug workaround: see b/215390692 */
+	if (core->ip_ver < 1 && freq > BIGW_A0_CSR_PROG_FREQ)
+		freq = BIGW_A0_CSR_PROG_FREQ;
+
+	if (!exynos_pm_qos_request_active(&core->pm.qos_bigo))
+		exynos_pm_qos_add_request(&core->pm.qos_bigo, PM_QOS_BW_THROUGHPUT, freq);
+	else
+		exynos_pm_qos_update_request(&core->pm.qos_bigo, freq);
+}
+
+static void bigo_scale_freq(struct bigo_core *core)
+{
+	u32 load = bigo_get_total_load(core, true);
+	u32 freq = bigo_get_target_freq(core, load);
+
+	bigo_set_freq(core, freq);
+}
+
+static void bigo_get_bw(struct bigo_core *core, struct bts_bw *bw)
+{
+	u32 load = bigo_get_total_load(core, false);
+
+	if (load) {
+		struct bigo_bw *bandwidth = bigo_get_target_bw(core, load);
+		struct bigo_inst *inst;
+		bool afbc = true;
+
+		/* Use AFBC BW table when all insts are AFBC */
+		list_for_each_entry(inst, &core->instances, list) {
+			if (!inst->afbc) {
+				afbc = false;
+				break;
+			}
+		}
+		if (afbc) {
+			bw->read = bandwidth->rd_bw_afbc;
+			bw->write = bandwidth->wr_bw_afbc;
+			bw->peak = bandwidth->pk_bw_afbc;
+		} else {
+			bw->read = bandwidth->rd_bw;
+			bw->write = bandwidth->wr_bw;
+			bw->peak = bandwidth->pk_bw;
+		}
+	} else {
+		memset(bw, 0, sizeof(*bw));
+	}
+	pr_debug("BW: load: %u, rd: %u, wr: %u, pk: %u", load, bw->read, bw->write, bw->peak);
+}
+
+#else
+
+#define LARGE_LOAD_MIF_FLOOR 1539000
 
 static inline void update_mif_floor(struct bigo_core *core)
 {
@@ -70,42 +155,20 @@ static inline void update_mif_floor(struct bigo_core *core)
 	}
 }
 
-static inline u32 bigo_get_target_freq(struct bigo_core *core, u32 load)
-{
-	struct bigo_opp *opp;
-
-	list_for_each_entry(opp, &core->pm.opps, list) {
-		if (opp->load_pps >= load)
-			break;
-	}
-	return opp->freq_khz;
-}
-
-static inline struct bigo_bw *bigo_get_target_bw(struct bigo_core *core, u32 load)
-{
-	struct bigo_bw *bw;
-
-	list_for_each_entry(bw, &core->pm.bw, list) {
-		if (bw->load_pps >= load)
-			break;
-	}
-	return bw;
-}
-
 static inline void bigo_set_freq(struct bigo_core *core, u32 freq)
 {
 	if (core->debugfs.set_freq)
 		freq = core->debugfs.set_freq;
 
 	if (!exynos_pm_qos_request_active(&core->pm.qos_bigo))
-		exynos_pm_qos_add_request(&core->pm.qos_bigo, PM_QOS_BO_THROUGHPUT, freq);
+		exynos_pm_qos_add_request(&core->pm.qos_bigo, PM_QOS_BW_THROUGHPUT, freq);
 	else
 		exynos_pm_qos_update_request(&core->pm.qos_bigo, freq);
 }
 
 static void bigo_scale_freq(struct bigo_core *core)
 {
-	u32 load = bigo_get_total_load(core);
+	u32 load = bigo_get_total_load(core, false);
 	u32 freq = bigo_get_target_freq(core, load);
 
 	bigo_set_freq(core, freq);
@@ -113,7 +176,7 @@ static void bigo_scale_freq(struct bigo_core *core)
 
 static void bigo_get_bw(struct bigo_core *core, struct bts_bw *bw)
 {
-	u32 load = bigo_get_total_load(core);
+	u32 load = bigo_get_total_load(core, false);
 	if (load) {
 		struct bigo_bw *bandwidth = bigo_get_target_bw(core, load);
 		bw->read = bandwidth->rd_bw;
@@ -124,6 +187,7 @@ static void bigo_get_bw(struct bigo_core *core, struct bts_bw *bw)
 	}
 	pr_debug("BW: load: %u, rd: %u, wr: %u, pk: %u", load, bw->read, bw->write, bw->peak);
 }
+#endif
 
 static int bigo_scale_bw(struct bigo_core *core)
 {
@@ -149,8 +213,9 @@ void bigo_update_qos(struct bigo_core *core)
 		rc = bigo_scale_bw(core);
 		if (rc)
 			pr_warn("%s: failed to scale bandwidth: %d\n", __func__, rc);
-
+#if !IS_ENABLED(CONFIG_SOC_ZUMA)
 		update_mif_floor(core);
+#endif
 		bigo_scale_freq(core);
 		core->qos_dirty = false;
 	}

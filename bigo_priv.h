@@ -15,12 +15,15 @@
 #include <linux/platform_device.h>
 #include <soc/google/exynos_pm_qos.h>
 
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+#include <soc/google/exynos-itmon.h>
+#endif
+
 #include "uapi/linux/bigo.h"
 
 #if IS_ENABLED(CONFIG_SLC_PARTITION_MANAGER)
 #include <soc/google/pt.h>
 #endif
-
 
 #define AVG_CNT 30
 #define PEAK_CNT 5
@@ -50,6 +53,9 @@ struct bigo_bw {
 	u32 rd_bw;
 	u32 wr_bw;
 	u32 pk_bw;
+	u32 rd_bw_afbc;
+	u32 wr_bw_afbc;
+	u32 pk_bw_afbc;
 };
 
 struct power_manager {
@@ -81,6 +87,7 @@ struct bigo_debugfs {
 	struct dentry *root;
 	u32 set_freq;
 	u32 trigger_ssr;
+	u32 timeout;
 };
 
 struct bigo_prio_array {
@@ -114,6 +121,10 @@ struct bigo_core {
 	wait_queue_head_t worker;
 	struct bigo_prio_array prioq;
 	u32 qos_dirty;
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+	struct notifier_block itmon_nb;
+#endif
+	u32 ip_ver;
 };
 
 struct bigo_inst {
@@ -137,6 +148,8 @@ struct bigo_inst {
 	/* bytes per pixel */
 	u32 bpp;
 	bool idle;
+        bool is_decoder_usage;
+        bool afbc;
 };
 
 inline void set_curr_inst(struct bigo_core *core, struct bigo_inst *inst);

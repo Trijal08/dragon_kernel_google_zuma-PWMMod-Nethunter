@@ -23,10 +23,10 @@ static int bigo_of_get_resource(struct bigo_core *core)
 	struct resource *res;
 	int rc = 0;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "bo");
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "regs");
 	if (IS_ERR_OR_NULL(res)) {
 		rc = PTR_ERR(res);
-		pr_err("Failed to find bo register base: %d\n", rc);
+		pr_err("Failed to find bw register base: %d\n", rc);
 		goto err;
 	}
 	core->base = devm_ioremap_resource(&pdev->dev, res);
@@ -34,26 +34,27 @@ static int bigo_of_get_resource(struct bigo_core *core)
 		rc = PTR_ERR(core->base);
 		if (rc == 0)
 			rc = -EIO;
-		pr_err("Failed to map bo register base: %d\n", rc);
+		pr_err("Failed to map bw register base: %d\n", rc);
 		core->base = NULL;
 		goto err;
 	}
 	core->regs_size = res->end - res->start + 1;
 	core->paddr = (phys_addr_t)res->start;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ssmt_bo_pid");
+#if IS_ENABLED(ENABLE_SLC)
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ssmt_pid");
 	if (IS_ERR_OR_NULL(res)) {
 		rc = PTR_ERR(res);
-		pr_err("Failed to find ssmt_bo register base: %d\n", rc);
+		pr_err("Failed to find ssmt register base: %d\n", rc);
 		goto err;
 	}
 	core->slc.ssmt_pid_base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR_OR_NULL(core->slc.ssmt_pid_base)) {
-		pr_warn("Failed to map ssmt_bo register base: %ld\n",
+		pr_warn("Failed to map ssmt register base: %ld\n",
 			PTR_ERR(core->slc.ssmt_pid_base));
 		core->slc.ssmt_pid_base = NULL;
 	}
-
+#endif
 	core->irq = platform_get_irq(pdev, 0);
 
 	if (core->irq < 0) {
@@ -62,6 +63,12 @@ static int bigo_of_get_resource(struct bigo_core *core)
 		goto err;
 	}
 
+	rc = of_property_read_u32(core->dev->of_node, "ip_ver", &core->ip_ver);
+	if (rc < 0) {
+		core->ip_ver = 1;
+		pr_debug("ip_ver is not specified\n");
+		rc = 0;
+	}
 err:
 	return rc;
 }
@@ -93,7 +100,7 @@ static int bigo_of_parse_opp_table(struct bigo_core *core)
 	struct bigo_opp *opp;
 
 	struct device_node *opp_np =
-		of_parse_phandle(core->dev->of_node, "bigo-opp-table", 0);
+		of_parse_phandle(core->dev->of_node, "vpu-opp-table", 0);
 	if (!opp_np) {
 		return -ENOENT;
 		goto err_add_table;
@@ -132,7 +139,7 @@ static int bigo_of_parse_bw_table(struct bigo_core *core)
 	struct bigo_bw *bw;
 
 	struct device_node *bw_np =
-		of_parse_phandle(core->dev->of_node, "bigo-bw-table", 0);
+		of_parse_phandle(core->dev->of_node, "vpu-bw-table", 0);
 	if (!bw_np) {
 		return -ENOENT;
 		goto err_add_table;
@@ -163,6 +170,16 @@ static int bigo_of_parse_bw_table(struct bigo_core *core)
 			kfree(bw);
 			goto err_entry;
 		}
+		/* *-bw-afbc entry is optional */
+		if (of_property_read_u32(np, "rd-bw-afbc", &bw->rd_bw_afbc) < 0)
+			bw->rd_bw_afbc = bw->rd_bw;
+
+		if (of_property_read_u32(np, "wr-bw-afbc", &bw->wr_bw_afbc) < 0)
+			bw->wr_bw_afbc = bw->wr_bw;
+
+		if (of_property_read_u32(np, "pk-bw-afbc", &bw->pk_bw_afbc) < 0)
+			bw->pk_bw_afbc = bw->pk_bw;
+
 		list_add_tail(&bw->list, &core->pm.bw);
 	}
 	return rc;
@@ -199,7 +216,6 @@ int bigo_of_dt_parse(struct bigo_core *core)
 		rc = core->pm.bwindex;
 		goto err_bwindex;
 	}
-
 	return rc;
 err_bwindex:
 	bigo_of_remove_bw_table(core);

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Driver for BigOcean video accelerator
+ * Driver for BigWave/BigOcean video accelerator
  *
- * Copyright 2020 Google LLC.
+ * Copyright 2022 Google LLC.
  *
  * Author: Vinay Kalia <vinaykalia@google.com>
  */
@@ -18,6 +18,8 @@
 #include <linux/platform_data/sscoredump.h>
 #include <linux/soc/samsung/exynos-smc.h>
 #include <linux/kthread.h>
+#include <linux/arm-smccc.h>
+#include <uapi/linux/sched/types.h>
 
 #include "bigo_io.h"
 #include "bigo_iommu.h"
@@ -29,16 +31,29 @@
 #include "bigo_prioq.h"
 
 #define BIGO_DEVCLASS_NAME "video_codec"
-#define BIGO_CHRDEV_NAME "bigocean"
 
 #define DEFAULT_WIDTH 3840
 #define DEFAULT_HEIGHT 2160
 #define DEFAULT_FPS 60
 #define BIGO_SMC_ID 0xd
 #define BIGO_MAX_INST_NUM 16
+
+#if IS_ENABLED(CONFIG_SOC_ZUMA)
+#define BIGO_HBD_BIT BIT(21)
+#define BIGO_CHRDEV_NAME "bigwave"
+#else
 #define BIGO_HBD_BIT BIT(17)
+#define BIGO_CHRDEV_NAME "bigocean"
+#endif
 
 #define BIGO_IDLE_TIMEOUT_MS 1000
+
+#define SMC_DRM_GET_PADDING_SIZE        ((unsigned int)(0x8200211E))
+
+enum misc_command {
+     BIGO_GET_PADDING_SIZE,
+     BIGO_CONFIG_AFBC,
+};
 
 static int bigo_worker_thread(void *data);
 
@@ -90,6 +105,8 @@ static inline int on_first_instance_open(struct bigo_core *core)
 		pr_err("failed to create worker thread rc = %d\n", rc);
 		goto exit;
 	}
+
+	sched_set_normal(core->worker_thread, -10);
 
 	rc = bigo_pt_client_enable(core);
 	if (rc) {
@@ -231,17 +248,19 @@ static int bigo_run_job(struct bigo_core *core, struct bigo_job *job)
 	int rc = 0;
 	u32 status = 0;
 	unsigned long flags;
+	struct bigo_inst* inst;
 
-	bigo_bypass_ssmt_pid(core);
+	inst = container_of(job, struct bigo_inst, job);
+	bigo_bypass_ssmt_pid(core, inst->is_decoder_usage);
 	bigo_push_regs(core, job->regs);
 	bigo_core_enable(core);
 	ret = wait_for_completion_timeout(&core->frame_done,
-			msecs_to_jiffies(JOB_COMPLETE_TIMEOUT_MS));
+			msecs_to_jiffies(core->debugfs.timeout));
 	if (!ret) {
-		pr_err("timed out waiting for HW\n");
 		pr_err("last rd addr: 0x%x, last_wr_addr: 0x%x\n",
 			bigo_core_readl(core, BIGO_REG_LAST_RD_AXI_ADDR),
 			bigo_core_readl(core, BIGO_REG_LAST_WR_AXI_ADDR));
+		pr_err("timed out waiting for HW for %u ms\n", core->debugfs.timeout);
 		pr_err("last rd addr: 0x%x, last_wr_addr: 0x%x\n",
 			bigo_core_readl(core, BIGO_REG_LAST_RD_AXI_ADDR),
 			bigo_core_readl(core, BIGO_REG_LAST_WR_AXI_ADDR));
@@ -304,6 +323,13 @@ inline void bigo_config_priority(struct bigo_inst *inst, __s32 priority)
 		return;
 	mutex_lock(&inst->lock);
 	inst->priority = priority;
+	mutex_unlock(&inst->lock);
+}
+
+inline void bigo_config_afbc(struct bigo_inst *inst)
+{
+	mutex_lock(&inst->lock);
+	inst->afbc = true;
 	mutex_unlock(&inst->lock);
 }
 
@@ -394,7 +420,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 
 		if (copy_regs_from_user(core, &desc, user_desc, job)) {
 			pr_err("Failed to copy regs from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 
 		hbd = (((u32*)job->regs)[3]) & BIGO_HBD_BIT;
@@ -404,9 +431,15 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 			bigo_mark_qos_dirty(core);
 		}
 
+#if IS_ENABLED(CONFIG_SOC_ZUMA)
+		inst->is_decoder_usage = !!(((uint8_t*)job->regs)[BIGO_REG_STAT] & BIGO_STAT_MODE);
+#else
+		inst->is_decoder_usage = true;
+#endif
 		if(enqueue_prioq(core, inst)) {
 			pr_err("Failed enqueue frame\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 
 		ret = wait_for_completion_timeout(
@@ -433,7 +466,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_MAP:
 		if (copy_from_user(&mapping, user_desc, sizeof(mapping))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		rc = bigo_map(core, inst, &mapping);
 		if (rc)
@@ -446,12 +480,25 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_UNMAP:
 		if (copy_from_user(&mapping, user_desc, sizeof(mapping))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		rc = bigo_unmap(inst, &mapping);
 		if (rc)
 			pr_err("Error un-mapping: %d\n", mapping.fd);
 		break;
+	case BIGO_IOCX_DMA_SYNC: {
+		struct bigo_buf_sync sync;
+		if (copy_from_user(&sync, user_desc, sizeof(sync))) {
+			pr_err("Failed to copy from user\n");
+			rc = -EFAULT;
+			break;
+		}
+		rc = bigo_dma_sync(&sync);
+		if (rc)
+			pr_err("Error dma sync: %d\n", sync.fd);
+		break;
+	}
 	case BIGO_IOCX_CONFIG_FRMRATE: {
 		u32 frmrate = (u32)arg;
 
@@ -461,7 +508,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_CONFIG_FRMSIZE:
 		if (copy_from_user(&frmsize, user_desc, sizeof(frmsize))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		bigo_config_frmsize(inst, &frmsize);
 		break;
@@ -480,6 +528,42 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_CONFIG_PRIORITY: {
 		s32 priority = (s32)arg;
 		bigo_config_priority(inst, priority);
+		break;
+	}
+	case BIGO_IOCX_MISC: {
+		struct bigo_ioc_misc misc;
+		if (copy_from_user(&misc, user_desc, sizeof(misc))) {
+			pr_err("Failed to copy from user\n");
+			rc = -EFAULT;
+			break;
+		}
+		switch (misc.cmd) {
+			case BIGO_GET_PADDING_SIZE: {
+				struct arm_smccc_res res;
+				uint64_t iova = (uint64_t)misc.data0;
+				uint64_t offset = (uint64_t)misc.data1;
+				int32_t size = (int32_t)misc.data2;
+
+				arm_smccc_smc(SMC_DRM_GET_PADDING_SIZE, iova, offset, size,
+								0, 0, 0, 0, &res);
+
+				misc.ret = res.a0;
+				misc.data0 = res.a1;
+				break;
+			}
+			case BIGO_CONFIG_AFBC: {
+				bigo_config_afbc(inst);
+				misc.ret = 0;
+				break;
+			}
+			default:
+				rc = -EINVAL;
+				break;
+		}
+		if (copy_to_user(user_desc, &misc, sizeof(misc))) {
+			pr_err("Failed to copy to user\n");
+			rc = -EFAULT;
+		}
 		break;
 	}
 	case BIGO_IOCX_ABORT:
@@ -507,6 +591,10 @@ static irqreturn_t bigo_isr(int irq, void *arg)
 	spin_lock_irqsave(&core->status_lock, flags);
 	core->stat_with_irq = bigo_stat;
 	spin_unlock_irqrestore(&core->status_lock, flags);
+#if IS_ENABLED(CONFIG_SOC_ZUMA)
+	bigo_stat &= ~BIGO_STAT_MODE;
+	bigo_stat &= ~BIGO_STAT_CODING_MODE;
+#endif
 	bigo_stat &= ~BIGO_STAT_IRQMASK;
 	bigo_core_writel(core, BIGO_REG_STAT, bigo_stat);
 	complete(&core->frame_done);
@@ -645,7 +733,7 @@ static int bigo_worker_thread(void *data)
 		if (inst->is_secure) {
 			if (exynos_smc(SMC_PROTECTION_SET, 0, BIGO_SMC_ID,
 					SMC_PROTECTION_DISABLE))
-				pr_err("failed to disable SMC_PROTECTION_SET\n");
+				pr_err("failed to disable SMC_PROTECTION_SET: %d\n", rc);
 		}
 
 	done:
@@ -654,6 +742,38 @@ static int bigo_worker_thread(void *data)
 	}
 	return 0;
 }
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+static int bigo_itmon_notifier(struct notifier_block *nb, unsigned long action,
+				void *nb_data)
+{
+	struct bigo_core *core;
+	struct itmon_notifier *itmon_info = nb_data;
+	int is_bo_itmon = 0;
+	int ret = NOTIFY_OK;
+
+	core = container_of(nb, struct bigo_core, itmon_nb);
+
+	if (unlikely(!core) || IS_ERR_OR_NULL(itmon_info))
+		return ret;
+
+	if ((itmon_info->port && !strncmp("BW", itmon_info->port, 2))
+		|| (itmon_info->client && !strncmp("BW", itmon_info->client, 2))
+		|| (itmon_info->dest && !strncmp("BW", itmon_info->dest, 2))) {
+		is_bo_itmon = 1;
+	}
+
+	if (!is_bo_itmon)
+		return ret;
+
+	dev_err(core->dev, "port %s client %s dest %s\n", itmon_info->port,
+				itmon_info->client, itmon_info->dest);
+	ret = NOTIFY_BAD;
+
+	BUG();
+
+	return ret;
+}
+#endif
 
 static int bigo_probe(struct platform_device *pdev)
 {
@@ -725,6 +845,11 @@ static int bigo_probe(struct platform_device *pdev)
 
 	bigo_init_debugfs(core);
 
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+	core->itmon_nb.notifier_call = bigo_itmon_notifier;
+	itmon_notifier_chain_register(&core->itmon_nb);
+#endif
+
 	return rc;
 
 err_pt_client:
@@ -757,7 +882,8 @@ static int bigo_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id bigo_dt_match[] = {
-	{ .compatible = "google,bigocean" },
+	{ .compatible = "google,bigwave"},
+	{ .compatible = "google,bigocean"},
 	{}
 };
 
@@ -765,10 +891,10 @@ static struct platform_driver bigo_driver = {
 	.probe = bigo_probe,
 	.remove = bigo_remove,
 	.driver = {
-		.name = "bigocean",
+		.name = BIGO_CHRDEV_NAME,
 		.owner = THIS_MODULE,
 		.of_match_table = bigo_dt_match,
-#ifdef CONFIG_PM
+#if IS_ENABLED(CONFIG_PM)
 		.pm = &bigo_pm_ops,
 #endif
 	},
@@ -778,5 +904,5 @@ module_platform_driver(bigo_driver);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Vinay Kalia <vinaykalia@google.com>");
-MODULE_DESCRIPTION("BigOcean driver");
+MODULE_DESCRIPTION("BigWave driver");
 MODULE_IMPORT_NS(DMA_BUF);
