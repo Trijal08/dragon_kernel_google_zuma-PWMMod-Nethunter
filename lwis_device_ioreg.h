@@ -36,5 +36,6 @@ struct lwis_ioreg_device {
 	struct lwis_ioreg_list reg_list;
 };
 
+int lwis_ioreg_device_init(void);
 int lwis_ioreg_device_deinit(void);
 #endif /* LWIS_DEVICE_IOREG_H_ */

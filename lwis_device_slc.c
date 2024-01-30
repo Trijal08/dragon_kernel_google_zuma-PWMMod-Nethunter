@@ -9,7 +9,6 @@
  */
 
 #include "lwis_device_slc.h"
-#include "lwis_init.h"
 
 #include <linux/anon_inodes.h>
 #include <linux/delay.h>
@@ -176,6 +175,11 @@ int lwis_slc_buffer_alloc(struct lwis_device *lwis_dev, struct lwis_alloc_buffer
 				slc_dev->pt[i].partition_id = partition_id;
 				alloc_info->dma_fd = fd_or_err;
 				alloc_info->partition_id = slc_dev->pt[i].partition_id;
+
+				if (slc_dev->pt[i].size_kb > SIZE_TO_KB(alloc_info->size)) {
+					dev_warn(lwis_dev->dev,
+						"Size of SLC Partition is more than what was requested\n");
+				}
 				return 0;
 			} else {
 				dev_err(lwis_dev->dev, "Failed to enable partition id %d\n",
@@ -244,7 +248,6 @@ static int lwis_slc_device_probe(struct platform_device *plat_dev)
 	/* Allocate SLC device specific data construct */
 	slc_dev = devm_kzalloc(dev, sizeof(struct lwis_slc_device), GFP_KERNEL);
 	if (!slc_dev) {
-		dev_err(dev, "Failed to allocate slc device structure\n");
 		return -ENOMEM;
 	}
 

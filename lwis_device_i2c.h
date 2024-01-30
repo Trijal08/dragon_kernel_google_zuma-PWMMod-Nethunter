@@ -34,11 +34,11 @@ struct lwis_i2c_device {
 	u32 i2c_lock_group_id;
 	/* Mutex shared by the same group id's I2C devices */
 	struct mutex *group_i2c_lock;
-	/* Pointer to the I2C bus manager for this device */
 	struct lwis_i2c_bus_manager *i2c_bus_manager;
 	int device_priority;
 };
 
+int lwis_i2c_device_init(void);
 int lwis_i2c_device_deinit(void);
 
 #if IS_ENABLED(CONFIG_INPUT_STMVL53L1)

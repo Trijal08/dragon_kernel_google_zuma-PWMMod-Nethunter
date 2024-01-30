@@ -1,11 +1,12 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
+// SPDX-License-Identifier: GPL-2.0-only
+
 /*
- * Google LWIS Busan Platform-Specific Functions
+ * Google LWIS Casablanca Platform-Specific Functions
  *
- * Copyright (c) 2021 Google, LLC
+ * Copyright (c) 2022 Google, LLC
  */
 
-#include "lwis_platform_busan.h"
+#include "lwis_platform_casablanca.h"
 
 #include <linux/iommu.h>
 #include <linux/of.h>
@@ -76,8 +77,8 @@ static int lwis_iommu_fault_handler(struct iommu_fault *fault, void *param)
 			port_name, iommus_reg);
 		pr_err("\n");
 	}
-	pr_err("IOMMU Page Fault at Address: 0x%px Flag: 0x%08x. Check dmesg for sysmmu errors\n",
-	       (void *)fault->event.addr, fault->event.flags);
+	pr_err("IOMMU Page Fault at Address: 0x%llx Flag: 0x%08x. Check dmesg for sysmmu errors\n",
+	       fault->event.addr, fault->event.flags);
 	pr_err("\n");
 	lwis_debug_print_transaction_info(lwis_dev);
 	pr_err("\n");
@@ -119,7 +120,6 @@ int lwis_platform_device_enable(struct lwis_device *lwis_dev)
 	int iommus_len = 0;
 	struct lwis_platform *platform;
 
-	const int core_clock_qos = 67000;
 	/* const int hpg_qos = 1; */
 
 	if (!lwis_dev) {
@@ -144,24 +144,6 @@ int lwis_platform_device_enable(struct lwis_device *lwis_dev)
 							  lwis_dev);
 		if (ret < 0) {
 			pr_err("Failed to register fault handler for the device: %d\n", ret);
-			return ret;
-		}
-	}
-
-	if (lwis_dev->clock_family != CLOCK_FAMILY_INVALID &&
-	    lwis_dev->clock_family < NUM_CLOCK_FAMILY) {
-		ret = lwis_platform_update_qos(lwis_dev, core_clock_qos, lwis_dev->clock_family);
-		if (ret < 0) {
-			dev_err(lwis_dev->dev, "Failed to enable core clock\n");
-			return ret;
-		}
-		/* TODO(b/173493818): We currently see some stability issue on specific device
-		 * and sensor due to INT clock vote to 100 MHz. Set the minimum INT requirement
-		 * to 200Mhz for now.
-		 */
-		ret = lwis_platform_update_qos(lwis_dev, 200000, CLOCK_FAMILY_INT);
-		if (ret < 0) {
-			dev_err(lwis_dev->dev, "Failed to initial INT clock\n");
 			return ret;
 		}
 	}
@@ -212,8 +194,8 @@ int lwis_platform_device_disable(struct lwis_device *lwis_dev)
 int lwis_platform_update_qos(struct lwis_device *lwis_dev, int value, int32_t clock_family)
 {
 	struct lwis_platform *platform;
-	struct exynos_pm_qos_request *qos_req;
-	int qos_class;
+	struct exynos_pm_qos_request __maybe_unused *qos_req;
+	int __maybe_unused qos_class;
 
 	if (!lwis_dev) {
 		return -ENODEV;
@@ -251,11 +233,13 @@ int lwis_platform_update_qos(struct lwis_device *lwis_dev, int value, int32_t cl
 		return -EINVAL;
 	}
 
+#if IS_ENABLED(CONFIG_EXYNOS_PM_QOS) || IS_ENABLED(CONFIG_EXYNOS_PM_QOS_MODULE)
 	if (!exynos_pm_qos_request_active(qos_req)) {
 		exynos_pm_qos_add_request(qos_req, qos_class, value);
 	} else {
 		exynos_pm_qos_update_request(qos_req, value);
 	}
+#endif
 
 	dev_info(lwis_dev->dev, "Updating clock for clock_family %d, freq to %u\n", clock_family,
 		 value);
@@ -366,6 +350,7 @@ int lwis_platform_remove_qos(struct lwis_device *lwis_dev)
 		return -ENODEV;
 	}
 
+#if IS_ENABLED(CONFIG_EXYNOS_PM_QOS) || IS_ENABLED(CONFIG_EXYNOS_PM_QOS_MODULE)
 	if (exynos_pm_qos_request_active(&platform->pm_qos_int)) {
 		exynos_pm_qos_remove_request(&platform->pm_qos_int);
 	}
@@ -382,6 +367,7 @@ int lwis_platform_remove_qos(struct lwis_device *lwis_dev)
 	if (exynos_pm_qos_request_active(&platform->pm_qos_tnr)) {
 		exynos_pm_qos_remove_request(&platform->pm_qos_tnr);
 	}
+#endif
 	return 0;
 }
 

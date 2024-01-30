@@ -93,6 +93,8 @@ const char *lwis_device_type_to_string(int32_t type)
 		return "SLC";
 	case DEVICE_TYPE_TEST:
 		return "TEST";
+	case DEVICE_TYPE_SPI:
+		return "SPI";
 	case DEVICE_TYPE_UNKNOWN:
 	default:
 		return "UNKNOWN";

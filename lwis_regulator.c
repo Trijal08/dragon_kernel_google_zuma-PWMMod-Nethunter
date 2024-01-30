@@ -135,7 +135,7 @@ int lwis_regulator_put_by_name(struct lwis_regulator_list *list, char *name)
 int lwis_regulator_put_all(struct lwis_regulator_list *list)
 {
 	int i;
-	int ret;
+	int ret = 0;
 
 	if (!list) {
 		return -EINVAL;

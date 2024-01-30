@@ -39,6 +39,7 @@
 #define LWIS_SLC_DEVICE_COMPAT "google,lwis-slc-device"
 #define LWIS_DPM_DEVICE_COMPAT "google,lwis-dpm-device"
 #define LWIS_TEST_DEVICE_COMPAT "google,lwis-test-device"
+#define LWIS_SPI_DEVICE_COMPAT "google,lwis-spi-device"
 
 #define EVENT_HASH_BITS 8
 #define BUFFER_HASH_BITS 8
@@ -55,10 +56,7 @@
  * Once the flush is complete, the client will transition back
  * to NOT_FLUSHING state.
  */
-enum lwis_client_flush_state {
-	NOT_FLUSHING = 0,
-	FLUSHING
-};
+enum lwis_client_flush_state { NOT_FLUSHING, FLUSHING };
 
 /* Forward declaration for lwis_device. This is needed for the declaration for
    lwis_device_subclass_operations data struct. */
@@ -269,9 +267,11 @@ struct lwis_device {
 	/* Resume sequence information */
 	struct lwis_device_power_sequence_list *resume_sequence;
 	/* GPIOs list */
-	struct lwis_gpios_list *gpios_list;
+	struct list_head gpios_list;
 	/* GPIO interrupts list */
 	struct lwis_gpios_info irq_gpios_info;
+	/* Is power up to suspend mode */
+	bool power_up_to_suspend;
 
 	/* Power management hibernation state of the device */
 	int pm_hibernation;
@@ -346,6 +346,8 @@ struct lwis_client {
 	enum lwis_client_flush_state flush_state;
 	/* Lock to guard client's flush state changes */
 	spinlock_t flush_lock;
+	/* Lock to guard client's buffer changes */
+	spinlock_t buffer_lock;
 };
 
 /*
@@ -428,5 +430,19 @@ void lwis_save_register_io_info(struct lwis_device *lwis_dev, struct lwis_io_ent
  * periodic io queue on the transaction thread
  */
 void lwis_process_worker_queue(struct lwis_client *client);
+
+/*
+ * lwis_queue_device_worker:
+ * Function to queue periodic or transaction work on the device
+ * worker.
+ */
+void lwis_queue_device_worker(struct lwis_client *client);
+
+/*
+ * lwis_flush_device_worker:
+ * Function to flush periodic or transaction work from the device
+ * worker.
+ */
+void lwis_flush_device_worker(struct lwis_client *client);
 
 #endif /* LWIS_DEVICE_H_ */

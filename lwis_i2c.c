@@ -157,13 +157,11 @@ static int i2c_read(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t *valu
 
 	wbuf = kmalloc(offset_bytes, GFP_KERNEL);
 	if (!wbuf) {
-		dev_err(i2c->base_dev.dev, "Failed to allocate memory for i2c write buffer\n");
 		return -ENOMEM;
 	}
 
 	rbuf = kmalloc(value_bytes, GFP_KERNEL);
 	if (!rbuf) {
-		dev_err(i2c->base_dev.dev, "Failed to allocate memory for i2c read buffer\n");
 		ret = -ENOMEM;
 		goto error_rbuf_alloc;
 	}
@@ -235,7 +233,6 @@ static int i2c_write(struct lwis_i2c_device *i2c, uint64_t offset, uint64_t valu
 	msg_bytes = offset_bytes + value_bytes;
 	buf = kmalloc(msg_bytes, GFP_KERNEL);
 	if (!buf) {
-		dev_err(i2c->base_dev.dev, "Failed to allocate memory for i2c buffer\n");
 		return -ENOMEM;
 	}
 
@@ -282,7 +279,6 @@ static int i2c_read_batch(struct lwis_i2c_device *i2c, uint64_t start_offset, ui
 
 	wbuf = kmalloc(offset_bytes, GFP_KERNEL);
 	if (!wbuf) {
-		dev_err(i2c->base_dev.dev, "Failed to allocate memory for i2c write buffer\n");
 		return -ENOMEM;
 	}
 
@@ -339,7 +335,6 @@ static int i2c_write_batch(struct lwis_i2c_device *i2c, uint64_t start_offset, u
 	msg_bytes = offset_bytes + write_buf_size;
 	buf = kmalloc(msg_bytes, GFP_KERNEL);
 	if (!buf) {
-		dev_err(i2c->base_dev.dev, "Failed to allocate memory for i2c buffer\n");
 		return -ENOMEM;
 	}
 

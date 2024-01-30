@@ -18,7 +18,6 @@
 
 #include "lwis_commands.h"
 #include "lwis_device.h"
-#include "lwis_init.h"
 #include "lwis_platform.h"
 
 #ifdef CONFIG_OF
@@ -153,7 +152,6 @@ static int lwis_test_device_probe(struct platform_device *plat_dev)
 	/* Allocate test device specific data construct */
 	test_dev = devm_kzalloc(dev, sizeof(struct lwis_test_device), GFP_KERNEL);
 	if (!test_dev) {
-		dev_err(dev, "Failed to allocate TEST device structure\n");
 		return -ENOMEM;
 	}
 

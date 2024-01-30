@@ -13,11 +13,10 @@
 #include "lwis_periodic_io.h"
 
 #include <linux/completion.h>
-#include <linux/kthread.h>
 #include <linux/slab.h>
-#include <linux/workqueue.h>
 
 #include "lwis_allocator.h"
+#include "lwis_device.h"
 #include "lwis_event.h"
 #include "lwis_io_entry.h"
 #include "lwis_ioreg.h"
@@ -35,14 +34,9 @@ static enum hrtimer_restart periodic_io_timer_func(struct hrtimer *timer)
 	struct lwis_periodic_io_proxy *periodic_io_proxy;
 	struct lwis_client *client;
 	bool active_periodic_io_present = false;
-	struct lwis_device *lwis_dev;
-	struct lwis_i2c_bus_manager *i2c_bus_manager = NULL;
 
 	periodic_io_list = container_of(timer, struct lwis_periodic_io_list, hr_timer);
 	client = periodic_io_list->client;
-
-	lwis_dev = client->lwis_dev;
-	i2c_bus_manager = lwis_i2c_bus_manager_get_manager(lwis_dev);
 
 	/* Go through all periodic io under the chosen periodic list */
 	spin_lock_irqsave(&client->periodic_io_lock, flags);
@@ -53,7 +47,8 @@ static enum hrtimer_restart periodic_io_timer_func(struct hrtimer *timer)
 				client->lwis_dev, sizeof(*periodic_io_proxy), GFP_ATOMIC);
 			if (!periodic_io_proxy) {
 				/* Non-fatal, skip this period */
-				dev_warn(lwis_dev->dev, "Cannot allocate new periodic io proxy.\n");
+				dev_warn(client->lwis_dev->dev,
+					 "Cannot allocate new periodic io proxy.\n");
 			} else {
 				periodic_io_proxy->periodic_io = periodic_io;
 				list_add_tail(&periodic_io_proxy->process_queue_node,
@@ -62,14 +57,11 @@ static enum hrtimer_restart periodic_io_timer_func(struct hrtimer *timer)
 			}
 		}
 	}
+
 	if (active_periodic_io_present) {
-		if (i2c_bus_manager) {
-			kthread_queue_work(&i2c_bus_manager->i2c_bus_worker, &client->i2c_work);
-		} else {
-			kthread_queue_work(&client->lwis_dev->transaction_worker,
-					   &client->transaction_work);
-		}
+		lwis_queue_device_worker(client);
 	}
+
 	spin_unlock_irqrestore(&client->periodic_io_lock, flags);
 	if (!active_periodic_io_present) {
 		periodic_io_list->hr_timer_state = LWIS_HRTIMER_INACTIVE;
@@ -103,7 +95,6 @@ static struct lwis_periodic_io_list *periodic_io_list_create_locked(struct lwis_
 	struct lwis_periodic_io_list *periodic_io_list =
 		kmalloc(sizeof(struct lwis_periodic_io_list), GFP_ATOMIC);
 	if (!periodic_io_list) {
-		dev_err(lwis_dev->dev, "Cannot allocate new event list\n");
 		return NULL;
 	}
 
@@ -344,7 +335,7 @@ void lwis_process_periodic_io_in_queue(struct lwis_client *client)
 		/* Error indicates the cancellation of the periodic io */
 		if (periodic_io->resp->error_code || !periodic_io->active) {
 			error_code = periodic_io->resp->error_code ? periodic_io->resp->error_code :
-									   -ECANCELED;
+								     -ECANCELED;
 			push_periodic_io_error_event_locked(periodic_io, error_code,
 							    &pending_events);
 		} else {
@@ -412,7 +403,6 @@ static int prepare_response(struct lwis_client *client, struct lwis_periodic_io 
 		    read_buf_size * info->batch_size;
 	periodic_io->resp = kmalloc(resp_size, GFP_KERNEL);
 	if (!periodic_io->resp) {
-		pr_err_ratelimited("Cannot allocate periodic io response\n");
 		return -ENOMEM;
 	}
 	periodic_io->resp->batch_size = 0;
@@ -523,14 +513,9 @@ int lwis_periodic_io_client_flush(struct lwis_client *client)
 	struct lwis_periodic_io_list *it_periodic_io_list;
 	unsigned long flags;
 
-	struct lwis_device *lwis_dev = client->lwis_dev;
-	struct lwis_i2c_bus_manager *i2c_bus_manager = NULL;
-
 	struct lwis_periodic_io *periodic_cleanup_io;
 	struct lwis_periodic_io_proxy *periodic_cleanup_io_proxy;
 	struct list_head *it_cleanup_period, *it_cleanup_period_tmp;
-
-	i2c_bus_manager = lwis_i2c_bus_manager_get_manager(lwis_dev);
 
 	/* First, cancel all timers */
 	hash_for_each_safe (client->timer_list, i, tmp, it_periodic_io_list, node) {
@@ -546,13 +531,7 @@ int lwis_periodic_io_client_flush(struct lwis_client *client)
 	}
 
 	/* Wait until all workload in process queue are processed */
-	if (i2c_bus_manager) {
-		lwis_i2c_bus_manager_flush_i2c_worker(lwis_dev);
-	} else {
-		if (client->lwis_dev->transaction_worker_thread) {
-			kthread_flush_worker(&client->lwis_dev->transaction_worker);
-		}
-	}
+	lwis_flush_device_worker(client);
 	spin_lock_irqsave(&client->periodic_io_lock, flags);
 
 	/* Cleanup any stale entries remaining after the flush */

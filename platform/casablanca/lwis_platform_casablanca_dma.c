@@ -1,11 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
 /*
- * Google LWIS Anchorage Platform-Specific DMA Functions
+ * Google LWIS Casablanca Platform-Specific DMA Functions
  *
- * Copyright (c) 2020 Google, LLC
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Copyright (c) 2022 Google, LLC
  */
 
 #include <linux/slab.h>
@@ -56,7 +54,7 @@ dma_addr_t lwis_platform_dma_buffer_map(struct lwis_device *lwis_dev,
 /*
  * We don't ever do dma_buf_vmap before. Instead, use the upstream dma-buf
  * interface to map ION buffers, so we don't need to do dma_buf_vunmap.
- * Keep this function by defult return 0
+ * Keep this function by default return 0
  */
 int lwis_platform_dma_buffer_unmap(struct lwis_device *lwis_dev,
 				   struct dma_buf_attachment *attachment, dma_addr_t address)

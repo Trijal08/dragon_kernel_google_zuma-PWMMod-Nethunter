@@ -32,6 +32,7 @@ struct lwis_test_device {
 	uint8_t scratch_mem[SCRATCH_TEST_DEV_MEMORY_SIZE];
 };
 
+int lwis_test_device_init(void);
 int lwis_test_device_deinit(void);
 
 #endif /* LWIS_DEVICE_TEST_H_ */

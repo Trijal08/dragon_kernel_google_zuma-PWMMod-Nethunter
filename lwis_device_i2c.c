@@ -25,7 +25,6 @@
 
 #include "lwis_device.h"
 #include "lwis_i2c.h"
-#include "lwis_init.h"
 #include "lwis_periodic_io.h"
 #include "lwis_util.h"
 #include "lwis_trace.h"
@@ -244,7 +243,6 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 	/* Allocate I2C device specific data construct */
 	i2c_dev = devm_kzalloc(dev, sizeof(struct lwis_i2c_device), GFP_KERNEL);
 	if (!i2c_dev) {
-		dev_err(dev, "Failed to allocate i2c device structure\n");
 		return -ENOMEM;
 	}
 
@@ -269,7 +267,6 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 		return ret;
 	}
 
-	/* Create I2C Bus Manager */
 	ret = lwis_i2c_bus_manager_create(i2c_dev);
 	if (ret) {
 		dev_err(i2c_dev->base_dev.dev, "Error in i2c bus manager creation\n");

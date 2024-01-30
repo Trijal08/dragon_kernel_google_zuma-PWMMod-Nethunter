@@ -116,8 +116,6 @@ lwis_client_event_state_find_or_create(struct lwis_client *lwis_client, int64_t 
 		new_state = kmalloc(sizeof(struct lwis_client_event_state), GFP_ATOMIC);
 		/* Oh no, ENOMEM */
 		if (!new_state) {
-			dev_err(lwis_client->lwis_dev->dev,
-				"Could not allocate lwis_client_event_state\n");
 			return ERR_PTR(-ENOMEM);
 		}
 		/* Set the event_id and initialize flags to 0 which pretty much
@@ -236,9 +234,14 @@ struct lwis_device_event_state *lwis_device_event_state_find_or_create(struct lw
 	struct lwis_device_event_state *new_state;
 	/* Flags for IRQ disable */
 	unsigned long flags;
+	struct lwis_device_event_state *state;
+
+	if (unlikely(event_id == LWIS_EVENT_ID_NONE)) {
+		return ERR_PTR(-EINVAL);
+	}
 
 	/* Try to find a state first, if it already exists */
-	struct lwis_device_event_state *state = lwis_device_event_state_find(lwis_dev, event_id);
+	state = lwis_device_event_state_find(lwis_dev, event_id);
 
 	/* If it doesn't, we'll have to create one */
 	if (unlikely(state == NULL)) {
@@ -246,7 +249,6 @@ struct lwis_device_event_state *lwis_device_event_state_find_or_create(struct lw
 		new_state = kmalloc(sizeof(struct lwis_device_event_state), GFP_ATOMIC);
 		/* Oh no, ENOMEM */
 		if (!new_state) {
-			dev_err(lwis_dev->dev, "Could not allocate lwis_device_event_state\n");
 			return ERR_PTR(-ENOMEM);
 		}
 		/* Set the event_id and initialize ref counter  to 0 which means
@@ -897,7 +899,6 @@ static int device_event_emit_impl(struct lwis_device *lwis_dev, int64_t event_id
 		if (emit) {
 			event = kmalloc(sizeof(struct lwis_event_entry) + payload_size, GFP_ATOMIC);
 			if (!event) {
-				dev_err(lwis_dev->dev, "Failed to allocate event entry\n");
 				return -ENOMEM;
 			}
 
@@ -926,7 +927,7 @@ static int device_event_emit_impl(struct lwis_device *lwis_dev, int64_t event_id
 
 		/* Trigger transactions, if there's any that matches this event
 		   ID and counter */
-		if (lwis_transaction_event_trigger(lwis_client, event_id, event_counter,
+		if (lwis_transaction_event_trigger(lwis_client, event_id, event_counter, timestamp,
 						   pending_events)) {
 			dev_warn(lwis_dev->dev,
 				 "Failed to process transactions: Event ID: 0x%llx Counter: %lld\n",
@@ -967,7 +968,6 @@ int lwis_pending_event_push(struct list_head *pending_events, int64_t event_id, 
 
 	event = kzalloc(sizeof(struct lwis_event_entry) + payload_size, GFP_ATOMIC);
 	if (!event) {
-		pr_err("Failed to allocate event entry\n");
 		return -ENOMEM;
 	}
 	event->event_info.event_id = event_id;
@@ -1083,7 +1083,6 @@ void lwis_device_external_event_emit(struct lwis_device *lwis_dev, int64_t event
 		if (emit) {
 			event = kmalloc(sizeof(struct lwis_event_entry), GFP_ATOMIC);
 			if (!event) {
-				dev_err(lwis_dev->dev, "Failed to allocate event entry\n");
 				return;
 			}
 
@@ -1102,7 +1101,7 @@ void lwis_device_external_event_emit(struct lwis_device *lwis_dev, int64_t event
 			}
 		}
 
-		if (lwis_transaction_event_trigger(lwis_client, event_id, event_counter,
+		if (lwis_transaction_event_trigger(lwis_client, event_id, event_counter, timestamp,
 						   &pending_events))
 			dev_warn(
 				lwis_dev->dev,
@@ -1136,7 +1135,6 @@ void lwis_device_error_event_emit(struct lwis_device *lwis_dev, int64_t event_id
 
 		event = kmalloc(sizeof(struct lwis_event_entry) + payload_size, GFP_ATOMIC);
 		if (!event) {
-			dev_err(lwis_dev->dev, "Failed to allocate event entry\n");
 			return;
 		}
 		event->event_info.event_id = event_id;

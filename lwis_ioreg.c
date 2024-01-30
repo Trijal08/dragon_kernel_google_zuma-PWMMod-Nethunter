@@ -355,7 +355,7 @@ int lwis_ioreg_io_entry_rw(struct lwis_ioreg_device *ioreg_dev, struct lwis_io_e
 	int ret = 0;
 	int index;
 	struct lwis_ioreg *block;
-	uint64_t reg_value;
+	uint64_t reg_value = 0;
 	unsigned long flags;
 
 	if (!ioreg_dev) {
@@ -531,9 +531,9 @@ int lwis_ioreg_write(struct lwis_ioreg_device *ioreg_dev, int index, uint64_t of
 	int ret;
 	uint64_t internal_offset = offset;
 	unsigned int native_value_bitwidth;
-	uint64_t read_value;
-	uint64_t offset_mask;
-	uint64_t value_mask;
+	uint64_t read_value = 0;
+	uint64_t offset_mask = 0;
+	uint64_t value_mask = 0;
 
 	if (!ioreg_dev) {
 		pr_err("LWIS IOREG device is NULL\n");
@@ -557,10 +557,10 @@ int lwis_ioreg_write(struct lwis_ioreg_device *ioreg_dev, int index, uint64_t of
 		return ret;
 	}
 
-	if (access_size != native_value_bitwidth) {
+	if (access_size < 64 && access_size != native_value_bitwidth) {
 		offset_mask = native_value_bitwidth / BITS_PER_BYTE - 1;
 		internal_offset = offset & ~offset_mask;
-		value_mask = ((1 << access_size) - 1);
+		value_mask = ((1ULL << access_size) - 1);
 		value_mask <<= (offset - internal_offset) * BITS_PER_BYTE;
 		/* We need to read-modify-write in this case */
 		ioreg_read_internal(block->base, internal_offset, native_value_bitwidth,

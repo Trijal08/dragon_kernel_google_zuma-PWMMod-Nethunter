@@ -19,10 +19,14 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/workqueue.h>
 
 #include "lwis_device.h"
 #include "lwis_event.h"
-#include "lwis_init.h"
+#include "lwis_util.h"
+
+#include "lwis_device.h"
+#include "lwis_event.h"
 #include "lwis_util.h"
 
 #ifdef CONFIG_OF
@@ -117,7 +121,6 @@ static struct lwis_event_subscriber_list *event_subscriber_list_create(struct lw
 	struct lwis_event_subscriber_list *event_subscriber_list =
 		kmalloc(sizeof(struct lwis_event_subscriber_list), GFP_ATOMIC);
 	if (!event_subscriber_list) {
-		dev_err(lwis_dev->dev, "Can't allocate event subscriber list\n");
 		return NULL;
 	}
 	event_subscriber_list->trigger_event_id = trigger_event_id;
@@ -183,7 +186,6 @@ static void lwis_top_event_notify(struct lwis_device *lwis_dev, int64_t trigger_
 	struct lwis_trigger_event_info *trigger_event =
 		kmalloc(sizeof(struct lwis_trigger_event_info), GFP_ATOMIC);
 	if (trigger_event == NULL) {
-		dev_err(lwis_top_dev->base_dev.dev, "Allocate trigger_event_info failed");
 		return;
 	}
 
@@ -245,8 +247,6 @@ static int lwis_top_event_subscribe(struct lwis_device *lwis_dev, int64_t trigge
 	/* If the subscription does not exist in hash table, create one */
 	new_subscription = kmalloc(sizeof(struct lwis_event_subscribe_info), GFP_KERNEL);
 	if (!new_subscription) {
-		dev_err(lwis_top_dev->base_dev.dev,
-			"Failed to allocate memory for new subscription\n");
 		return -ENOMEM;
 	}
 	INIT_LIST_HEAD(&new_subscription->list_node);
@@ -487,7 +487,6 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 	/* Allocate top device specific data construct */
 	top_dev = devm_kzalloc(dev, sizeof(struct lwis_top_device), GFP_KERNEL);
 	if (!top_dev) {
-		dev_err(dev, "Failed to allocate top device structure\n");
 		return -ENOMEM;
 	}
 
@@ -496,6 +495,7 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 	top_dev->subscribe_ops = top_subscribe_ops;
 	top_dev->base_dev.plat_dev = plat_dev;
 	top_dev->base_dev.k_dev = &plat_dev->dev;
+	top_dev->transaction_worker_active = false;
 
 	/* Call the base device probe function */
 	ret = lwis_base_probe(&top_dev->base_dev);
@@ -532,17 +532,37 @@ static int lwis_top_device_probe(struct platform_device *plat_dev)
 		return ret;
 	}
 
-	/* Create associated kworker threads */
-	ret = lwis_create_kthread_workers(&top_dev->base_dev);
-	if (ret) {
-		dev_err(top_dev->base_dev.dev, "Failed to create lwis_top_kthread");
-		lwis_base_unprobe(&top_dev->base_dev);
-		return ret;
-	}
-
 	dev_info(top_dev->base_dev.dev, "Top Device Probe: Success\n");
 
 	return 0;
+}
+
+void lwis_start_top_device_worker(struct lwis_client *client)
+{
+	int ret;
+	struct lwis_device *lwis_dev = client->lwis_dev;
+	struct lwis_top_device *top_dev = container_of(lwis_dev, struct lwis_top_device, base_dev);
+	if (!top_dev->transaction_worker_active) {
+		dev_info(top_dev->base_dev.dev, "Starting top device worker");
+		/* Create associated kworker threads */
+		ret = lwis_create_kthread_workers(&top_dev->base_dev);
+		if (ret) {
+			dev_err(top_dev->base_dev.dev, "Failed to create lwis_top_kthread");
+			return;
+		}
+		top_dev->transaction_worker_active = true;
+	}
+}
+
+void lwis_stop_top_device_worker(struct lwis_client *client)
+{
+	struct lwis_device *lwis_dev = client->lwis_dev;
+	struct lwis_top_device *top_dev = container_of(lwis_dev, struct lwis_top_device, base_dev);
+	if (top_dev->transaction_worker_active) {
+		dev_info(top_dev->base_dev.dev, "Stopping top device worker");
+		kthread_stop(client->lwis_dev->transaction_worker_thread);
+		top_dev->transaction_worker_active = false;
+	}
 }
 
 #ifdef CONFIG_OF

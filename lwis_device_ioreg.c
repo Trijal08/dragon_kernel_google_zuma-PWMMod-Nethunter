@@ -20,7 +20,6 @@
 #include <linux/slab.h>
 #include <uapi/linux/sched/types.h>
 
-#include "lwis_init.h"
 #include "lwis_interrupt.h"
 #include "lwis_ioreg.h"
 #include "lwis_periodic_io.h"
@@ -99,7 +98,6 @@ static int lwis_ioreg_device_probe(struct platform_device *plat_dev)
 	/* Allocate IOREG device specific data construct */
 	ioreg_dev = devm_kzalloc(dev, sizeof(struct lwis_ioreg_device), GFP_KERNEL);
 	if (!ioreg_dev) {
-		dev_err(dev, "Failed to allocate IOREG device structure\n");
 		return -ENOMEM;
 	}
 

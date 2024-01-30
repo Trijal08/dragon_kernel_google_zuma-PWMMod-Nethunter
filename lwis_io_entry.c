@@ -21,9 +21,10 @@ int lwis_io_entry_poll(struct lwis_device *lwis_dev, struct lwis_io_entry *entry
 	uint64_t val, start;
 	uint64_t timeout_ms = entry->read_assert.timeout_ms;
 	int ret = 0;
+	int64_t process_time_ms = 0;
 
-	/* Only read and check once if in_irq() */
-	if (in_irq()) {
+	/* Only read and check once if in_hardirq() */
+	if (in_hardirq()) {
 		timeout_ms = 0;
 	}
 
@@ -53,6 +54,12 @@ int lwis_io_entry_poll(struct lwis_device *lwis_dev, struct lwis_io_entry *entry
 			/* Sleep for 1ms */
 			usleep_range(1000, 1000);
 		}
+	}
+
+	process_time_ms = ktime_to_ms(lwis_get_time()) - start;
+
+	if (process_time_ms > DEFAULT_POLLING_TIMEOUT_MS) {
+		dev_info(lwis_dev->dev, "IO entry polling processed %lld ms", process_time_ms);
 	}
 	return ret;
 }
