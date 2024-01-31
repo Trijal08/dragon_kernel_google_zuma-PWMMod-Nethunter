@@ -227,6 +227,9 @@ static int gs_panel_connector_get_property(struct gs_drm_connector *gs_connector
 	} else if (property == p->dimming_on) {
 		*val = gs_state->dimming_on;
 		dev_dbg(ctx->dev, "%s: dimming_on(%s)\n", __func__, *val ? "true" : "false");
+	} else if (property == p->operation_rate) {
+		*val = gs_state->operation_rate;
+		dev_dbg(ctx->dev, "%s: operation_rate(%llu)\n", __func__, *val);
 	} else if (property == p->lp_mode) {
 		return gs_panel_get_lp_mode(gs_connector, gs_state, val);
 	} else if (property == p->mipi_sync) {
@@ -521,6 +524,7 @@ static int gs_panel_connector_attach_properties(struct gs_panel *ctx)
 	drm_object_attach_property(obj, p->panel_idle_support, desc->is_idle_supported);
 	drm_object_attach_property(obj, p->panel_orientation, ctx->orientation);
 	drm_object_attach_property(obj, p->rr_switch_duration, desc->rr_switch_duration);
+	drm_object_attach_property(obj, p->operation_rate, 0);
 
 	if (desc->brightness_desc->brt_capability) {
 		ret = gs_panel_attach_brightness_capability(ctx->gs_connector,

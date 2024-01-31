@@ -984,6 +984,8 @@ struct gs_panel {
 
 	/** @dsi_hs_clk: current MIPI DSI HS clock (Hz) */
 	u32 dsi_hs_clk;
+	/* ACL mode */
+	enum gs_acl_mode acl_mode;
 };
 
 /* FUNCTIONS */

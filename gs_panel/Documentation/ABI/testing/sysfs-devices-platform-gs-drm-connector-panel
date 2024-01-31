@@ -120,3 +120,11 @@ Description:
   Userspace client uses this to read backlight state. This information includes if the panel is
   on, off, in low-power mode, or in a HBM state, as well as providing high-level information
   about the current operating mode, if active (resolution and refresh rate).
+
+What: /sys/devices/platform/gs-drm-connector/panel/backlight/panel0-backlight/acl_mode
+Date: January 2024
+KernelVersion: 6.1
+Contact: "Gil Liu" <gilliu@google.com>
+Description:
+  Userspace client can activate ACL mode to reduce panel voltage at higher brightness levels.
+  This prevents potential damage to the PMIC.
