@@ -814,13 +814,19 @@ struct gti_pm {
  * @ignore_coord_filter_update: Ignore fw_coordinate_filter status updates.
  * @fw_coord_filter_enabled: the current setting of coordinate filter.
  * @default_coord_filter_enabled: the default setting of coordinate filter.
+ * @panel_notifier_enabled: enable flag for receiving panel notifications.
  * @lptw_triggered: LPTW is triggered or not.
  * @lptw_suppress_coords_enabled: enable flag for suppressing the coords after lptw.
  * @lptw_track_finger: flag for tracking the suppressed fingers.
- * @panel_notifier_enabled: enable flag for receiving panel notifications.
- * @lptw_x: x-axis center of the lptw area.
- * @lptw_y: y-axis center of the lptw area.
- * @lptw_suppress_coords_work: delayed work for suppressing finger.
+ * @lptw_track_min_x: minimum x of tracking area.
+ * @lptw_track_max_x: maximum x of tracking area.
+ * @lptw_track_min_y: minimum y of tracking area.
+ * @lptw_track_max_x: maximum t of tracking area.
+ * @lptw_cancel_delayed_work: delayed work for canceling finger.
+ * @lptw_cancel_time: record the time for lptw cancel timeout.
+ * @qbt_lptw_down: true if the finger is still on the screen.
+ * @qbt_lptw_x: x coordinate for the tracking finger.
+ * @qbt_lptw_y: y coordinate for the tracking finger.
  * @ignore_force_active: Ignore the force_active sysfs request.
  * @offload_id: id that used by touch offload.
  * @heatmap_buf: heatmap buffer that used by v4l2.
@@ -917,13 +923,22 @@ struct goog_touch_interface {
 	bool ignore_coord_filter_update;
 	bool fw_coord_filter_enabled;
 	bool default_coord_filter_enabled;
+	bool panel_notifier_enabled;
 	bool lptw_triggered;
 	bool lptw_suppress_coords_enabled;
 	bool lptw_track_finger;
-	bool panel_notifier_enabled;
-	u32 lptw_x;
-	u32 lptw_y;
-	struct delayed_work lptw_suppress_coords_work;
+	u32 lptw_track_min_x;
+	u32 lptw_track_max_x;
+	u32 lptw_track_min_y;
+	u32 lptw_track_max_y;
+	struct delayed_work lptw_cancel_delayed_work;
+	ktime_t lptw_cancel_time;
+#if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
+	bool qbt_lptw_down;
+	int qbt_lptw_x;
+	int qbt_lptw_y;
+#endif
+
 	bool ignore_force_active;
 	bool gesture_config_enabled;
 	bool manual_heatmap_from_irq;
