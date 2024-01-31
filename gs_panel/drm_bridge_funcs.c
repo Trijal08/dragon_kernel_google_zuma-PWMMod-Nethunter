@@ -69,7 +69,7 @@ void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state pane
 	mutex_unlock(&ctx->bl_state_lock); /*TODO(b/267170999): BL*/
 
 	if (state_changed) {
-		schedule_work(&ctx->state_notify);
+		notify_panel_mode_changed(ctx);
 		dev_dbg(ctx->dev, "%s: panel:%d, bl:0x%x\n", __func__, panel_state,
 			bl->props.state);
 	}
@@ -275,7 +275,7 @@ static void bridge_mode_set_normal(struct gs_panel *ctx, const struct gs_panel_m
 		gs_panel_set_backlight_state(ctx, is_active ? GPANEL_STATE_NORMAL :
 							      GPANEL_STATE_OFF);
 	else if (ctx->bl)
-		schedule_work(&ctx->state_notify);
+		notify_panel_mode_changed(ctx);
 }
 
 static void bridge_mode_set_update_timestamps(struct gs_panel *ctx,
@@ -289,14 +289,15 @@ static void bridge_mode_set_update_timestamps(struct gs_panel *ctx,
 
 	if (!old_mode)
 		return;
-	if (drm_mode_vrefresh(&pmode->mode) == drm_mode_vrefresh(&old_mode->mode))
+	if ((drm_mode_vrefresh(&pmode->mode) == drm_mode_vrefresh(&old_mode->mode)) &&
+		((gs_drm_mode_te_freq(&pmode->mode) == gs_drm_mode_te_freq(&old_mode->mode))))
 		return;
 
 	/* save the context in order to predict TE width in
 	 * gs_panel_check_mipi_sync_timing
 	 */
 	ctx->timestamps.last_rr_switch_ts = ktime_get();
-	ctx->te2.last_rr = drm_mode_vrefresh(&old_mode->mode);
+	ctx->te2.last_rr = gs_drm_mode_te_freq(&old_mode->mode);
 	ctx->te2.last_rr_te_gpio_value = gpio_get_value(gs_connector_state->te_gpio);
 	ctx->te2.last_rr_te_counter = drm_crtc_vblank_count(crtc);
 	/* TODO(tknelms)

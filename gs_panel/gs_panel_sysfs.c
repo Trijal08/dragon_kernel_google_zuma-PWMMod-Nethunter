@@ -390,6 +390,130 @@ static ssize_t te2_lp_timing_show(struct device *dev, struct device_attribute *a
 	return ret;
 }
 
+static ssize_t time_in_state_show(struct device *dev,
+			      struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bl = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bl);
+	struct display_stats *stats = &ctx->disp_stats;
+	int state, vrefresh_idx, res_idx, time_state_idx;
+	u64 time, delta_ms;
+	ssize_t len = 0;
+
+	if (!stats->initialized)
+		return -ENODEV;
+
+	mutex_lock(&stats->lock);
+	delta_ms = ktime_ms_delta(ktime_get_boottime(), stats->last_update);
+	for (state = 0; state < DISPLAY_STATE_MAX; state++) {
+		int *vrefresh_range;
+		size_t vrefresh_range_count;
+
+		if (!stats->time_in_state[state].available_count)
+			continue;
+
+		if (state == DISPLAY_STATE_OFF) {
+			time = stats->time_in_state[state].time[0];
+			if (stats->last_state == state)
+				time += delta_ms;
+			if (time) {
+				len += sysfs_emit_at(buf, len, "%d 0 0 0 %llu\n",
+				DISPLAY_STATE_OFF, time);
+			}
+			continue;
+		}
+
+		if (state == DISPLAY_STATE_LP) {
+			vrefresh_range = stats->lp_vrefresh_range;
+			vrefresh_range_count = stats->lp_vrefresh_range_count;
+		} else {
+			vrefresh_range = stats->vrefresh_range;
+			vrefresh_range_count = stats->vrefresh_range_count;
+		}
+		for (res_idx = 0; res_idx < stats->res_table_count; res_idx++) {
+			for (vrefresh_idx = 0; vrefresh_idx < vrefresh_range_count;
+					vrefresh_idx++) {
+				int vrefresh;
+
+				vrefresh = vrefresh_range[vrefresh_idx];
+				time_state_idx = get_disp_stats_time_state_idx(
+					ctx, state, vrefresh, stats->res_table[res_idx]);
+				if (time_state_idx < 0)
+					continue;
+
+				time = stats->time_in_state[state].time[time_state_idx];
+				if (state == stats->last_state &&
+					time_state_idx == stats->last_time_state_idx) {
+					time += delta_ms;
+				}
+				if (!time)
+					continue;
+
+				len += sysfs_emit_at(buf, len,
+					"%d %u %u %d %llu\n", state,
+					stats->res_table[res_idx].hdisplay,
+					stats->res_table[res_idx].vdisplay,
+					vrefresh,
+					time);
+			}
+		}
+	}
+
+	mutex_unlock(&stats->lock);
+	return len;
+}
+
+static ssize_t available_disp_stats_show(struct device *dev,
+			      struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bl = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bl);
+	struct display_stats *stats = &ctx->disp_stats;
+	int state, vrefresh_idx, res_idx;
+	ssize_t len = 0;
+
+	if (!stats->initialized)
+		return -ENODEV;
+
+	mutex_lock(&stats->lock);
+	for (state = 0; state < DISPLAY_STATE_MAX; state++) {
+		int *vrefresh_range;
+		size_t vrefresh_range_count;
+
+		if (!stats->time_in_state[state].available_count)
+			continue;
+
+		if (state == DISPLAY_STATE_OFF) {
+			len += sysfs_emit_at(buf, len, "%d 0 0 0\n", state);
+			continue;
+		}
+
+		if (state == DISPLAY_STATE_LP) {
+			vrefresh_range = stats->lp_vrefresh_range;
+			vrefresh_range_count = stats->lp_vrefresh_range_count;
+		} else {
+			vrefresh_range = stats->vrefresh_range;
+			vrefresh_range_count = stats->vrefresh_range_count;
+		}
+		for (res_idx = 0; res_idx < stats->res_table_count; res_idx++) {
+			for (vrefresh_idx = 0; vrefresh_idx < vrefresh_range_count;
+					vrefresh_idx++) {
+				u16 hdisplay, vdisplay;
+				int vrefresh;
+
+				hdisplay = stats->res_table[res_idx].hdisplay;
+				vdisplay = stats->res_table[res_idx].vdisplay;
+				vrefresh = vrefresh_range[vrefresh_idx];
+				len += sysfs_emit_at(buf, len, "%d %u %u %d\n",
+						state, hdisplay, vdisplay, vrefresh);
+			}
+		}
+	}
+
+	mutex_unlock(&stats->lock);
+	return len;
+}
+
 static DEVICE_ATTR_RO(serial_number);
 static DEVICE_ATTR_RO(panel_extinfo);
 static DEVICE_ATTR_RO(panel_name);
@@ -403,6 +527,8 @@ static DEVICE_ATTR_RW(refresh_ctrl);
 static DEVICE_ATTR_RW(min_vrefresh);
 static DEVICE_ATTR_RW(te2_timing);
 static DEVICE_ATTR_RW(te2_lp_timing);
+static DEVICE_ATTR_RO(time_in_state);
+static DEVICE_ATTR_RO(available_disp_stats);
 /* TODO(tknelms): re-implement below */
 #if 0
 static DEVICE_ATTR_WO(gamma);
@@ -435,8 +561,16 @@ static const struct attribute *panel_attrs[] = {
 	NULL
 };
 
-int gs_panel_sysfs_create_files(struct device *dev)
+int gs_panel_sysfs_create_files(struct device *dev, struct gs_panel *ctx)
 {
+	if (ctx->disp_stats.initialized) {
+		if (sysfs_create_file(&dev->kobj, &dev_attr_time_in_state.attr))
+			dev_err(ctx->dev, "unable to add time_in_state panel sysfs file\n");
+
+		if (sysfs_create_file(&dev->kobj, &dev_attr_available_disp_stats.attr))
+			dev_err(ctx->dev, "unable to add available_disp_stats sysfs file\n");
+	}
+
 	return sysfs_create_files(&dev->kobj, panel_attrs);
 }
 
@@ -479,7 +613,7 @@ static ssize_t hbm_mode_store(struct device *dev, struct device_attribute *attr,
 
 	if (hbm_mode != ctx->hbm_mode) {
 		ctx->desc->gs_panel_func->set_hbm_mode(ctx, hbm_mode);
-		schedule_work(&ctx->state_notify);
+		notify_panel_mode_changed(ctx);
 	}
 
 unlock:
@@ -609,35 +743,24 @@ static ssize_t state_show(struct device *dev, struct device_attribute *attr, cha
 {
 	struct backlight_device *bl = to_backlight_device(dev);
 	struct gs_panel *ctx = bl_get_data(bl);
-	const char *statestr;
+	enum display_stats_state state;
 	int rc, ret_cnt;
 
 	mutex_lock(&ctx->bl_state_lock);
-
-	if (bl->props.state & BL_STATE_STANDBY) {
-		mutex_unlock(&ctx->bl_state_lock);
-		return sysfs_emit(buf, "Off\n");
-	} else if (bl->props.state & BL_STATE_LP) {
-		statestr = "LP";
-	} else if (GS_IS_HBM_ON(ctx->hbm_mode)) {
-		statestr = GS_IS_HBM_ON_IRC_OFF(ctx->hbm_mode) ? "HBM IRC_OFF" : "HBM";
-	} else {
-		statestr = "On";
-	}
-
+	state = gs_get_current_display_state_locked(ctx);
 	mutex_unlock(&ctx->bl_state_lock);
 
-	ret_cnt = sysfs_emit(buf, "%s", statestr);
+	ret_cnt = sysfs_emit(buf, "%s", get_disp_state_str(state));
 	rc = ret_cnt;
 
-	if (rc > 0) {
+	if (rc > 0 && state != DISPLAY_STATE_OFF) {
 		const struct gs_panel_mode *pmode;
 
 		mutex_lock(&ctx->mode_lock);
 		pmode = ctx->current_mode;
 		mutex_unlock(&ctx->mode_lock);
 		if (pmode) {
-			ret_cnt = sysfs_emit_at(buf, ret_cnt, ": %dx%d@%d\n", pmode->mode.hdisplay,
+			ret_cnt = sysfs_emit_at(buf, ret_cnt, ": %ux%u@%d\n", pmode->mode.hdisplay,
 						pmode->mode.vdisplay, gs_get_actual_vrefresh(ctx));
 			if (ret_cnt > 0)
 				rc += ret_cnt;

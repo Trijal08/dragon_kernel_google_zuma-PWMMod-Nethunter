@@ -548,6 +548,343 @@ static void panel_idle_work(struct work_struct *work)
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 }
 
+/* Display stats */
+const char * const disp_state_str[] = {
+	[DISPLAY_STATE_ON] = "On",
+	[DISPLAY_STATE_HBM] = "HBM",
+	[DISPLAY_STATE_LP] = "LP",
+	[DISPLAY_STATE_OFF] = "Off",
+};
+
+const char *get_disp_state_str(enum display_stats_state state)
+{
+	return disp_state_str[state];
+}
+
+static size_t disp_stats_update_vrefresh_range(const int vrefresh,
+						const size_t current_count, int *vrefresh_range)
+{
+	int i;
+	size_t count = 0;
+
+	for (i = 0; i < MAX_VREFRESH_RANGES; i++) {
+		if (i == current_count) {
+			vrefresh_range[i] = vrefresh;
+			count++;
+			break;
+		} else if (vrefresh_range[i] == vrefresh) {
+			break;
+		}
+	}
+
+	return count;
+}
+
+int get_disp_stats_time_state_idx(struct gs_panel *ctx,
+		enum display_stats_state state, int vrefresh, struct display_stats_resolution res)
+{
+	struct display_stats *stats = &ctx->disp_stats;
+	int i;
+	int vrefresh_idx = -1, res_idx = -1, time_state_idx;
+	int *vrefresh_range;
+	size_t max_vrefresh_range_count;
+
+	if (!stats->time_in_state[state].available_count) {
+		dev_err(ctx->dev, "time state does not support %s\n",
+			get_disp_state_str(state));
+		return -1;
+	}
+
+	if (state == DISPLAY_STATE_OFF)
+		return 0;
+
+	if (state == DISPLAY_STATE_LP) {
+		vrefresh_range = stats->lp_vrefresh_range;
+		max_vrefresh_range_count = stats->lp_vrefresh_range_count;
+	} else {
+		/* ON, HBM */
+		vrefresh_range = stats->vrefresh_range;
+		max_vrefresh_range_count = stats->vrefresh_range_count;
+	}
+
+	for (i = 0; i < stats->res_table_count; i++) {
+		if (stats->res_table[i].hdisplay == res.hdisplay &&
+			stats->res_table[i].vdisplay == res.vdisplay) {
+			res_idx = i;
+			break;
+		}
+	}
+
+	if (res_idx < 0) {
+		dev_err(ctx->dev, "time state does not support %ux%u on %s\n",
+			res.hdisplay, res.vdisplay, get_disp_state_str(state));
+		return -1;
+	}
+
+	for (i = 0; i < max_vrefresh_range_count; i++) {
+		if (vrefresh_range[i] == vrefresh) {
+			vrefresh_idx = i;
+			break;
+		}
+	}
+
+	if (vrefresh_idx < 0) {
+		dev_err(ctx->dev, "time state does not support %dhz on %s\n",
+			vrefresh, get_disp_state_str(state));
+		return -1;
+	}
+
+	time_state_idx = res_idx * max_vrefresh_range_count + vrefresh_idx;
+	if (time_state_idx >= stats->time_in_state[state].available_count) {
+		dev_err(ctx->dev, "time state does not support %ux%u@%d on %s state\n",
+			res.hdisplay, res.vdisplay, vrefresh, get_disp_state_str(state));
+		return -1;
+	}
+
+	return time_state_idx;
+}
+
+static void disp_stats_init_resolution_tables(struct gs_panel *ctx)
+{
+	struct display_stats *stats = &ctx->disp_stats;
+	int i, j;
+
+	if (ctx->desc->stats_desc && ctx->desc->stats_desc->resolution_table) {
+		stats->res_table_count = ctx->desc->stats_desc->resolution_table_count;
+		if (stats->res_table_count > MAX_RESOLUTION_TABLES) {
+			dev_warn(ctx->dev, "exceed max count of resolution table\n");
+			stats->res_table_count = MAX_RESOLUTION_TABLES;
+		}
+		for (i = 0; i < stats->res_table_count; i++)
+			stats->res_table[i] = ctx->desc->stats_desc->resolution_table[i];
+	} else {
+		dev_dbg(ctx->dev, "find available resolution from modes\n");
+		for (i = 0; i < ctx->desc->modes->num_modes; i++) {
+			const struct gs_panel_mode *pmode = &ctx->desc->modes->modes[i];
+
+			for (j = 0; j < MAX_RESOLUTION_TABLES; j++) {
+				struct display_stats_resolution *res =  &stats->res_table[j];
+
+				if (j == stats->res_table_count) {
+					res->hdisplay = pmode->mode.hdisplay;
+					res->vdisplay = pmode->mode.vdisplay;
+					stats->res_table_count++;
+					break;
+				} else if ((res->hdisplay == pmode->mode.hdisplay) &&
+					(res->vdisplay == pmode->mode.vdisplay)) {
+					break;
+				}
+			}
+		}
+	}
+}
+
+static void disp_stats_init_vrefresh_ranges(struct gs_panel *ctx)
+{
+	struct display_stats *stats = &ctx->disp_stats;
+	int i;
+
+	if (ctx->desc->stats_desc->vrefresh_range) {
+		stats->vrefresh_range_count = ctx->desc->stats_desc->vrefresh_range_count;
+		if (stats->vrefresh_range_count > MAX_VREFRESH_RANGES) {
+			dev_warn(ctx->dev, "exceed max count of vrefresh range\n");
+			stats->vrefresh_range_count = MAX_VREFRESH_RANGES;
+		}
+		for (i = 0; i < stats->vrefresh_range_count; i++)
+			stats->vrefresh_range[i] = ctx->desc->stats_desc->vrefresh_range[i];
+	} else {
+		dev_dbg(ctx->dev, "find available vrefresh from modes\n");
+		for (i = 0; i < ctx->desc->modes->num_modes; i++) {
+			const struct gs_panel_mode *pmode = &ctx->desc->modes->modes[i];
+			const int vrefresh = drm_mode_vrefresh(&pmode->mode);
+			int *vrefresh_range = stats->vrefresh_range;
+
+			stats->vrefresh_range_count +=
+				disp_stats_update_vrefresh_range(vrefresh,
+					stats->vrefresh_range_count, vrefresh_range);
+		}
+	}
+
+	if (ctx->desc->stats_desc->lp_vrefresh_range) {
+		stats->lp_vrefresh_range_count = ctx->desc->stats_desc->lp_vrefresh_range_count;
+		if (stats->lp_vrefresh_range_count > MAX_VREFRESH_RANGES) {
+			dev_warn(ctx->dev, "exceed max count of lp vrefresh range\n");
+			stats->lp_vrefresh_range_count = MAX_VREFRESH_RANGES;
+		}
+		for (i = 0; i < stats->lp_vrefresh_range_count; i++)
+			stats->lp_vrefresh_range[i] = ctx->desc->stats_desc->lp_vrefresh_range[i];
+	} else if (ctx->desc->lp_modes) {
+		const size_t lp_mode_count = ctx->desc->lp_modes->num_modes ? : 1;
+
+		dev_dbg(ctx->dev, "find available lp vrefresh from lp modes\n");
+		for (i = 0; i < lp_mode_count; i++) {
+			const struct gs_panel_mode *pmode = &ctx->desc->lp_modes->modes[i];
+			const int vrefresh = drm_mode_vrefresh(&pmode->mode);
+			int *vrefresh_range = stats->lp_vrefresh_range;
+
+			stats->lp_vrefresh_range_count +=
+				disp_stats_update_vrefresh_range(vrefresh,
+					stats->lp_vrefresh_range_count, vrefresh_range);
+		}
+	}
+}
+
+static void disp_stats_init(struct gs_panel *ctx)
+{
+	struct display_stats *stats = &ctx->disp_stats;
+	enum display_stats_state init_state;
+	int i, time_state_idx;
+	size_t available_count;
+
+	if (!ctx->desc->stats_desc)
+		return;
+
+	if (!ctx->desc->stats_desc->enabled)
+		return;
+
+	disp_stats_init_resolution_tables(ctx);
+	disp_stats_init_vrefresh_ranges(ctx);
+	available_count = stats->res_table_count *
+				stats->vrefresh_range_count;
+
+	stats->time_in_state[DISPLAY_STATE_ON].available_count =
+			available_count;
+
+	if (gs_panel_has_func(ctx, set_hbm_mode))
+		stats->time_in_state[DISPLAY_STATE_HBM].available_count =
+			available_count;
+
+	stats->time_in_state[DISPLAY_STATE_LP].available_count =
+		stats->res_table_count * stats->lp_vrefresh_range_count;
+
+	stats->time_in_state[DISPLAY_STATE_OFF].available_count = 1;
+
+	/* setting init display mode */
+	if (gs_is_panel_enabled(ctx) && ctx->current_mode) {
+		struct display_stats_resolution init_res;
+		int init_vrefresh;
+
+		init_state = DISPLAY_STATE_ON;
+		init_res.hdisplay = ctx->current_mode->mode.hdisplay;
+		init_res.vdisplay = ctx->current_mode->mode.vdisplay;
+		init_vrefresh = drm_mode_vrefresh(&ctx->current_mode->mode);
+		time_state_idx = get_disp_stats_time_state_idx(ctx, init_state,
+				init_vrefresh, init_res);
+		if (time_state_idx < 0) {
+			init_state = DISPLAY_STATE_OFF;
+			time_state_idx = 0;
+			dev_dbg(ctx->dev, "time state init mode: OFF");
+		} else {
+			dev_dbg(ctx->dev, "time state init mode: %s",
+				ctx->current_mode->mode.name[0] ?
+				ctx->current_mode->mode.name : "NA");
+		}
+	} else {
+		init_state = DISPLAY_STATE_OFF;
+		time_state_idx = 0;
+		dev_dbg(ctx->dev, "time state init mode: OFF");
+	}
+
+	stats->last_state = init_state;
+	stats->last_time_state_idx = time_state_idx;
+
+	/* allocate memory for time state */
+	for (i = 0; i < DISPLAY_STATE_MAX; i++) {
+		struct display_stats_time_state *t = &stats->time_in_state[i];
+
+		if (t->available_count) {
+			t->time = devm_kcalloc(ctx->dev,
+				t->available_count, sizeof(*t->time),
+				GFP_KERNEL);
+			if (!t->time)
+				goto free_time_state;
+		}
+	}
+
+	mutex_init(&stats->lock);
+	stats->initialized = true;
+
+	return;
+
+free_time_state:
+	for (i = 0; i < DISPLAY_STATE_MAX; i++) {
+		if (stats->time_in_state[i].time) {
+			devm_kfree(ctx->dev, stats->time_in_state[i].time);
+			stats->time_in_state[i].time = NULL;
+		}
+	}
+}
+
+static int disp_stats_update_state(struct gs_panel *ctx)
+{
+	struct display_stats *stats = &ctx->disp_stats;
+	struct display_stats_resolution cur_res;
+	enum display_stats_state cur_state, last_state;
+	int cur_vrefresh, cur_time_state_idx, last_time_state_idx;
+	u64 cur_time, delta_ms;
+
+	if (!stats->initialized)
+		return -1;
+
+	mutex_lock(&ctx->bl_state_lock);
+	cur_state = gs_get_current_display_state_locked(ctx);
+	mutex_unlock(&ctx->bl_state_lock);
+
+	mutex_lock(&ctx->mode_lock);
+	if (unlikely(!ctx->current_mode)) {
+		dev_warn(ctx->dev, "%s: current mode is null\n", __func__);
+		mutex_unlock(&ctx->mode_lock);
+		return -1;
+	}
+	cur_vrefresh = gs_get_actual_vrefresh(ctx);
+	cur_res.hdisplay = ctx->current_mode->mode.hdisplay;
+	cur_res.vdisplay = ctx->current_mode->mode.vdisplay;
+	mutex_unlock(&ctx->mode_lock);
+
+	mutex_lock(&stats->lock);
+	cur_time = ktime_get_boottime();
+	delta_ms = ktime_ms_delta(cur_time, stats->last_update);
+	cur_time_state_idx = get_disp_stats_time_state_idx(ctx, cur_state, cur_vrefresh,
+			cur_res);
+
+	if (cur_time_state_idx < 0) {
+		dev_err(ctx->dev, "%s: fail to find time stats idx for %ux%u@%d\n",
+			__func__, cur_res.hdisplay, cur_res.vdisplay, cur_vrefresh);
+		mutex_unlock(&stats->lock);
+		return -1;
+	}
+
+	last_state = stats->last_state;
+	last_time_state_idx = stats->last_time_state_idx;
+	stats->time_in_state[last_state].time[last_time_state_idx] +=
+		delta_ms;
+	stats->last_time_state_idx = cur_time_state_idx;
+	stats->last_state = cur_state;
+	stats->last_update = cur_time;
+
+	mutex_unlock(&stats->lock);
+
+	return 0;
+}
+
+
+static void notify_panel_mode_changed_worker(struct work_struct *work)
+{
+	struct gs_panel *ctx =
+		container_of(work, struct gs_panel, notify_panel_mode_changed_work);
+
+	disp_stats_update_state(ctx);
+	sysfs_notify(&ctx->bl->dev.kobj, NULL, "state");
+}
+
+static void notify_brightness_changed_worker(struct work_struct *work)
+{
+	struct gs_panel *ctx =
+		container_of(work, struct gs_panel, notify_brightness_changed_work);
+
+	sysfs_notify(&ctx->bl->dev.kobj, NULL, "brightness");
+}
+
 /* BACKLIGHT */
 
 static int gs_get_brightness(struct backlight_device *bl)
@@ -998,19 +1335,6 @@ static void gs_panel_init_te2(struct gs_panel *ctx)
 	ctx->te2.option = GTE2_OPT_CHANGEABLE;
 }
 
-static void state_notify_worker(struct work_struct *work)
-{
-	struct gs_panel *ctx = container_of(work, struct gs_panel, state_notify);
-
-	sysfs_notify(&ctx->bl->dev.kobj, NULL, "state");
-}
-
-static void brightness_notify_worker(struct work_struct *work)
-{
-	struct gs_panel *ctx = container_of(work, struct gs_panel, brightness_notify);
-
-	sysfs_notify(&ctx->bl->dev.kobj, NULL, "brightness");
-}
 
 int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 {
@@ -1083,8 +1407,13 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 		for (i = 0; i < ctx->desc->modes->num_modes; i++) {
 			const struct gs_panel_mode *pmode = &ctx->desc->modes->modes[i];
 			const int vrefresh = drm_mode_vrefresh(&pmode->mode);
+			const int bts_fps = gs_drm_mode_bts_fps(&pmode->mode);
+
 			if (ctx->max_vrefresh < vrefresh)
 				ctx->max_vrefresh = vrefresh;
+
+			if (ctx->peak_bts_fps < bts_fps)
+				ctx->peak_bts_fps = bts_fps;
 		}
 	}
 
@@ -1092,8 +1421,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	ctx->idle_data.panel_idle_enabled = gs_panel_has_func(ctx, set_self_refresh);
 	INIT_DELAYED_WORK(&ctx->idle_data.idle_work, panel_idle_work);
 
-	INIT_WORK(&ctx->state_notify, state_notify_worker);
-	INIT_WORK(&ctx->brightness_notify, brightness_notify_worker);
+	INIT_WORK(&ctx->notify_panel_mode_changed_work, notify_panel_mode_changed_worker);
+	INIT_WORK(&ctx->notify_brightness_changed_work, notify_brightness_changed_worker);
 
 	/* DSI HS Clock */
 	if (ctx->desc->default_dsi_hs_clk)
@@ -1121,8 +1450,14 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	/* Attach bridge funcs */
 	ctx->bridge.funcs = get_panel_drm_bridge_funcs();
 
+	/* panel handoff */
+	gs_panel_handoff(ctx);
+
+	/* initial display time_in_state */
+	disp_stats_init(ctx);
+
 	/* Create sysfs files */
-	ret = gs_panel_sysfs_create_files(dev);
+	ret = gs_panel_sysfs_create_files(dev, ctx);
 	if (ret)
 		dev_warn(dev, "unable to add panel sysfs files (%d)\n", ret);
 	ret = gs_panel_sysfs_create_bl_files(&ctx->bl->dev);
@@ -1137,9 +1472,6 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 			dev_err(dev, "unable to create cabc_mode\n");
 	}
 	*/
-
-	/* panel handoff */
-	gs_panel_handoff(ctx);
 
 	/* dsi attach */
 	ret = mipi_dsi_attach(dsi);
@@ -1284,6 +1616,20 @@ void gs_panel_wait_for_vsync_done(struct gs_panel *ctx, u32 te_us, u32 period_us
 	usleep_range(delay_us, delay_us + 10);
 }
 EXPORT_SYMBOL(gs_panel_wait_for_vsync_done);
+
+enum display_stats_state gs_get_current_display_state_locked(struct gs_panel *ctx)
+{
+	struct backlight_device *bl = ctx->bl;
+
+	if (bl->props.state & BL_STATE_STANDBY)
+		return DISPLAY_STATE_OFF;
+	else if (bl->props.state & BL_STATE_LP)
+		return DISPLAY_STATE_LP;
+	else if (GS_IS_HBM_ON(ctx->hbm_mode))
+		return DISPLAY_STATE_HBM;
+	else
+		return DISPLAY_STATE_ON;
+}
 
 /* Tracing */
 

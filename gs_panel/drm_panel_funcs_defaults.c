@@ -58,8 +58,9 @@ EXPORT_SYMBOL(gs_panel_prepare);
 
 static void gs_panel_mode_set_name(struct drm_display_mode *mode)
 {
-	scnprintf(mode->name, DRM_DISPLAY_MODE_LEN, "%dx%dx%d", mode->hdisplay, mode->vdisplay,
-		  drm_mode_vrefresh(mode));
+	scnprintf(mode->name, DRM_DISPLAY_MODE_LEN, "%ux%ux%d@%d",
+		  mode->hdisplay, mode->vdisplay,
+		  drm_mode_vrefresh(mode), gs_drm_mode_te_freq(mode));
 }
 
 int gs_panel_get_modes(struct drm_panel *panel, struct drm_connector *connector)

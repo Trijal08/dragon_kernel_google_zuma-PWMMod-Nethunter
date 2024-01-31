@@ -177,9 +177,6 @@ static void gs_panel_connector_print_state(struct drm_printer *p,
 	const struct gs_panel_desc *desc = ctx->desc;
 	int ret;
 
-	dev_dbg(ctx->dev, "%s+ (exiting)\n", __func__);
-	return;
-
 	/*TODO(b/267170999): MODE*/
 	ret = mutex_lock_interruptible(&ctx->mode_lock);
 	if (ret)
@@ -193,8 +190,7 @@ static void gs_panel_connector_print_state(struct drm_printer *p,
 	if (ctx->current_mode) {
 		const struct drm_display_mode *m = &ctx->current_mode->mode;
 
-		drm_printf(p, " \tcurrent mode: %dx%d@%d\n", m->hdisplay, m->vdisplay,
-			   drm_mode_vrefresh(m));
+		drm_printf(p, " \tcurrent mode: %s te@%d\n", m->name, gs_drm_mode_te_freq(m));
 	}
 	drm_printf(p, "\text_info: %s\n", ctx->panel_extinfo);
 	drm_printf(p, "\tluminance: [%u, %u] avg: %u\n", desc->brightness_desc->min_luminance,
@@ -374,7 +370,7 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 		/*TODO(b/267170999): MODE*/
 		mutex_lock(&ctx->mode_lock);
 		gs_panel_func->set_hbm_mode(ctx, conn_state->global_hbm_mode);
-		schedule_work(&ctx->state_notify);
+		notify_panel_mode_changed(ctx);
 		/*TODO(b/267170999): MODE*/
 		mutex_unlock(&ctx->mode_lock);
 		/*TODO(tknelms) DPU_ATRACE_END("set_hbm");*/

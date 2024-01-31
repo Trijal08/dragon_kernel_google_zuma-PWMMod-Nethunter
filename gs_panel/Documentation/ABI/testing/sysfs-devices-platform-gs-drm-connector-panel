@@ -128,3 +128,19 @@ Contact: "Gil Liu" <gilliu@google.com>
 Description:
   Userspace client can activate ACL mode to reduce panel voltage at higher brightness levels.
   This prevents potential damage to the PMIC.
+
+What: /sys/devices/platform/gs-drm-connector/panel/time_in_state
+Date: January 2024
+KernelVersion:	6.1
+Contact: "Ken Huang" <kenbshuang@google.com>
+Description:
+  The file provides the time (msec) spent in various display states.
+  The format is: "[Display state] [Display width] [Display height] [Refresh rate] [Time]"
+
+What: /sys/devices/platform/gs-drm-connector/panel/available_disp_stats
+Date: January 2024
+KernelVersion:	6.1
+Contact: "Ken Huang" <kenbshuang@google.com>
+Description:
+  The file provides the different available display states for which stats can be displayed.
+  The format is: "[Display state] [Display width] [Display height] [Refresh rate]"

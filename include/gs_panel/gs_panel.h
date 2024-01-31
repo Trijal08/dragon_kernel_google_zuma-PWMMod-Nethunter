@@ -666,6 +666,19 @@ struct gs_panel_reg_ctrl_desc {
 	const struct panel_reg_ctrl reg_ctrl_disable[PANEL_REG_COUNT];
 };
 
+/**
+ * struct gs_display_stats_desc - Descriptor of the display stats
+ */
+struct gs_display_stats_desc {
+	const struct display_stats_resolution *resolution_table;
+	size_t resolution_table_count;
+	const int *vrefresh_range;
+	size_t vrefresh_range_count;
+	const int *lp_vrefresh_range;
+	size_t lp_vrefresh_range_count;
+	bool enabled;
+};
+
 struct gs_panel_desc {
 	u8 panel_id_reg;
 	u32 data_lane_cnt;
@@ -689,6 +702,7 @@ struct gs_panel_desc {
 	const struct gs_panel_funcs *gs_panel_func;
 	const int reset_timing_ms[PANEL_RESET_TIMING_COUNT];
 	const struct gs_panel_reg_ctrl_desc *reg_ctrl_desc;
+	struct gs_display_stats_desc *stats_desc;
 	/** @default_dsi_hs_clk: default MIPI DSI HS clock (Hz) */
 	u32 default_dsi_hs_clk;
 };
@@ -916,6 +930,43 @@ struct gs_thermal_data {
 	bool pending_temp_update;
 };
 
+
+enum display_stats_state {
+	DISPLAY_STATE_ON,
+	DISPLAY_STATE_HBM,
+	DISPLAY_STATE_LP,
+	DISPLAY_STATE_OFF,
+	DISPLAY_STATE_MAX
+};
+
+struct display_stats_resolution {
+	u16 hdisplay;
+	u16 vdisplay;
+};
+
+struct display_stats_time_state {
+	size_t available_count;
+	u64 *time;
+};
+
+#define MAX_VREFRESH_RANGES	10
+#define MAX_RESOLUTION_TABLES	2
+
+struct display_stats {
+	int vrefresh_range[MAX_VREFRESH_RANGES];
+	size_t vrefresh_range_count;
+	int lp_vrefresh_range[MAX_VREFRESH_RANGES];
+	size_t lp_vrefresh_range_count;
+	struct display_stats_resolution res_table[MAX_RESOLUTION_TABLES];
+	unsigned int res_table_count;
+	struct display_stats_time_state time_in_state[DISPLAY_STATE_MAX];
+	enum display_stats_state last_state;
+	int last_time_state_idx;
+	ktime_t last_update;
+	struct mutex lock;
+	bool initialized;
+};
+
 /**
  * struct gs_panel - data associated with panel driver operation
  * TODO: better documentation
@@ -988,9 +1039,12 @@ struct gs_panel {
 
 	struct gs_thermal_data *thermal;
 
-	/* works of sysfs_notify */
-	struct work_struct state_notify;
-	struct work_struct brightness_notify;
+	/* use for notify state changed */
+	struct work_struct notify_panel_mode_changed_work;
+	struct work_struct notify_brightness_changed_work;
+
+	/* use for display stats residence */
+	struct display_stats disp_stats;
 
 	/* current type of mode switch */
 	enum mode_progress_type mode_in_progress;
@@ -1085,6 +1139,11 @@ static inline ssize_t gs_get_te2_type_len(const struct gs_panel_desc *desc, bool
 			return -EINVAL;
 		return desc->modes->num_modes;
 	}
+}
+
+static inline void notify_panel_mode_changed(struct gs_panel *ctx)
+{
+	schedule_work(&ctx->notify_panel_mode_changed_work);
 }
 
 static inline u32 get_current_frame_duration_us(struct gs_panel *ctx)

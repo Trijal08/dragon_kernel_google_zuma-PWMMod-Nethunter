@@ -18,6 +18,8 @@ struct gs_drm_connector;
 struct dentry;
 struct mipi_dsi_device;
 enum gs_panel_state;
+enum display_stats_state;
+struct display_stats_resolution;
 
 /* gs_panel_connector_funcs.c */
 int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *drm_dev,
@@ -48,12 +50,13 @@ void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state pane
 /**
  * gs_panel_sysfs_create_files() - Creates sysfs files for panel
  * @dev: pointer to panel's device node
+ * @ctx: Pointer to gs_panel
  *
  * Creates sysfs files for panel itself
  *
  * Return: Result of sysfs_create_files function
  */
-int gs_panel_sysfs_create_files(struct device *dev);
+int gs_panel_sysfs_create_files(struct device *dev, struct gs_panel *ctx);
 /**
  * gs_panel_sysfs_create_bl_files() - Creates sysfs files for panel backlight
  * @bl_dev: pointer to backlight's device node
@@ -201,5 +204,24 @@ struct gs_drm_connector *get_gs_drm_connector_parent(const struct gs_panel *ctx)
  * Return: pointer to gs_panel attached to connector, or NULL on error.
  */
 struct gs_panel *gs_connector_to_panel(const struct gs_drm_connector *gs_connector);
+
+enum display_stats_state gs_get_current_display_state_locked(struct gs_panel *ctx);
+const char *get_disp_state_str(enum display_stats_state state);
+
+/**
+ * get_disp_stats_time_state_idx() - get the index of display stats table
+ * @ctx: handle for gs_panel
+ * @state: display state
+ * @vrefresh: display refresh rate
+ * @res: display resolution
+ *
+ * The display stats table provides residency data for various display configurations,
+ * including display state, refresh rate, and resolution. This function is used to obtain
+ * the index of the display stats that corresponds to a specific display configuration.
+ *
+ * Return: index of display stats table.
+ */
+int get_disp_stats_time_state_idx(struct gs_panel *ctx,
+		enum display_stats_state state, int vrefresh, struct display_stats_resolution res);
 
 #endif // _GS_PANEL_INTERNAL_H_
