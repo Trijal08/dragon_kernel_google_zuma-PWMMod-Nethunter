@@ -124,4 +124,14 @@ int gs_panel_set_te2_edges_helper(struct gs_panel *ctx, u32 *timings, bool lp_mo
  */
 void gs_panel_set_binned_lp_helper(struct gs_panel *ctx, const u16 brightness);
 
+/**
+ * gs_panel_set_lp_mode_helper() - Execute command sequence to enter LP mode
+ * @ctx: Reference to panel data
+ * @pmode: mode to enter
+ *
+ * This helper is a convenience function to execute the lp_cmdset commands.
+ * If there is no cmdset defined in the gs_panel_desc, this function does nothing
+ */
+void gs_panel_set_lp_mode_helper(struct gs_panel *ctx, const struct gs_panel_mode *pmode);
+
 #endif // _GS_PANEL_FUNCS_DEFAULTS_H_

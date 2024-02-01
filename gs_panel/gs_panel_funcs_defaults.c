@@ -244,3 +244,11 @@ void gs_panel_set_binned_lp_helper(struct gs_panel *ctx, const u16 brightness)
 		gs_panel_update_te2(ctx);
 }
 EXPORT_SYMBOL(gs_panel_set_binned_lp_helper);
+
+void gs_panel_set_lp_mode_helper(struct gs_panel *ctx, const struct gs_panel_mode *pmode)
+{
+	if (ctx->desc->lp_cmdset)
+		gs_panel_send_cmdset(ctx, ctx->desc->lp_cmdset);
+	dev_info(ctx->dev, "enter %dhz LP mode\n", drm_mode_vrefresh(&pmode->mode));
+}
+EXPORT_SYMBOL(gs_panel_set_lp_mode_helper);
