@@ -111,22 +111,55 @@ TRACE_EVENT(te2_update_settings,
 		  __entry->is_idle ? "active" : "inactive")
 );
 
-TRACE_EVENT(panel_int_value,
-	TP_PROTO(const char *name, int pid, int value),
-	TP_ARGS(name, pid, value),
+TRACE_EVENT(panel_write_generic,
+	TP_PROTO(char type, int pid, const char *name, int value),
+	TP_ARGS(type, pid, name, value),
 	TP_STRUCT__entry(
-		__string(name, name)
+		__field(char, type)
 		__field(int, pid)
+		__string(name, name)
 		__field(int, value)
 	),
 	TP_fast_assign(
-		__assign_str(name, name);
+		__entry->type = type;
 		__entry->pid = pid;
+		__assign_str(name, name);
 		__entry->value = value;
 	),
-	TP_printk("C|%d|%s|%d", __entry->pid, __get_str(name), __entry->value)
+	TP_printk("%c|%d|%s|%d",
+		  __entry->type, __entry->pid, __get_str(name), __entry->value)
 );
-#define PANEL_ATRACE_INT(name, value) trace_panel_int_value(name, current->tgid, value)
+/**
+ * PANEL_ATRACE_BEGIN() - used to trace beginning of a scope
+ * @name: Name of scope to trace
+ *
+ * Used to trace a scope of time. Often used for function duration,
+ * but may be used to keep track of the duration of more high-level operations.
+ */
+#define PANEL_ATRACE_BEGIN(name) trace_panel_write_generic('B', current->tgid, name, 0)
+/**
+ * PANEL_ATRACE_END() - used to trace end of a scope
+ * @name: Name of scope to trace
+ *
+ * Used to trace a scope of time. Often used for function duration,
+ * but may be used to keep track of the duration of more high-level operations.
+ */
+#define PANEL_ATRACE_END(name) trace_panel_write_generic('E', current->tgid, "", 0)
+/**
+ * PANEL_ATRACE_INSTANT() - used to trace an instantaneous event
+ * @name: Name of event to trace
+ *
+ * Used to trace a named event without a duration attached.
+ */
+#define PANEL_ATRACE_INSTANT(name) trace_panel_write_generic('I', current->tgid, name, 0)
+/**
+ * PANEL_ATRACE_INT() - used to trace an integer value
+ * @name: Name of variable to trace
+ * @value: Value of variable to trace
+ *
+ * Used to trace a variable or counter with an integer value
+ */
+#define PANEL_ATRACE_INT(name, value) trace_panel_write_generic('C', current->tgid, name, value)
 
 #endif /* _PANEL_TRACE_H_ */
 
