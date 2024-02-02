@@ -542,6 +542,106 @@ static ssize_t te_info_show(struct device *dev, struct device_attribute *attr, c
 	return scnprintf(buf, PAGE_SIZE, "%s@%d\n", changeable ? "changeable" : "fixed", freq);
 }
 
+static ssize_t te2_rate_hz_store(struct device *dev, struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	int ret;
+	u32 rate_hz;
+
+	if (!gs_panel_has_func(ctx, set_te2_rate))
+		return -ENOTSUPP;
+
+	ret = kstrtouint(buf, 0, &rate_hz);
+	if (ret) {
+		dev_err(dev, "invalid TE2 rate value\n");
+		return ret;
+	}
+
+	mutex_lock(&ctx->mode_lock);
+	if (!gs_is_panel_active(ctx)) {
+		dev_warn(ctx->dev, "%s: cache rate(%u)\n", __func__, rate_hz);
+		ctx->te2.rate_hz = rate_hz;
+	} else if (ctx->desc->gs_panel_func->set_te2_rate(ctx, rate_hz)) {
+		notify_panel_te2_rate_changed(ctx);
+	}
+	mutex_unlock(&ctx->mode_lock);
+
+	return count;
+}
+
+static ssize_t te2_rate_hz_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	int ret;
+
+	if (!gs_panel_has_func(ctx, get_te2_rate))
+		return -ENOTSUPP;
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_warn(ctx->dev, "%s: panel is not enabled\n", __func__);
+		return -EPERM;
+	}
+
+	mutex_lock(&ctx->mode_lock);
+	ret = sysfs_emit(buf, "%u\n", ctx->desc->gs_panel_func->get_te2_rate(ctx));
+	mutex_unlock(&ctx->mode_lock);
+
+	return ret;
+}
+
+static ssize_t te2_option_store(struct device *dev, struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	int ret;
+	u32 option;
+
+	if (!gs_panel_has_func(ctx, set_te2_option))
+		return -ENOTSUPP;
+
+	ret = kstrtou32(buf, 0, &option);
+	if (ret) {
+		dev_err(dev, "invalid TE2 option value\n");
+		return ret;
+	}
+
+	mutex_lock(&ctx->mode_lock);
+	if (!gs_is_panel_active(ctx)) {
+		dev_warn(ctx->dev, "%s: cache option(%u)\n", __func__, option);
+		ctx->te2.option = option;
+	} else if (ctx->desc->gs_panel_func->set_te2_option(ctx, option)) {
+		notify_panel_te2_option_changed(ctx);
+	}
+	mutex_unlock(&ctx->mode_lock);
+
+	return count;
+}
+
+static ssize_t te2_option_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	enum gs_panel_tex_opt option;
+
+	if (!gs_panel_has_func(ctx, get_te2_option))
+		return -ENOTSUPP;
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_warn(ctx->dev, "%s: panel is not enabled\n", __func__);
+		return -EPERM;
+	}
+
+	mutex_lock(&ctx->mode_lock);
+	option = ctx->desc->gs_panel_func->get_te2_option(ctx);
+	mutex_unlock(&ctx->mode_lock);
+
+	return sysfs_emit(buf, "%s\n", (option == TEX_OPT_CHANGEABLE) ? "changeable" : "fixed");
+}
+
 static DEVICE_ATTR_RO(serial_number);
 static DEVICE_ATTR_RO(panel_extinfo);
 static DEVICE_ATTR_RO(panel_name);
@@ -558,6 +658,8 @@ static DEVICE_ATTR_RW(te2_lp_timing);
 static DEVICE_ATTR_RO(time_in_state);
 static DEVICE_ATTR_RO(available_disp_stats);
 static DEVICE_ATTR_RO(te_info);
+static DEVICE_ATTR_RW(te2_rate_hz);
+static DEVICE_ATTR_RW(te2_option);
 /* TODO(tknelms): re-implement below */
 #if 0
 static DEVICE_ATTR_WO(gamma);
@@ -580,12 +682,14 @@ static const struct attribute *panel_attrs[] = { &dev_attr_serial_number.attr,
 						 &dev_attr_te2_timing.attr,
 						 &dev_attr_te2_lp_timing.attr,
 						 &dev_attr_te_info.attr,
+						 &dev_attr_te2_rate_hz.attr,
+						 &dev_attr_te2_option.attr,
 /* TODO(tknelms): re-implement below */
 #if 0
-	&dev_attr_gamma.attr,
-	&dev_attr_force_power_on.attr,
-	&dev_attr_osc2_clk_khz.attr,
-	&dev_attr_available_osc2_clk_khz.attr,
+						 &dev_attr_gamma.attr,
+						 &dev_attr_force_power_on.attr,
+						 &dev_attr_osc2_clk_khz.attr,
+						 &dev_attr_available_osc2_clk_khz.attr,
 #endif
 						 NULL };
 
@@ -910,16 +1014,14 @@ static DEVICE_ATTR_RO(state);
 static DEVICE_ATTR_RW(acl_mode);
 static DEVICE_ATTR_RW(ssc_en);
 
-static struct attribute *bl_device_attrs[] = {
-	&dev_attr_hbm_mode.attr,
-	&dev_attr_dimming_on.attr,
-	&dev_attr_local_hbm_mode.attr,
-	&dev_attr_local_hbm_max_timeout.attr,
-	&dev_attr_acl_mode.attr,
-	&dev_attr_state.attr,
-	&dev_attr_ssc_en.attr,
-	NULL,
-};
+static struct attribute *bl_device_attrs[] = { &dev_attr_hbm_mode.attr,
+					       &dev_attr_dimming_on.attr,
+					       &dev_attr_local_hbm_mode.attr,
+					       &dev_attr_local_hbm_max_timeout.attr,
+					       &dev_attr_acl_mode.attr,
+					       &dev_attr_state.attr,
+					       &dev_attr_ssc_en.attr,
+					       NULL };
 ATTRIBUTE_GROUPS(bl_device);
 
 int gs_panel_sysfs_create_bl_files(struct device *bl_dev)
