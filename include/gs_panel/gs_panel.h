@@ -549,6 +549,38 @@ struct gs_panel_funcs {
 	 * @pmode: mode that panel is transitioning to
 	 */
 	bool (*rr_need_te_high)(struct gs_panel *gs_panel, const struct gs_panel_mode *pmode);
+
+	/**
+	 * @set_te2_rate
+	 *
+	 * This callback is used to set TE2 rate.
+	 *
+	 * Returns true if the rate is applied successfully.
+	 */
+	bool (*set_te2_rate)(struct gs_panel *gs_panel, u32 rate_hz);
+
+	/**
+	 * @get_te2_rate
+	 *
+	 * This callback is used to get TE2 rate.
+	 */
+	u32 (*get_te2_rate)(struct gs_panel *gs_panel);
+
+	/**
+	 * @set_te2_option
+	 *
+	 * This callback is used to set TE2 option.
+	 *
+	 * Returns true if the option is applied successfully.
+	 */
+	bool (*set_te2_option)(struct gs_panel *gs_panel, u32 option);
+
+	/**
+	 * @get_te2_option
+	 *
+	 * This callback is used to get TE2 option.
+	 */
+	enum gs_panel_tex_opt (*get_te2_option)(struct gs_panel *gs_panel);
 };
 
 /* PANEL DESC */
@@ -844,6 +876,8 @@ struct gs_te2_mode_data {
 struct gs_te2_data {
 	struct gs_te2_mode_data mode_data[MAX_TE2_TYPE];
 	enum gs_panel_tex_opt option;
+	u32 rate_hz;
+	/* TODO: below are related to refresh rate instead of TE2 */
 	u32 last_rr;
 	int last_rr_te_gpio_value;
 	u64 last_rr_te_counter;
@@ -1073,6 +1107,8 @@ struct gs_panel {
 	/* use for notify state changed */
 	struct work_struct notify_panel_mode_changed_work;
 	struct work_struct notify_brightness_changed_work;
+	struct work_struct notify_panel_te2_rate_changed_work;
+	struct work_struct notify_panel_te2_option_changed_work;
 
 	/* use for display stats residence */
 	struct display_stats disp_stats;
@@ -1180,6 +1216,16 @@ static inline ssize_t gs_get_te2_type_len(const struct gs_panel_desc *desc, bool
 static inline void notify_panel_mode_changed(struct gs_panel *ctx)
 {
 	schedule_work(&ctx->notify_panel_mode_changed_work);
+}
+
+static inline void notify_panel_te2_rate_changed(struct gs_panel *ctx)
+{
+	schedule_work(&ctx->notify_panel_te2_rate_changed_work);
+}
+
+static inline void notify_panel_te2_option_changed(struct gs_panel *ctx)
+{
+	schedule_work(&ctx->notify_panel_te2_option_changed_work);
 }
 
 static inline u32 get_current_frame_duration_us(struct gs_panel *ctx)
