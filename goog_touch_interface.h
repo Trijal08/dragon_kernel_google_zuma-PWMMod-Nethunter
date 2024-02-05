@@ -738,7 +738,6 @@ struct gti_optional_configuration {
 /**
  * struct gti_pm - power manager for GTI.
  * @state_update_work: a work to update pm state.
- * @event_wq: a work queue to run suspend/resume work.
  * @locks: the lock state.
  * @lock_mutex: protect the lock state.
  * @state: GTI pm state.
@@ -750,7 +749,6 @@ struct gti_optional_configuration {
  */
 struct gti_pm {
 	struct work_struct state_update_work;
-	struct workqueue_struct *event_wq;
 
 	u32 locks;
 	struct mutex lock_mutex;
@@ -781,6 +779,8 @@ struct gti_pm {
  * @cmd: struct that used by vendor default handler.
  * @proc_dir: struct that used for procfs.
  * @proc_heatmap: struct that used for heatmap procfs.
+ * @set_op_hz_work: a work to set op_hz.
+ * @event_wq: a work queue to run suspend/resume work.
  * @input_timestamp: input timestamp from touch vendor driver.
  * @mf_downtime: timestamp for motion filter control.
  * @display_vrefresh: display vrefresh in Hz.
@@ -814,12 +814,19 @@ struct gti_pm {
  * @ignore_coord_filter_update: Ignore fw_coordinate_filter status updates.
  * @fw_coord_filter_enabled: the current setting of coordinate filter.
  * @default_coord_filter_enabled: the default setting of coordinate filter.
+ * @panel_notifier_enabled: enable flag for receiving panel notifications.
  * @lptw_triggered: LPTW is triggered or not.
  * @lptw_suppress_coords_enabled: enable flag for suppressing the coords after lptw.
  * @lptw_track_finger: flag for tracking the suppressed fingers.
- * @lptw_x: x-axis center of the lptw area.
- * @lptw_y: y-axis center of the lptw area.
- * @lptw_suppress_coords_work: delayed work for suppressing finger.
+ * @lptw_track_min_x: minimum x of tracking area.
+ * @lptw_track_max_x: maximum x of tracking area.
+ * @lptw_track_min_y: minimum y of tracking area.
+ * @lptw_track_max_x: maximum t of tracking area.
+ * @lptw_cancel_delayed_work: delayed work for canceling finger.
+ * @lptw_cancel_time: record the time for lptw cancel timeout.
+ * @qbt_lptw_down: true if the finger is still on the screen.
+ * @qbt_lptw_x: x coordinate for the tracking finger.
+ * @qbt_lptw_y: y coordinate for the tracking finger.
  * @ignore_force_active: Ignore the force_active sysfs request.
  * @offload_id: id that used by touch offload.
  * @heatmap_buf: heatmap buffer that used by v4l2.
@@ -831,10 +838,12 @@ struct gti_pm {
  * @slot_bit_last_active: bitmap of last active slot when reporting offload inputs.
  * @slot_bit_offload_active: bitmap of active slot from offload.
  * @slot_bit_lptw_track: bitmap of lptw suppressed fingers.
+ * @panel_op_hz: the operating rate of display panel.
  * @dev_id: dev_t used for google interface driver.
  * @panel_id: id of the display panel.
  * @charger_state: indicates a USB charger is connected.
  * @charger_notifier: notifier for power_supply updates.
+ * @panel_notifier: notifier for display panel updates.
  * @ical_state: state of interactive calibration finite state machine.
  * @ical_timestamp_ns: time of last interactive calibration state transition.
  * @ical_result: interactive calibration FSM result.
@@ -870,6 +879,8 @@ struct goog_touch_interface {
 	struct gti_union_cmd_data cmd;
 	struct proc_dir_entry *proc_dir;
 	struct proc_dir_entry *proc_show[GTI_PROC_NUM];
+	struct work_struct set_op_hz_work;
+	struct workqueue_struct *event_wq;
 	ktime_t input_timestamp;
 	ktime_t mf_downtime;
 
@@ -912,12 +923,22 @@ struct goog_touch_interface {
 	bool ignore_coord_filter_update;
 	bool fw_coord_filter_enabled;
 	bool default_coord_filter_enabled;
+	bool panel_notifier_enabled;
 	bool lptw_triggered;
 	bool lptw_suppress_coords_enabled;
 	bool lptw_track_finger;
-	u32 lptw_x;
-	u32 lptw_y;
-	struct delayed_work lptw_suppress_coords_work;
+	u32 lptw_track_min_x;
+	u32 lptw_track_max_x;
+	u32 lptw_track_min_y;
+	u32 lptw_track_max_y;
+	struct delayed_work lptw_cancel_delayed_work;
+	ktime_t lptw_cancel_time;
+#if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
+	bool qbt_lptw_down;
+	int qbt_lptw_x;
+	int qbt_lptw_y;
+#endif
+
 	bool ignore_force_active;
 	bool gesture_config_enabled;
 	bool manual_heatmap_from_irq;
@@ -934,6 +955,7 @@ struct goog_touch_interface {
 	unsigned long slot_bit_last_active;
 	unsigned long slot_bit_offload_active;
 	unsigned long slot_bit_lptw_track;
+	unsigned int panel_op_hz;
 	dev_t dev_id;
 	int panel_id;
 	char fw_name[64];
@@ -943,6 +965,7 @@ struct goog_touch_interface {
 
 	u8 charger_state;
 	struct notifier_block charger_notifier;
+	struct notifier_block panel_notifier;
 
 	u32 ical_state;
 	u64 ical_timestamp_ns;

@@ -13,6 +13,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <samsung/exynos_drm_connector.h>
+#include <samsung/panel/panel-samsung-drv.h>
 #include <trace/hooks/systrace.h>
 #if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
 #include <qbt_handler.h>
@@ -39,6 +40,8 @@ static void goog_set_display_state(struct goog_touch_interface *gti,
 	enum gti_display_state_setting display_state);
 #if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
 void goog_notify_lptw_triggered(struct TbnLptwEvent* lptw, void* data);
+void goog_notify_lptw_left(void* data);
+void goog_track_lptw_slot(struct goog_touch_interface *gti, u16 x, u16 y, int slot_bit);
 #endif
 
 /*-----------------------------------------------------------------------------
@@ -1929,6 +1932,98 @@ void gti_debug_input_dump(struct goog_touch_interface *gti)
 /*-----------------------------------------------------------------------------
  * DRM: functions and structures.
  */
+struct drm_connector *get_bridge_connector(struct drm_bridge *bridge)
+{
+	struct drm_connector *connector;
+	struct drm_connector_list_iter conn_iter;
+
+	drm_connector_list_iter_begin(bridge->dev, &conn_iter);
+	drm_for_each_connector_iter(connector, &conn_iter) {
+		if (connector->encoder == bridge->encoder)
+			break;
+	}
+	drm_connector_list_iter_end(&conn_iter);
+	return connector;
+}
+
+static void panel_set_op_hz(struct work_struct *work)
+{
+	struct goog_touch_interface *gti = container_of(work,
+		struct goog_touch_interface, set_op_hz_work);
+	int ret = 0;
+
+	GOOG_LOGI(gti, "set panel op_hz: %d\n", gti->panel_op_hz);
+
+	gti->cmd.panel_speed_mode_cmd.setting = gti->panel_op_hz == 120 ?
+		GTI_PANEL_SPEED_MODE_HS : GTI_PANEL_SPEED_MODE_NS;
+	ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_PANEL_SPEED_MODE);
+	if (ret)
+		GOOG_LOGW(gti, "unexpected return(%d)!", ret);
+}
+
+static int panel_notifier_call(
+	struct notifier_block *nb, unsigned long id, void *data)
+{
+	struct goog_touch_interface *gti =
+		(struct goog_touch_interface *)container_of(nb,
+			struct goog_touch_interface, panel_notifier);
+
+	GOOG_LOGI(gti, "\n");
+
+	if (!gti->connector || !gti->connector->state)
+		gti->connector = get_bridge_connector(&gti->panel_bridge);
+
+	if (!gti->connector) return 0;
+
+	if (is_exynos_drm_connector(gti->connector)) {
+		if (id == EXYNOS_PANEL_NOTIFIER_SET_OP_HZ) {
+			gti->panel_op_hz = *(unsigned int*)data;
+			if (gti->event_wq != NULL)
+				queue_work(gti->event_wq, &gti->set_op_hz_work);
+		}
+	}
+
+	return 0;
+}
+
+static int panel_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_attach_flags flags)
+{
+	struct goog_touch_interface *gti =
+		container_of(bridge, struct goog_touch_interface, panel_bridge);
+
+	if (gti->panel_notifier_enabled) {
+		if (!gti->connector || !gti->connector->state)
+			gti->connector = get_bridge_connector(&gti->panel_bridge);
+
+		if (!gti->connector) {
+			GOOG_LOGW(gti, "can't get panel connector to resgister notification!\n");
+			return 0;
+		}
+
+		gti->panel_notifier.notifier_call = panel_notifier_call;
+		if (is_exynos_drm_connector(gti->connector))
+			exynos_panel_register_notifier(gti->connector, &gti->panel_notifier);
+	}
+
+	return 0;
+}
+
+static void panel_bridge_detach(struct drm_bridge *bridge)
+{
+	struct goog_touch_interface *gti =
+		container_of(bridge, struct goog_touch_interface, panel_bridge);
+
+	if (gti->panel_notifier_enabled) {
+		if (!gti->connector || !gti->connector->state)
+			gti->connector = get_bridge_connector(&gti->panel_bridge);
+
+		if (!gti->connector) return;
+
+		if (is_exynos_drm_connector(gti->connector))
+			exynos_panel_unregister_notifier(gti->connector, &gti->panel_notifier);
+	}
+}
+
 static void panel_bridge_enable(struct drm_bridge *bridge)
 {
 	struct goog_touch_interface *gti =
@@ -1955,20 +2050,6 @@ static void panel_bridge_disable(struct drm_bridge *bridge)
 	}
 
 	goog_set_display_state(gti, GTI_DISPLAY_STATE_OFF);
-}
-
-struct drm_connector *get_bridge_connector(struct drm_bridge *bridge)
-{
-	struct drm_connector *connector;
-	struct drm_connector_list_iter conn_iter;
-
-	drm_connector_list_iter_begin(bridge->dev, &conn_iter);
-	drm_for_each_connector_iter(connector, &conn_iter) {
-		if (connector->encoder == bridge->encoder)
-			break;
-	}
-	drm_connector_list_iter_end(&conn_iter);
-	return connector;
 }
 
 static bool panel_bridge_is_lp_mode(struct drm_connector *connector)
@@ -2036,6 +2117,8 @@ static void panel_bridge_mode_set(struct drm_bridge *bridge,
 }
 
 static const struct drm_bridge_funcs panel_bridge_funcs = {
+	.attach = panel_bridge_attach,
+	.detach = panel_bridge_detach,
 	.enable = panel_bridge_enable,
 	.disable = panel_bridge_disable,
 	.mode_set = panel_bridge_mode_set,
@@ -2044,6 +2127,9 @@ static const struct drm_bridge_funcs panel_bridge_funcs = {
 static int register_panel_bridge(struct goog_touch_interface *gti)
 {
 	GOOG_LOGI(gti, "\n");
+
+	INIT_WORK(&gti->set_op_hz_work, panel_set_op_hz);
+
 #ifdef CONFIG_OF
 	gti->panel_bridge.of_node = gti->vendor_dev->of_node;
 #endif
@@ -2862,6 +2948,17 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 			GOOG_ERR(gti, "Failed to set report rate!\n");
 	}
 
+
+	if (gti->panel_notifier_enabled) {
+		GOOG_LOGI(gti, "set panel op_hz: %d\n", gti->panel_op_hz);
+
+		gti->cmd.panel_speed_mode_cmd.setting = gti->panel_op_hz == 120 ?
+			GTI_PANEL_SPEED_MODE_HS : GTI_PANEL_SPEED_MODE_NS;
+		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_PANEL_SPEED_MODE);
+		if (ret != 0)
+			GOOG_LOGW(gti, "unexpected return(%d)!", ret);
+	}
+
 	/* Update LPTW gesture configs. */
 	if (gti->gesture_config_enabled) {
 		gti->cmd.gesture_config_cmd.params[GTI_GESTURE_TYPE] = GTI_GESTURE_DISABLE;
@@ -2902,6 +2999,82 @@ static void goog_offload_set_running(struct goog_touch_interface *gti, bool runn
 	}
 }
 
+static void goog_report_lptw_cancel(struct goog_touch_interface *gti,
+		unsigned long slot_bit_cancel)
+{
+#if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
+	goog_notify_lptw_left((void *)gti);
+#else
+	int i = 0;
+	int coord_x = (gti->lptw_track_min_x + gti->lptw_track_max_x) / 2;
+	int coord_y = (gti->lptw_track_min_y + gti->lptw_track_max_y) / 2;
+
+	/* Skip reporting input cancel if the finger stays over 500ms. */
+	if (ktime_after(ktime_get(), ktime_add_ms(gti->lptw_cancel_time, 500)))
+		return;
+
+	GOOG_INFO(gti, "Report LPTW cancel coord, slot: %#lx.", slot_bit_cancel);
+
+	goog_input_lock(gti);
+	for (i = 0; i < MAX_SLOTS; i++) {
+		if (!test_bit(i, &slot_bit_cancel))
+			continue;
+		/* Finger down. */
+		input_mt_slot(gti->vendor_input_dev, i);
+		input_report_key(gti->vendor_input_dev, BTN_TOUCH, 1);
+		input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_FINGER, 1);
+		input_report_abs(gti->vendor_input_dev, ABS_MT_POSITION_X, coord_x);
+		input_report_abs(gti->vendor_input_dev, ABS_MT_POSITION_Y, coord_y);
+		input_report_abs(gti->vendor_input_dev, ABS_MT_TOUCH_MAJOR, 200);
+		input_report_abs(gti->vendor_input_dev, ABS_MT_TOUCH_MINOR, 200);
+		input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE, 1);
+		input_report_abs(gti->vendor_input_dev, ABS_MT_ORIENTATION, 0);
+		input_sync(gti->vendor_input_dev);
+
+		/* Report MT_TOOL_PALM for canceling the touch event. */
+		input_mt_slot(gti->vendor_input_dev, i);
+		input_report_key(gti->vendor_input_dev, BTN_TOUCH, 1);
+		input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_PALM, 1);
+		input_sync(gti->vendor_input_dev);
+
+		/* Release touches. */
+		input_mt_slot(gti->vendor_input_dev, i);
+		input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE, 0);
+		input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_FINGER, 0);
+		input_report_abs(gti->vendor_input_dev, ABS_MT_TRACKING_ID, -1);
+		input_report_key(gti->vendor_input_dev, BTN_TOUCH, 0);
+		input_sync(gti->vendor_input_dev);
+	}
+
+	goog_input_unlock(gti);
+#endif
+}
+
+static void goog_lptw_cancel_delayed_work(struct work_struct *work)
+{
+	struct goog_touch_interface *gti;
+	struct delayed_work *delayed_work;
+	delayed_work = container_of(work, struct delayed_work, work);
+	gti = container_of(delayed_work, struct goog_touch_interface, lptw_cancel_delayed_work);
+
+	gti->lptw_track_finger = false;
+	goog_report_lptw_cancel(gti, 1);
+}
+
+void goog_save_tracking_slot(struct goog_touch_interface *gti, u16 x, u16 y, int slot_bit)
+{
+	if ((x > gti->lptw_track_min_x) && (x < gti->lptw_track_max_x) &&
+		(y > gti->lptw_track_min_y) && (y < gti->lptw_track_max_y)) {
+		if (gti->slot_bit_lptw_track != 0) {
+			GOOG_WARN(gti, "More than one finger in the tracking area, new slot:%#x",
+					slot_bit);
+			return;
+		}
+		set_bit(slot_bit, &gti->slot_bit_lptw_track);
+		GOOG_INFO(gti, "LPTW track slot bit %#lx", gti->slot_bit_lptw_track);
+	}
+}
+
 void goog_offload_input_report(void *handle,
 		 struct TouchOffloadIocReport *report)
 {
@@ -2911,6 +3084,7 @@ void goog_offload_input_report(void *handle,
 	int i;
 	int error;
 	unsigned long slot_bit_active = 0;
+	unsigned long slot_bit_cancel = 0;
 	char trace_tag[128];
 	ktime_t ktime = ktime_get();
 	ktime_t *input_ktime;
@@ -2923,7 +3097,7 @@ void goog_offload_input_report(void *handle,
 	ATRACE_BEGIN(trace_tag);
 
 	if (gti->lptw_suppress_coords_enabled && gti->lptw_track_finger)
-		cancel_delayed_work_sync(&gti->lptw_suppress_coords_work);
+		cancel_delayed_work_sync(&gti->lptw_cancel_delayed_work);
 
 	goog_input_lock(gti);
 
@@ -2958,10 +3132,16 @@ void goog_offload_input_report(void *handle,
 			set_bit(i, &slot_bit_active);
 
 			if (gti->lptw_suppress_coords_enabled) {
-				if (gti->lptw_track_finger)
-					set_bit(i, &gti->slot_bit_lptw_track);
+				if (gti->lptw_track_finger) {
+					goog_save_tracking_slot(gti, report->coords[i].x,
+							report->coords[i].y, i);
+				}
 
 				if (test_bit(i, &gti->slot_bit_lptw_track)) {
+#if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
+					goog_track_lptw_slot(gti, report->coords[i].x,
+							report->coords[i].y, i);
+#endif
 					GOOG_DBG(gti, "Skip reporting lptw tracking slot %d", i);
 					continue;
 				}
@@ -2990,6 +3170,7 @@ void goog_offload_input_report(void *handle,
 			clear_bit(i, &slot_bit_active);
 			if (gti->lptw_suppress_coords_enabled &&
 					test_and_clear_bit(i, &gti->slot_bit_lptw_track)) {
+				set_bit(i, &slot_bit_cancel);
 				if (gti->slot_bit_lptw_track == 0)
 					GOOG_INFO(gti, "All lptw tracking slots released");
 				continue;
@@ -3028,9 +3209,8 @@ void goog_offload_input_report(void *handle,
 		goog_v4l2_read(gti, report->timestamp);
 
 	if (gti->lptw_suppress_coords_enabled) {
-		if (gti->lptw_track_finger)
-			GOOG_INFO(gti, "LPTW track slot bit %#lx", gti->slot_bit_lptw_track);
-
+		if (slot_bit_cancel || (gti->lptw_track_finger && gti->slot_bit_lptw_track == 0))
+			goog_report_lptw_cancel(gti, slot_bit_cancel);
 		gti->lptw_track_finger = false;
 	}
 
@@ -3877,51 +4057,10 @@ void goog_init_input(struct goog_touch_interface *gti)
 	}
 }
 
-static void goog_lptw_suppress_coords_work(struct work_struct *work)
-{
-	struct goog_touch_interface *gti;
-	struct delayed_work *delayed_work;
-	delayed_work = container_of(work, struct delayed_work, work);
-	gti = container_of(delayed_work, struct goog_touch_interface, lptw_suppress_coords_work);
-
-	GOOG_INFO(gti, "Report LPTW cancel coord.");
-	gti->lptw_track_finger = false;
-
-	goog_input_lock(gti);
-
-	/* Finger down. */
-	input_mt_slot(gti->vendor_input_dev, 0);
-	input_report_key(gti->vendor_input_dev, BTN_TOUCH, 1);
-	input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_FINGER, 1);
-	input_report_abs(gti->vendor_input_dev, ABS_MT_POSITION_X, gti->lptw_x);
-	input_report_abs(gti->vendor_input_dev, ABS_MT_POSITION_Y, gti->lptw_y);
-	input_report_abs(gti->vendor_input_dev, ABS_MT_TOUCH_MAJOR, 200);
-	input_report_abs(gti->vendor_input_dev, ABS_MT_TOUCH_MINOR, 200);
-	input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE, 1);
-	input_report_abs(gti->vendor_input_dev, ABS_MT_ORIENTATION, 0);
-	input_sync(gti->vendor_input_dev);
-
-	/* Report MT_TOOL_PALM for canceling the touch event. */
-	input_mt_slot(gti->vendor_input_dev, 0);
-	input_report_key(gti->vendor_input_dev, BTN_TOUCH, 1);
-	input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_PALM, 1);
-	input_sync(gti->vendor_input_dev);
-
-	/* Release touches. */
-	input_mt_slot(gti->vendor_input_dev, 0);
-	input_report_abs(gti->vendor_input_dev, ABS_MT_PRESSURE, 0);
-	input_mt_report_slot_state(gti->vendor_input_dev, MT_TOOL_FINGER, 0);
-	input_report_abs(gti->vendor_input_dev, ABS_MT_TRACKING_ID, -1);
-	input_report_key(gti->vendor_input_dev, BTN_TOUCH, 0);
-	input_sync(gti->vendor_input_dev);
-
-	goog_input_unlock(gti);
-}
-
 void goog_init_options(struct goog_touch_interface *gti,
 		struct gti_optional_configuration *options)
 {
-	u32 coords[2];
+	u32 coords[4];
 
 	/* Initialize the common features. */
 	gti->mf_mode = GTI_MF_MODE_DEFAULT;
@@ -3939,17 +4078,21 @@ void goog_init_options(struct goog_touch_interface *gti,
 		gti->lptw_suppress_coords_enabled = of_property_read_bool(np,
 				"goog,lptw-suppress-coords-enabled");
 		if (gti->lptw_suppress_coords_enabled) {
-			if (of_property_read_u32_array(np, "goog,lptw-coords", coords, 2)) {
-				GOOG_LOGW(gti, "goog,lptw-coords not found\n");
+			if (of_property_read_u32_array(np, "goog,lptw-tracking-area", coords, 4)) {
+				GOOG_LOGE(gti, "goog,lptw-tracking-area not found\n");
 				coords[0] = 200;
 				coords[1] = 200;
-			} else {
-				gti->lptw_x = coords[0];
-				gti->lptw_y = coords[1];
+				coords[2] = 200;
+				coords[3] = 200;
 			}
-			INIT_DELAYED_WORK(&gti->lptw_suppress_coords_work,
-					goog_lptw_suppress_coords_work);
+			gti->lptw_track_min_x = coords[0];
+			gti->lptw_track_max_x = coords[1];
+			gti->lptw_track_min_y = coords[2];
+			gti->lptw_track_max_y = coords[3];
+			INIT_DELAYED_WORK(&gti->lptw_cancel_delayed_work, goog_lptw_cancel_delayed_work);
 		}
+		gti->panel_notifier_enabled = of_property_read_bool(np,
+				"goog,panel-notifier-enabled");
 
 		gti->panel_id = goog_get_panel_id(np);
 		if (gti->panel_id >= 0) {
@@ -4098,7 +4241,8 @@ int goog_pm_wake_lock_nosync(struct goog_touch_interface *gti,
 
 	pm->new_state = GTI_PM_RESUME;
 	pm->update_state = true;
-	queue_work(pm->event_wq, &pm->state_update_work);
+	if (gti->event_wq != NULL)
+		queue_work(gti->event_wq, &pm->state_update_work);
 	mutex_unlock(&pm->lock_mutex);
 	return 0;
 }
@@ -4116,7 +4260,8 @@ int goog_pm_wake_lock(struct goog_touch_interface *gti,
 
 	ret = goog_pm_wake_lock_nosync(gti, type, skip_pm_resume);
 	if (ret < 0) return ret;
-	flush_workqueue(pm->event_wq);
+	if (gti->event_wq != NULL)
+		flush_workqueue(gti->event_wq);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(goog_pm_wake_lock);
@@ -4145,7 +4290,8 @@ int goog_pm_wake_unlock_nosync(struct goog_touch_interface *gti,
 	if (pm->locks == 0) {
 		pm->new_state = GTI_PM_SUSPEND;
 		pm->update_state = true;
-		queue_work(pm->event_wq, &pm->state_update_work);
+		if (gti->event_wq != NULL)
+			queue_work(gti->event_wq, &pm->state_update_work);
 	}
 	mutex_unlock(&pm->lock_mutex);
 
@@ -4165,7 +4311,8 @@ int goog_pm_wake_unlock(struct goog_touch_interface *gti,
 
 	ret = goog_pm_wake_unlock_nosync(gti, type);
 	if (ret < 0) return ret;
-	flush_workqueue(pm->event_wq);
+	if (gti->event_wq != NULL)
+		flush_workqueue(gti->event_wq);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(goog_pm_wake_unlock);
@@ -4241,13 +4388,16 @@ static void goog_pm_resume(struct gti_pm *pm)
 			GOOG_ERR(gti, "tbn_request_bus failed, ret %d!\n", ret);
 	}
 
+	if (gti->lptw_suppress_coords_enabled && gti->lptw_triggered)
+		gti->lptw_cancel_time = ktime_get();
+
 	if (pm->resume)
 		pm->resume(gti->vendor_dev);
 
 	if (gti->lptw_suppress_coords_enabled && gti->lptw_triggered) {
 		gti->lptw_track_finger = true;
 		gti->slot_bit_lptw_track = 0;
-		queue_delayed_work(gti->pm.event_wq, &gti->lptw_suppress_coords_work,
+		queue_delayed_work(gti->event_wq, &gti->lptw_cancel_delayed_work,
 				msecs_to_jiffies(10));
 	}
 
@@ -4383,13 +4533,6 @@ static int goog_pm_probe(struct goog_touch_interface *gti)
 
 	pm->state = GTI_PM_RESUME;
 	pm->locks = GTI_PM_WAKELOCK_TYPE_SCREEN_ON;
-	pm->event_wq = alloc_workqueue(
-		"gti_pm_wq", WQ_UNBOUND | WQ_HIGHPRI | WQ_CPU_INTENSIVE, 1);
-	if (!pm->event_wq) {
-		GOOG_ERR(gti, "Failed to create work thread for pm!\n");
-		ret = -ENOMEM;
-		goto err_alloc_workqueue;
-	}
 
 	mutex_init(&pm->lock_mutex);
 	INIT_WORK(&pm->state_update_work, goog_pm_state_update_work);
@@ -4398,7 +4541,6 @@ static int goog_pm_probe(struct goog_touch_interface *gti)
 	cpu_latency_qos_add_request(&gti->pm_qos_req, PM_QOS_DEFAULT_VALUE);
 	pm->enabled = true;
 
-err_alloc_workqueue:
 	return ret;
 }
 
@@ -4409,8 +4551,6 @@ static int goog_pm_remove(struct goog_touch_interface *gti)
 	if (pm->enabled) {
 		pm->enabled = false;
 		cpu_latency_qos_remove_request(&gti->pm_qos_req);
-		if (pm->event_wq)
-			destroy_workqueue(pm->event_wq);
 	}
 
 	return 0;
@@ -4441,8 +4581,9 @@ static void goog_lookup_touch_report_rate(struct goog_touch_interface *gti)
 	}
 
 	if (gti->report_rate_setting_next != gti->report_rate_setting &&
-			gti->pm.state == GTI_PM_RESUME) {
-		queue_delayed_work(gti->pm.event_wq, &gti->set_report_rate_work,
+			gti->pm.state == GTI_PM_RESUME &&
+			gti->event_wq != NULL) {
+		queue_delayed_work(gti->event_wq, &gti->set_report_rate_work,
 				(gti->report_rate_setting_next > gti->report_rate_setting) ?
 				msecs_to_jiffies(gti->increase_report_rate_delay * MSEC_PER_SEC) :
 				msecs_to_jiffies(gti->decrease_report_rate_delay * MSEC_PER_SEC));
@@ -4465,8 +4606,10 @@ static void goog_set_report_rate_work(struct work_struct *work)
 
 	/* Retry it 10ms later if there is finger on the screen. */
 	if (gti->slot_bit_active) {
-		queue_delayed_work(gti->pm.event_wq, &gti->set_report_rate_work,
-				msecs_to_jiffies(10));
+		if (gti->event_wq != NULL) {
+			queue_delayed_work(gti->event_wq, &gti->set_report_rate_work,
+					msecs_to_jiffies(10));
+		}
 		return;
 	}
 
@@ -4485,7 +4628,7 @@ static int goog_init_variable_report_rate(struct goog_touch_interface *gti)
 {
 	int table_size = 0;
 
-	if (!gti->pm.event_wq) {
+	if (!gti->event_wq) {
 		GOOG_ERR(gti, "No workqueue for variable report rate.\n");
 		return -ENODEV;
 	}
@@ -4573,8 +4716,42 @@ EXPORT_SYMBOL_GPL(goog_get_lptw_triggered);
 void goog_notify_lptw_triggered(struct TbnLptwEvent* lptw, void* data)
 {
 	struct goog_touch_interface *gti = (struct goog_touch_interface *)data;
-	GOOG_INFO(gti, "Notify lptw event");
-	qbt_lptw_report_event(lptw->x, lptw->y, 1);
+
+	GOOG_INFO(gti, "Notify lptw event down");
+
+	gti->qbt_lptw_x = lptw->x;
+	gti->qbt_lptw_y = lptw->y;
+	qbt_lptw_report_event(gti->qbt_lptw_x, gti->qbt_lptw_y, 1);
+	gti->qbt_lptw_down = true;
+}
+
+void goog_notify_lptw_left(void* data)
+{
+	struct goog_touch_interface *gti = (struct goog_touch_interface *)data;
+
+	if (gti->qbt_lptw_down) {
+		qbt_lptw_report_event(gti->qbt_lptw_x, gti->qbt_lptw_y, 0);
+		GOOG_INFO(gti, "Notify lptw event up");
+		gti->qbt_lptw_down = false;
+	} else {
+		GOOG_INFO(gti, "Lptw event already up");
+	}
+}
+
+void goog_track_lptw_slot(struct goog_touch_interface *gti, u16 x, u16 y, int slot_bit)
+{
+	gti->qbt_lptw_x = x;
+	gti->qbt_lptw_y = y;
+
+	if (!gti->qbt_lptw_down)
+		return;
+
+	if ((x < gti->lptw_track_min_x) || (x > gti->lptw_track_max_x) ||
+		(y < gti->lptw_track_min_y) || (y > gti->lptw_track_max_y)) {
+		GOOG_INFO(gti, "The tracking slot %#x moves out from the tracking area",
+				slot_bit);
+		goog_notify_lptw_left((void *)gti);
+	}
 }
 #endif
 
@@ -4725,6 +4902,13 @@ struct goog_touch_interface *goog_touch_interface_probe(
 		mutex_init(&gti->input_lock);
 		mutex_init(&gti->input_process_lock);
 		mutex_init(&gti->input_heatmap_lock);
+
+		gti->event_wq = alloc_workqueue(
+			"gti_wq", WQ_UNBOUND | WQ_HIGHPRI | WQ_CPU_INTENSIVE, 1);
+		if (!gti->event_wq) {
+			GOOG_ERR(gti, "Failed to create work thread for gti!\n");
+			return NULL;
+		}
 	}
 
 	if (!gti_class)
@@ -4796,6 +4980,11 @@ int goog_touch_interface_remove(struct goog_touch_interface *gti)
 {
 	if (!gti)
 		return -ENODEV;
+
+	if (gti->event_wq) {
+		destroy_workqueue(gti->event_wq);
+		gti->event_wq = NULL;
+	}
 
 	if (gti->dev) {
 		sysfs_remove_group(&gti->dev->kobj, &goog_attr_group);
