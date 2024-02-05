@@ -25,7 +25,7 @@
 #include "lwis_i2c.h"
 #include "lwis_ioreg.h"
 #include "lwis_regulator.h"
-#include "lwis_i2c_bus_manager.h"
+#include "lwis_bus_manager.h"
 
 /* Uncomment this to help debug device tree parsing. */
 // #define LWIS_DT_DEBUG
@@ -1123,7 +1123,7 @@ static int parse_i2c_device_priority(struct lwis_i2c_device *i2c_dev)
 
 	dev_node = i2c_dev->base_dev.k_dev->of_node;
 	/* Set i2c device_priority value to default */
-	i2c_dev->device_priority = I2C_DEVICE_HIGH_PRIORITY;
+	i2c_dev->device_priority = DEVICE_HIGH_PRIORITY;
 
 	ret = of_property_read_u32(dev_node, "i2c-device-priority", &i2c_dev->device_priority);
 	/* If no property in device tree, just return to use default */
@@ -1134,8 +1134,8 @@ static int parse_i2c_device_priority(struct lwis_i2c_device *i2c_dev)
 		dev_err(i2c_dev->base_dev.dev, "invalid i2c-device-priority value\n");
 		return ret;
 	}
-	if ((i2c_dev->device_priority < I2C_DEVICE_HIGH_PRIORITY) ||
-	    (i2c_dev->device_priority > I2C_DEVICE_LOW_PRIORITY)) {
+	if ((i2c_dev->device_priority < DEVICE_HIGH_PRIORITY) ||
+	    (i2c_dev->device_priority > DEVICE_LOW_PRIORITY)) {
 		dev_err(i2c_dev->base_dev.dev, "invalid i2c-device-priority value %d\n",
 			i2c_dev->device_priority);
 		return -EINVAL;

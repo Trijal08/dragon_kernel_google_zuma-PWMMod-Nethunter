@@ -26,7 +26,7 @@ struct lwis_fence;
  *    into a queue.
  */
 struct lwis_transaction {
-	struct lwis_transaction_info_v3 info;
+	struct lwis_transaction_info_v4 info;
 	struct lwis_transaction_response_header *resp;
 	struct list_head event_list_node;
 	struct list_head process_queue_node;
@@ -71,7 +71,7 @@ struct lwis_transaction {
  * well as the time it executes and the time it took to execute.
  */
 struct lwis_transaction_history {
-	struct lwis_transaction_info_v3 info;
+	struct lwis_transaction_info_v4 info;
 	int64_t process_timestamp;
 	int64_t process_duration_ns;
 };

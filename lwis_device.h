@@ -340,8 +340,8 @@ struct lwis_client {
 	struct list_head node;
 	/* Mark if the client called device enable */
 	bool is_enabled;
-	/* Work item to schedule I2C transfers */
-	struct kthread_work i2c_work;
+	/* Work item to schedule managed LWIS Bus transfers */
+	struct kthread_work io_bus_work;
 	/* Indicates if the client has been issued a flush worker call */
 	enum lwis_client_flush_state flush_state;
 	/* Lock to guard client's flush state changes */

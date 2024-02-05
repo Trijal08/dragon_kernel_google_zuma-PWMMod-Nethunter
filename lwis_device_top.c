@@ -21,6 +21,7 @@
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 
+#include "lwis_bus_manager.h"
 #include "lwis_device.h"
 #include "lwis_event.h"
 #include "lwis_util.h"
@@ -609,6 +610,7 @@ int __init lwis_top_device_init(void)
 
 	pr_info("Top device initialization\n");
 
+	lwis_bus_manager_list_initialize();
 	ret = platform_driver_register(&lwis_driver);
 	if (ret) {
 		pr_err("platform_driver_register failed: %d\n", ret);
@@ -619,6 +621,7 @@ int __init lwis_top_device_init(void)
 
 int lwis_top_device_deinit(void)
 {
+	lwis_bus_manager_list_deinitialize();
 	platform_driver_unregister(&lwis_driver);
 	return 0;
 }

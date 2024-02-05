@@ -267,7 +267,7 @@ static int lwis_i2c_device_probe(struct platform_device *plat_dev)
 		return ret;
 	}
 
-	ret = lwis_i2c_bus_manager_create(i2c_dev);
+	ret = lwis_bus_manager_create(&i2c_dev->base_dev);
 	if (ret) {
 		dev_err(i2c_dev->base_dev.dev, "Error in i2c bus manager creation\n");
 		lwis_base_unprobe(&i2c_dev->base_dev);
@@ -351,8 +351,6 @@ int __init lwis_i2c_device_init(void)
 
 	pr_info("I2C device initialization\n");
 
-	lwis_i2c_bus_manager_list_initialize();
-
 	ret = platform_driver_register(&lwis_driver);
 	if (ret) {
 		pr_err("platform_driver_register failed: %d\n", ret);
@@ -367,8 +365,6 @@ int __init lwis_i2c_device_init(void)
 
 int lwis_i2c_device_deinit(void)
 {
-	lwis_i2c_bus_manager_list_deinitialize();
-
 	platform_driver_unregister(&lwis_driver);
 	return 0;
 }

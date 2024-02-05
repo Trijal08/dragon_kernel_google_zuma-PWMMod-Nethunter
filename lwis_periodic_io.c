@@ -22,7 +22,7 @@
 #include "lwis_ioreg.h"
 #include "lwis_transaction.h"
 #include "lwis_util.h"
-#include "lwis_i2c_bus_manager.h"
+#include "lwis_bus_manager.h"
 
 static enum hrtimer_restart periodic_io_timer_func(struct hrtimer *timer)
 {
@@ -186,7 +186,7 @@ static int process_io_entries(struct lwis_client *client,
 	}
 
 	reinit_completion(&periodic_io->io_done);
-	lwis_i2c_bus_manager_lock_i2c_bus(lwis_dev);
+	lwis_bus_manager_lock_bus(lwis_dev);
 	for (i = 0; i < info->num_io_entries; ++i) {
 		/* Abort if periodic io is deactivated during processing.
 		 * Abort can only apply to <= 1 write entries to prevent partial writes,
@@ -270,7 +270,7 @@ static int process_io_entries(struct lwis_client *client,
 
 event_push:
 	complete(&periodic_io->io_done);
-	lwis_i2c_bus_manager_unlock_i2c_bus(lwis_dev);
+	lwis_bus_manager_unlock_bus(lwis_dev);
 
 	/* Use read memory barrier at the beginning of I/O entries if the access protocol
 	 * allows it */

@@ -15,7 +15,7 @@
 #include <linux/pinctrl/consumer.h>
 
 #include "lwis_device.h"
-#include "lwis_i2c_bus_manager.h"
+#include "lwis_bus_manager.h"
 
 #define MAX_I2C_LOCK_NUM 8
 
@@ -34,7 +34,7 @@ struct lwis_i2c_device {
 	u32 i2c_lock_group_id;
 	/* Mutex shared by the same group id's I2C devices */
 	struct mutex *group_i2c_lock;
-	struct lwis_i2c_bus_manager *i2c_bus_manager;
+	struct lwis_bus_manager *i2c_bus_manager;
 	int device_priority;
 };
 
