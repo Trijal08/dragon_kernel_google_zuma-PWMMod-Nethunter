@@ -224,6 +224,9 @@ static ssize_t refresh_ctrl_store(struct device *dev, struct device_attribute *a
 	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
 	ssize_t ret;
 	u32 ctrl;
+	bool auto_fi;
+	bool onetime_fi;
+	bool repeated_fi;
 
 	if (!count)
 		return -EINVAL;
@@ -239,9 +242,16 @@ static ssize_t refresh_ctrl_store(struct device *dev, struct device_attribute *a
 
 	ret = kstrtou32(buf, 0, &ctrl);
 
-	if (ret || (ctrl > GS_PANEL_REFRESH_CTRL_FI_AUTO) ||
-		((ctrl & GS_PANEL_REFRESH_CTRL_FI_FRAME_COUNT_MASK) &&
-		(ctrl & GS_PANEL_REFRESH_CTRL_FI_REFRESH_RATE_MASK))) {
+	if (ret) {
+		dev_err(ctx->dev, "%s: failed to parse input\n", __func__);
+		return -EINVAL;
+	}
+
+	auto_fi = ctrl & GS_PANEL_REFRESH_CTRL_FI_AUTO;
+	onetime_fi = ctrl & GS_PANEL_REFRESH_CTRL_FI_FRAME_COUNT_MASK;
+	repeated_fi = ctrl & GS_PANEL_REFRESH_CTRL_FI_REFRESH_RATE_MASK;
+
+	if ((auto_fi && (onetime_fi || repeated_fi)) || (onetime_fi && repeated_fi)) {
 		dev_err(ctx->dev, "%s: invalid command combination: 0x%X\n", __func__, ctrl);
 		return -EINVAL;
 	}
