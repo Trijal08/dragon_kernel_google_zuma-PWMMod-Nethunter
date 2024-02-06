@@ -253,6 +253,15 @@ static ssize_t refresh_ctrl_store(struct device *dev, struct device_attribute *a
 	return count;
 }
 
+static ssize_t refresh_ctrl_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+
+	return sysfs_emit(buf, "%s\n", gs_panel_has_func(ctx, refresh_ctrl) ? "Enabled" :
+									      "Disabled");
+}
+
 static ssize_t min_vrefresh_store(struct device *dev, struct device_attribute *attr,
 				  const char *buf, size_t count)
 {
@@ -382,7 +391,7 @@ static DEVICE_ATTR_RW(panel_need_handle_idle_exit);
 static DEVICE_ATTR_RW(idle_delay_ms);
 static DEVICE_ATTR_RW(op_hz);
 static DEVICE_ATTR_RO(refresh_rate);
-static DEVICE_ATTR_WO(refresh_ctrl);
+static DEVICE_ATTR_RW(refresh_ctrl);
 static DEVICE_ATTR_RW(min_vrefresh);
 static DEVICE_ATTR_RW(te2_timing);
 static DEVICE_ATTR_RW(te2_lp_timing);
