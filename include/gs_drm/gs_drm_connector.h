@@ -214,6 +214,11 @@ struct gs_drm_connector {
 	 * pipeline updates for as long as this flag is set
 	 */
 	bool needs_commit;
+	/**
+	 * @ignore_op_rate: a flag used to ignore the current OP rate when deciding
+	 * BTS behavior in the DPU driver
+	 */
+	bool ignore_op_rate;
 };
 
 #define to_gs_connector(connector) container_of((connector), struct gs_drm_connector, base)
