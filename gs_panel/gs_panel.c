@@ -1167,32 +1167,38 @@ EXPORT_SYMBOL(gs_dsi_panel_common_remove);
 
 void gs_panel_reset_helper(struct gs_panel *ctx)
 {
-	u32 delay;
+	int delay;
+	struct device *dev = ctx->dev;
 	const u32 *timing_ms = ctx->desc->reset_timing_ms;
 
-	dev_dbg(ctx->dev, "%s +\n", __func__);
+	dev_dbg(dev, "%s +\n", __func__);
 
 	if (IS_ERR_OR_NULL(ctx->gpio.reset_gpio)) {
-		dev_dbg(ctx->dev, "%s -(no reset gpio)\n", __func__);
+		dev_dbg(dev, "%s -(no reset gpio)\n", __func__);
 		return;
 	}
 
-	gpiod_set_value(ctx->gpio.reset_gpio, 1);
 	delay = timing_ms[PANEL_RESET_TIMING_HIGH] ?: 5;
-	delay *= 1000;
-	usleep_range(delay, delay + 10);
+	if (delay > 0) {
+		gpiod_set_value(ctx->gpio.reset_gpio, 1);
+		dev_dbg(dev, "reset=H, delay: %dms\n", delay);
+		delay *= 1000;
+		usleep_range(delay, delay + 10);
+	}
 
 	gpiod_set_value(ctx->gpio.reset_gpio, 0);
 	delay = timing_ms[PANEL_RESET_TIMING_LOW] ?: 5;
+	dev_dbg(dev, "reset=L, delay: %dms\n", delay);
 	delay *= 1000;
 	usleep_range(delay, delay + 10);
 
 	gpiod_set_value(ctx->gpio.reset_gpio, 1);
 	delay = timing_ms[PANEL_RESET_TIMING_INIT] ?: 10;
+	dev_dbg(dev, "reset=H, delay: %dms\n", delay);
 	delay *= 1000;
 	usleep_range(delay, delay + 10);
 
-	dev_dbg(ctx->dev, "%s -\n", __func__);
+	dev_dbg(dev, "%s -\n", __func__);
 
 	gs_panel_first_enable(ctx);
 
