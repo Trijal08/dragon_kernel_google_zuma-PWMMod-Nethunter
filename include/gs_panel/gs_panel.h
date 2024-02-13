@@ -402,9 +402,10 @@ struct gs_panel_funcs {
 	/**
 	 * @refresh_ctrl
 	 *
-	 * Control some panel refresh behaviors
+	 * Apply the panel refresh behavior. It is expected to use the
+	 * `refresh_ctrl` member of the `gs_panel` when applying new behavior.
 	 */
-	void (*refresh_ctrl)(struct gs_panel *gs_panel, u32 ctrl);
+	void (*refresh_ctrl)(struct gs_panel *gs_panel);
 
 	/**
 	 * @set_op_hz
@@ -996,6 +997,8 @@ struct gs_panel {
 	u32 dsi_hs_clk;
 	/* ACL mode */
 	enum gs_acl_mode acl_mode;
+	/* refresh ctrl settings */
+	u32 refresh_ctrl;
 };
 
 /* FUNCTIONS */

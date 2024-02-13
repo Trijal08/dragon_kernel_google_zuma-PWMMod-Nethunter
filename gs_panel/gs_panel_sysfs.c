@@ -231,17 +231,10 @@ static ssize_t refresh_ctrl_store(struct device *dev, struct device_attribute *a
 	if (!count)
 		return -EINVAL;
 
-	if (!gs_is_panel_initialized(ctx))
-		return -EAGAIN;
-
-	if (!gs_is_panel_active(ctx))
-		return -EPERM;
-
 	if (!gs_panel_has_func(ctx, refresh_ctrl))
 		return -EINVAL;
 
 	ret = kstrtou32(buf, 0, &ctrl);
-
 	if (ret) {
 		dev_err(ctx->dev, "%s: failed to parse input\n", __func__);
 		return -EINVAL;
@@ -250,14 +243,19 @@ static ssize_t refresh_ctrl_store(struct device *dev, struct device_attribute *a
 	auto_fi = ctrl & GS_PANEL_REFRESH_CTRL_FI_AUTO;
 	onetime_fi = ctrl & GS_PANEL_REFRESH_CTRL_FI_FRAME_COUNT_MASK;
 	repeated_fi = ctrl & GS_PANEL_REFRESH_CTRL_FI_REFRESH_RATE_MASK;
-
 	if ((auto_fi && (onetime_fi || repeated_fi)) || (onetime_fi && repeated_fi)) {
 		dev_err(ctx->dev, "%s: invalid command combination: 0x%X\n", __func__, ctrl);
 		return -EINVAL;
 	}
 
 	mutex_lock(&ctx->mode_lock);
-	ctx->desc->gs_panel_func->refresh_ctrl(ctx, ctrl);
+	ctx->refresh_ctrl = ctrl;
+	if (!gs_is_panel_initialized(ctx) || !gs_is_panel_enabled(ctx))
+		dev_info(dev, "%s: cache ctrl=0x%08lX\n", __func__,
+			 ctrl & GS_PANEL_REFRESH_CTRL_FEATURE_MASK);
+	else
+		ctx->desc->gs_panel_func->refresh_ctrl(ctx);
+	ctx->refresh_ctrl &= GS_PANEL_REFRESH_CTRL_FEATURE_MASK;
 	mutex_unlock(&ctx->mode_lock);
 
 	return count;
