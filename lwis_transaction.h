@@ -13,6 +13,9 @@
 
 #include "lwis_commands.h"
 
+#define EXPLICIT_EVENT_COUNTER(x)                                                                  \
+	((x) != LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE && (x) != LWIS_EVENT_COUNTER_EVERY_TIME)
+
 /* LWIS forward declarations */
 struct lwis_device;
 struct lwis_client;

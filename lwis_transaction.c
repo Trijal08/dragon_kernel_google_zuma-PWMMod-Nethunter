@@ -33,9 +33,6 @@
 /* Triggered event to actual execution of transaction threshold */
 #define TRIGGRED_EVENT_EXECUTION_THRESHOLD_MS 5
 
-#define EXPLICIT_EVENT_COUNTER(x)                                                                  \
-	((x) != LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE && (x) != LWIS_EVENT_COUNTER_EVERY_TIME)
-
 bool lwis_transaction_debug;
 module_param(lwis_transaction_debug, bool, 0644);
 

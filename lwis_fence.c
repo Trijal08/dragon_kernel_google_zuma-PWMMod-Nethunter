@@ -285,6 +285,54 @@ transaction_list_find_or_create(struct lwis_fence *fence, struct lwis_client *ow
 	return (list == NULL) ? transaction_list_create(fence, owner) : list;
 }
 
+static int trigger_event_add_transaction(struct lwis_client *client,
+					 struct lwis_transaction *transaction,
+					 struct lwis_transaction_trigger_event *event)
+{
+	struct file *precondition_fence_fp;
+	struct lwis_device *lwis_dev = client->lwis_dev;
+	struct lwis_device_event_state *event_state;
+	struct lwis_fence *precondition_fence;
+	struct lwis_transaction_info_v4 *info = &transaction->info;
+	int32_t operator_type = info->trigger_condition.operator_type;
+	size_t all_signaled = info->trigger_condition.num_nodes;
+	int precondition_fence_status = LWIS_FENCE_STATUS_NOT_SIGNALED;
+
+	/* Check if the event has been encountered and if the event counters match. */
+	event_state = lwis_device_event_state_find(lwis_dev, event->id);
+	if (event_state != NULL && transaction->info.is_level_triggered &&
+	    EXPLICIT_EVENT_COUNTER(event->counter) &&
+	    event->counter == event_state->event_counter) {
+		/* The event is currently level triggered, first we need to check if there is a
+		 * precondition fence associated with the event. */
+		if (event->precondition_fence_fd >= 0) {
+			precondition_fence_fp = fget(event->precondition_fence_fd);
+			if (precondition_fence_fp == NULL) {
+				dev_err(client->lwis_dev->dev,
+					"Precondition fence %d results in NULL file pointer",
+					event->precondition_fence_fd);
+				return -EINVAL;
+			}
+			precondition_fence = precondition_fence_fp->private_data;
+			precondition_fence_status = get_fence_status(precondition_fence);
+		}
+		/* If the event is not triggered by a precondition fence, or the precondition fence
+		 * is already signaled, queue the transaction immediately. */
+		if (event->precondition_fence_fd < 0 || precondition_fence_status == 0) {
+			/* The event trigger has been satisfied, so we can increase the signal
+			 * count. */
+			transaction->signaled_count++;
+			transaction->queue_immediately =
+				operator_type != LWIS_TRIGGER_NODE_OPERATOR_AND ||
+				transaction->signaled_count == all_signaled;
+			return 0;
+		}
+	}
+
+	return lwis_trigger_event_add_weak_transaction(client, info->id, event->id,
+						       event->precondition_fence_fd);
+}
+
 static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *client,
 					      struct lwis_transaction *transaction)
 {
@@ -499,10 +547,9 @@ int lwis_parse_trigger_condition(struct lwis_client *client, struct lwis_transac
 
 	for (i = 0; i < info->trigger_condition.num_nodes; i++) {
 		if (info->trigger_condition.trigger_nodes[i].type == LWIS_TRIGGER_EVENT) {
-			ret = lwis_trigger_event_add_weak_transaction(
-				client, info->id, info->trigger_condition.trigger_nodes[i].event.id,
-				info->trigger_condition.trigger_nodes[i]
-					.event.precondition_fence_fd);
+			ret = trigger_event_add_transaction(
+				client, transaction,
+				&info->trigger_condition.trigger_nodes[i].event);
 		} else {
 			ret = trigger_fence_add_transaction(
 				info->trigger_condition.trigger_nodes[i].fence_fd, client,
