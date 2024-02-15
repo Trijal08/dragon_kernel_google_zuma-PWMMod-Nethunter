@@ -389,29 +389,36 @@ static int cmd_time_query(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *hea
 static int cmd_get_device_info(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
 			       struct lwis_cmd_device_info __user *u_msg)
 {
+	int ret = 0;
 	int i;
-	struct lwis_cmd_device_info k_info = { .header.cmd_id = header->cmd_id,
-					       .header.next = header->next,
-					       .info.id = lwis_dev->id,
-					       .info.type = lwis_dev->type,
-					       .info.num_clks = 0,
-					       .info.num_regs = 0,
-					       .info.transaction_worker_thread_pid = -1,
-					       .info.periodic_io_thread_pid = -1 };
-	strscpy(k_info.info.name, lwis_dev->name, LWIS_MAX_NAME_STRING_LEN);
+	struct lwis_cmd_device_info *k_info;
+
+	k_info = kmalloc(sizeof(*k_info), GFP_KERNEL);
+	if (!k_info) {
+		return -ENOMEM;
+	}
+	k_info->header.cmd_id = header->cmd_id;
+	k_info->header.next = header->next;
+	k_info->info.id = lwis_dev->id;
+	k_info->info.type = lwis_dev->type;
+	k_info->info.num_clks = 0;
+	k_info->info.num_regs = 0;
+	k_info->info.transaction_worker_thread_pid = -1;
+	k_info->info.periodic_io_thread_pid = -1;
+	strscpy(k_info->info.name, lwis_dev->name, LWIS_MAX_NAME_STRING_LEN);
 
 	if (lwis_dev->clocks) {
-		k_info.info.num_clks = lwis_dev->clocks->count;
+		k_info->info.num_clks = lwis_dev->clocks->count;
 		for (i = 0; i < lwis_dev->clocks->count; i++) {
 			if (i >= LWIS_MAX_CLOCK_NUM) {
 				dev_err(lwis_dev->dev,
 					"Clock count larger than LWIS_MAX_CLOCK_NUM\n");
 				break;
 			}
-			strscpy(k_info.info.clks[i].name, lwis_dev->clocks->clk[i].name,
+			strscpy(k_info->info.clks[i].name, lwis_dev->clocks->clk[i].name,
 				LWIS_MAX_NAME_STRING_LEN);
-			k_info.info.clks[i].clk_index = i;
-			k_info.info.clks[i].frequency = 0;
+			k_info->info.clks[i].clk_index = i;
+			k_info->info.clks[i].frequency = 0;
 		}
 	}
 
@@ -419,18 +426,19 @@ static int cmd_get_device_info(struct lwis_device *lwis_dev, struct lwis_cmd_pkt
 		struct lwis_ioreg_device *ioreg_dev;
 		ioreg_dev = container_of(lwis_dev, struct lwis_ioreg_device, base_dev);
 		if (ioreg_dev->reg_list.count > 0) {
-			k_info.info.num_regs = ioreg_dev->reg_list.count;
+			k_info->info.num_regs = ioreg_dev->reg_list.count;
 			for (i = 0; i < ioreg_dev->reg_list.count; i++) {
 				if (i >= LWIS_MAX_REG_NUM) {
 					dev_err(lwis_dev->dev,
 						"Reg count larger than LWIS_MAX_REG_NUM\n");
 					break;
 				}
-				strscpy(k_info.info.regs[i].name, ioreg_dev->reg_list.block[i].name,
+				strscpy(k_info->info.regs[i].name,
+					ioreg_dev->reg_list.block[i].name,
 					LWIS_MAX_NAME_STRING_LEN);
-				k_info.info.regs[i].reg_index = i;
-				k_info.info.regs[i].start = ioreg_dev->reg_list.block[i].start;
-				k_info.info.regs[i].size = ioreg_dev->reg_list.block[i].size;
+				k_info->info.regs[i].reg_index = i;
+				k_info->info.regs[i].start = ioreg_dev->reg_list.block[i].start;
+				k_info->info.regs[i].size = ioreg_dev->reg_list.block[i].size;
 			}
 		}
 	}
@@ -441,27 +449,29 @@ static int cmd_get_device_info(struct lwis_device *lwis_dev, struct lwis_cmd_pkt
 		/* For I2C devices, transactions are being run in the I2C bus manager thread */
 		struct lwis_i2c_device *i2c_dev;
 		i2c_dev = container_of(lwis_dev, struct lwis_i2c_device, base_dev);
-		k_info.info.transaction_worker_thread_pid =
+		k_info->info.transaction_worker_thread_pid =
 			i2c_dev->i2c_bus_manager->bus_worker_thread->pid;
 	} else if (lwis_dev->type == DEVICE_TYPE_IOREG) {
 		/* For IOREG devices, transactions are being run in the IOREG bus manager thread */
 		struct lwis_ioreg_device *ioreg_dev;
 		ioreg_dev = container_of(lwis_dev, struct lwis_ioreg_device, base_dev);
-		k_info.info.transaction_worker_thread_pid =
+		k_info->info.transaction_worker_thread_pid =
 			ioreg_dev->ioreg_bus_manager->bus_worker_thread->pid;
 	} else if (lwis_dev->type == DEVICE_TYPE_TOP) {
 		/* For top device, the event subscription thread is the main worker thread */
 		struct lwis_top_device *top_dev;
 		top_dev = container_of(lwis_dev, struct lwis_top_device, base_dev);
-		k_info.info.transaction_worker_thread_pid = top_dev->subscribe_worker_thread->pid;
+		k_info->info.transaction_worker_thread_pid = top_dev->subscribe_worker_thread->pid;
 	} else if (lwis_dev->transaction_worker_thread) {
 		/* For all other device types, transaction threads are the main worker threads */
-		k_info.info.transaction_worker_thread_pid =
+		k_info->info.transaction_worker_thread_pid =
 			lwis_dev->transaction_worker_thread->pid;
 	}
 
-	k_info.header.ret_code = 0;
-	return copy_pkt_to_user(lwis_dev, u_msg, (void *)&k_info, sizeof(k_info));
+	k_info->header.ret_code = 0;
+	ret = copy_pkt_to_user(lwis_dev, u_msg, k_info, sizeof(*k_info));
+	kfree(k_info);
+	return ret;
 }
 
 static int cmd_device_enable(struct lwis_client *lwis_client, struct lwis_cmd_pkt *header,
