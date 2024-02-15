@@ -159,6 +159,13 @@ int lwis_fence_signal(struct lwis_fence *lwis_fence, int status)
 		return -EFAULT;
 	}
 
+	if (status == LWIS_FENCE_STATUS_NOT_SIGNALED) {
+		/* Do not allow signaling with not-signaled status code. */
+		dev_err(lwis_fence->lwis_top_dev->dev,
+			"Cannot signal lwis_fence with invalid status : %d\n", status);
+		return -EINVAL;
+	}
+
 	spin_lock_irqsave(&lwis_fence->lock, flags);
 
 	if (lwis_fence->status != LWIS_FENCE_STATUS_NOT_SIGNALED) {
