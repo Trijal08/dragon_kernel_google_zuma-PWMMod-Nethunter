@@ -102,6 +102,10 @@ static int gs_panel_parse_gpios(struct gs_panel *ctx)
 		gpio->enable_gpio = NULL;
 	}
 
+	gpio->vddd_gpio = devm_gpiod_get(dev, "vddd", GPIOD_OUT_HIGH);
+	if (IS_ERR(gpio->vddd_gpio))
+		gpio->vddd_gpio = NULL;
+
 	dev_dbg(dev, "%s -\n", __func__);
 	return 0;
 }
@@ -782,11 +786,17 @@ EXPORT_SYMBOL(gs_panel_set_power_helper);
 
 void gs_panel_set_vddd_voltage(struct gs_panel *ctx, bool is_lp)
 {
-	u32 uv = is_lp ? ctx->regulator.vddd_lp_uV : ctx->regulator.vddd_normal_uV;
-	if (!uv || !ctx->regulator.vddd)
-		return;
-	if (regulator_set_voltage(ctx->regulator.vddd, uv, uv))
-		dev_err(ctx->dev, "failed to set vddd at %u uV\n", uv);
+	if (!IS_ERR_OR_NULL(ctx->gpio.vddd_gpio)) {
+		gpiod_set_value(ctx->gpio.vddd_gpio, is_lp ? 0 : 1);
+	} else {
+		u32 uv = is_lp ? ctx->regulator.vddd_lp_uV : ctx->regulator.vddd_normal_uV;
+
+		if (!uv || !ctx->regulator.vddd)
+			return;
+
+		if (regulator_set_voltage(ctx->regulator.vddd, uv, uv))
+			dev_err(ctx->dev, "failed to set vddd at %u uV\n", uv);
+	}
 }
 
 /* INITIALIZATION */

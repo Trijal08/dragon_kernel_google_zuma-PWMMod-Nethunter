@@ -711,6 +711,7 @@ struct gs_panel_debugfs_entries {
 struct gs_panel_gpio {
 	struct gpio_desc *reset_gpio;
 	struct gpio_desc *enable_gpio;
+	struct gpio_desc *vddd_gpio;
 };
 
 /**
