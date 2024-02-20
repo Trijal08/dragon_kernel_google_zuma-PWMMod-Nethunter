@@ -144,3 +144,11 @@ Contact: "Ken Huang" <kenbshuang@google.com>
 Description:
   The file provides the different available display states for which stats can be displayed.
   The format is: "[Display state] [Display width] [Display height] [Refresh rate]"
+
+What: /sys/devices/platform/gs-drm-connector/panel/backlight/panel0-backlight/ssc_en
+Date: February 2024
+KernelVersion: 6.1
+Contact: "Gil Liu" <gilliu@google.com>
+Description:
+  Userspace client can activate SSC mode to control dynamic OSC clock SSC(Spread Spectrum Clocking).
+  This sysfs node by control by RIL team and desense team to avoid signal interference.

@@ -823,12 +823,64 @@ static ssize_t acl_mode_show(struct device *dev,
 	return sysfs_emit(buf, "%d\n", ctx->acl_mode);
 }
 
+static ssize_t ssc_en_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	ssize_t ret;
+	bool ssc_en;
+
+	if (!gs_panel_has_func(ctx, set_ssc_en)) {
+		dev_err(ctx->dev, "SSC is not supported\n");
+		return -ENOTSUPP;
+	}
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		return -EAGAIN;
+	}
+
+	ret = kstrtobool(buf, &ssc_en);
+	if (ret) {
+		dev_err(dev, "invalid SSC mode value\n");
+		return ret;
+	}
+
+	mutex_lock(&ctx->mode_lock);
+	ctx->desc->gs_panel_func->set_ssc_en(ctx, ssc_en);
+	mutex_unlock(&ctx->mode_lock);
+
+	return count;
+}
+
+static ssize_t ssc_en_show(struct device *dev,
+			       struct device_attribute *attr, char *buf)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+
+	if (!gs_panel_has_func(ctx, set_ssc_en)) {
+		dev_err(ctx->dev, "SSC is not supported\n");
+		return -ENOTSUPP;
+	}
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		return -EAGAIN;
+	}
+
+	return sysfs_emit(buf, "%d\n", ctx->ssc_en);
+}
+
 static DEVICE_ATTR_RW(hbm_mode);
 static DEVICE_ATTR_RW(dimming_on);
 static DEVICE_ATTR_RW(local_hbm_mode);
 static DEVICE_ATTR_RW(local_hbm_max_timeout);
 static DEVICE_ATTR_RO(state);
 static DEVICE_ATTR_RW(acl_mode);
+static DEVICE_ATTR_RW(ssc_en);
 
 static struct attribute *bl_device_attrs[] = {
 	&dev_attr_hbm_mode.attr,
@@ -837,6 +889,7 @@ static struct attribute *bl_device_attrs[] = {
 	&dev_attr_local_hbm_max_timeout.attr,
 	&dev_attr_acl_mode.attr,
 	&dev_attr_state.attr,
+	&dev_attr_ssc_en.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(bl_device);
