@@ -390,9 +390,17 @@ static int prepare_response(struct lwis_client *client, struct lwis_periodic_io 
 	for (i = 0; i < info->num_io_entries; ++i) {
 		struct lwis_io_entry *entry = &info->io_entries[i];
 		if (entry->type == LWIS_IO_ENTRY_READ) {
+			/* Check for size_t overflow. */
+			if (read_buf_size + reg_value_bytewidth < read_buf_size) {
+				return -EOVERFLOW;
+			}
 			read_buf_size += reg_value_bytewidth;
 			read_entries++;
 		} else if (entry->type == LWIS_IO_ENTRY_READ_BATCH) {
+			/* Check for size_t overflow when adding user defined size_in_bytes. */
+			if (read_buf_size + entry->rw_batch.size_in_bytes < read_buf_size) {
+				return -EOVERFLOW;
+			}
 			read_buf_size += entry->rw_batch.size_in_bytes;
 			read_entries++;
 		}
