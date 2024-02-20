@@ -1174,7 +1174,7 @@ void gs_panel_reset_helper(struct gs_panel *ctx)
 {
 	int delay;
 	struct device *dev = ctx->dev;
-	const u32 *timing_ms = ctx->desc->reset_timing_ms;
+	const int *timing_ms = ctx->desc->reset_timing_ms;
 
 	dev_dbg(dev, "%s +\n", __func__);
 

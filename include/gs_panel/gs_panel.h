@@ -681,7 +681,7 @@ struct gs_panel_desc {
 	bool has_off_binned_lp_entry;
 	const struct drm_panel_funcs *panel_func;
 	const struct gs_panel_funcs *gs_panel_func;
-	const u32 reset_timing_ms[PANEL_RESET_TIMING_COUNT];
+	const int reset_timing_ms[PANEL_RESET_TIMING_COUNT];
 	const struct gs_panel_reg_ctrl_desc *reg_ctrl_desc;
 	/** @default_dsi_hs_clk: default MIPI DSI HS clock (Hz) */
 	u32 default_dsi_hs_clk;
