@@ -181,12 +181,15 @@ static int update_panel_timings_from_device_tree(struct device_node *np)
 	 */
 	struct drm_display_mode *mode =
 		(struct drm_display_mode *)&panel_gs_simple_normal_modes.modes[0].mode;
-	int ret = 0;
+	int ret = of_get_drm_panel_display_mode(np, mode, NULL);
 
-	ret = of_get_drm_panel_display_mode(np, mode, NULL);
-	if (ret) {
-		pr_warn("%p of_get_drm_panel_display_mode returned %d\n", np, ret);
+	if (ret && ret != -ENOENT) {
+		pr_warn("of_get_drm_panel_display_mode returned %d\n", ret);
+	} else if (ret == -ENOENT) {
+		pr_info("Unable to find panel timings in device tree, using defaults instead.\n");
+		ret = 0;
 	}
+
 	return ret;
 };
 
