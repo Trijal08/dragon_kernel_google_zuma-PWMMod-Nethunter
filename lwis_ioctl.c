@@ -1356,6 +1356,21 @@ static int construct_transaction_from_cmd(struct lwis_client *client, uint32_t c
 		goto error_free_transaction;
 	}
 
+	if (k_transaction->info.trigger_condition.num_nodes < 0) {
+		dev_err(lwis_dev->dev, "Invalid trigger condition node count %lu\n",
+			k_transaction->info.trigger_condition.num_nodes);
+		ret = -EINVAL;
+		goto error_free_transaction;
+	}
+
+	if (k_transaction->info.trigger_condition.num_nodes > LWIS_TRIGGER_NODES_MAX_NUM) {
+		dev_err(lwis_dev->dev,
+			"Trigger condition contains %lu node, more than the limit of %d\n",
+			k_transaction->info.trigger_condition.num_nodes,
+			LWIS_TRIGGER_NODES_MAX_NUM);
+		return -EINVAL;
+	}
+
 	ret = construct_io_entry(client, k_transaction->info.io_entries,
 				 k_transaction->info.num_io_entries,
 				 &k_transaction->info.io_entries);
