@@ -183,14 +183,10 @@ static int update_panel_timings_from_device_tree(struct device_node *np)
 		(struct drm_display_mode *)&panel_gs_simple_normal_modes.modes[0].mode;
 	int ret = 0;
 
-	/*
-	 * TODO (b/197774385): re-enable
 	ret = of_get_drm_panel_display_mode(np, mode, NULL);
 	if (ret) {
 		pr_warn("%p of_get_drm_panel_display_mode returned %d\n", np, ret);
 	}
-	 */
-	(void)mode;
 	return ret;
 };
 
