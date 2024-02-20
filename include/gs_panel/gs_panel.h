@@ -195,6 +195,12 @@ enum mode_progress_type {
 	MODE_RES_AND_RR_IN_PROGRESS,
 };
 
+enum gpio_level {
+	GPIO_LEVEL_LOW = 0,
+	GPIO_LEVEL_HIGH,
+	GPIO_LEVEL_UNSPECIFIED,
+};
+
 struct gs_panel;
 
 /**
@@ -712,6 +718,8 @@ struct gs_panel_gpio {
 	struct gpio_desc *reset_gpio;
 	struct gpio_desc *enable_gpio;
 	struct gpio_desc *vddd_gpio;
+
+	enum gpio_level vddd_gpio_fixed_level;
 };
 
 /**

@@ -83,6 +83,7 @@ static int gs_panel_parse_gpios(struct gs_panel *ctx)
 {
 	struct device *dev = ctx->dev;
 	struct gs_panel_gpio *gpio = &ctx->gpio;
+	int ret;
 
 	dev_dbg(dev, "%s +\n", __func__);
 
@@ -102,7 +103,19 @@ static int gs_panel_parse_gpios(struct gs_panel *ctx)
 		gpio->enable_gpio = NULL;
 	}
 
-	gpio->vddd_gpio = devm_gpiod_get(dev, "vddd", GPIOD_OUT_HIGH);
+	ret = of_property_read_u32(dev->of_node, "vddd_gpio_fixed_level",
+				   &gpio->vddd_gpio_fixed_level);
+	if (ret) {
+		gpio->vddd_gpio_fixed_level = GPIO_LEVEL_UNSPECIFIED;
+	} else if (gpio->vddd_gpio_fixed_level > GPIO_LEVEL_HIGH) {
+		dev_warn(ctx->dev, "ignore vddd_gpio_fixed_level value %u\n",
+			 gpio->vddd_gpio_fixed_level);
+		gpio->vddd_gpio_fixed_level = GPIO_LEVEL_UNSPECIFIED;
+	}
+
+	gpio->vddd_gpio = devm_gpiod_get_optional(
+		dev, "vddd",
+		(gpio->vddd_gpio_fixed_level == GPIO_LEVEL_LOW ? GPIOD_OUT_LOW : GPIOD_OUT_HIGH));
 	if (IS_ERR(gpio->vddd_gpio))
 		gpio->vddd_gpio = NULL;
 
@@ -787,7 +800,12 @@ EXPORT_SYMBOL(gs_panel_set_power_helper);
 void gs_panel_set_vddd_voltage(struct gs_panel *ctx, bool is_lp)
 {
 	if (!IS_ERR_OR_NULL(ctx->gpio.vddd_gpio)) {
-		gpiod_set_value(ctx->gpio.vddd_gpio, is_lp ? 0 : 1);
+		bool gpio_level = is_lp ? GPIO_LEVEL_LOW : GPIO_LEVEL_HIGH;
+
+		if (ctx->gpio.vddd_gpio_fixed_level != GPIO_LEVEL_UNSPECIFIED)
+			gpio_level = ctx->gpio.vddd_gpio_fixed_level;
+		gpiod_set_value(ctx->gpio.vddd_gpio, gpio_level);
+		dev_dbg(ctx->dev, "%s: is_lp: %d, vddd_gpio: %d\n", __func__, is_lp, gpio_level);
 	} else {
 		u32 uv = is_lp ? ctx->regulator.vddd_lp_uV : ctx->regulator.vddd_normal_uV;
 
