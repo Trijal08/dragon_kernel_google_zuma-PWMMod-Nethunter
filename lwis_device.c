@@ -602,12 +602,15 @@ static bool is_transaction_worker_active(struct lwis_client *client)
 	struct lwis_device *lwis_dev;
 	struct lwis_top_device *top_dev;
 
+	if (!client->lwis_dev->transaction_worker_thread) {
+		return false;
+	}
+
 	/*
 	 * Return true for all device types except Top device since the worker
 	 * thread will be active till the device exists.
 	 */
-	if ((client->lwis_dev->type != DEVICE_TYPE_TOP) &&
-	    (client->lwis_dev->transaction_worker_thread)) {
+	if (client->lwis_dev->type != DEVICE_TYPE_TOP) {
 		return true;
 	}
 
