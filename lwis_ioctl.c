@@ -197,9 +197,11 @@ static int register_modify(struct lwis_device *lwis_dev, struct lwis_io_entry *m
 
 static int synchronous_process_io_entries(struct lwis_device *lwis_dev, int num_io_entries,
 					  struct lwis_io_entry *io_entries,
-					  struct lwis_io_entry *user_msg)
+					  struct lwis_io_entry *user_msg, bool skip_error)
 {
-	int ret = 0, i = 0;
+	int ret = 0;
+	int last_error = 0;
+	int i = 0;
 
 	lwis_bus_manager_lock_bus(lwis_dev);
 	/* Use write memory barrier at the beginning of I/O entries if the access protocol
@@ -245,9 +247,18 @@ static int synchronous_process_io_entries(struct lwis_device *lwis_dev, int num_
 			dev_err(lwis_dev->dev, "Unknown io_entry operation\n");
 			ret = -EINVAL;
 		}
+
 		if (ret) {
-			dev_err(lwis_dev->dev, "Register io_entry failed\n");
-			goto exit;
+			last_error = ret;
+			if (skip_error) {
+				dev_warn(
+					lwis_dev->dev,
+					"IO type %d processing failed, skipping error and running next command\n",
+					io_entries[i].type);
+			} else {
+				dev_err(lwis_dev->dev, "Register io_entry failed\n");
+				goto exit;
+			}
 		}
 	}
 exit:
@@ -259,7 +270,8 @@ exit:
 						   /*use_write_barrier=*/false);
 	}
 	lwis_bus_manager_unlock_bus(lwis_dev);
-	return ret;
+
+	return last_error;
 }
 
 static int construct_io_entry(struct lwis_client *client, struct lwis_io_entry *user_entries,
@@ -678,24 +690,12 @@ exit_locked:
 }
 
 static int copy_io_entries_from_cmd(struct lwis_device *lwis_dev,
-				    struct lwis_cmd_io_entries __user *u_msg,
-				    struct lwis_cmd_io_entries *k_msg,
+				    struct lwis_cmd_io_entries_v2 *k_msg,
 				    struct lwis_io_entry **k_entries)
 {
 	struct lwis_io_entry *io_entries;
 	uint32_t buf_size;
 
-	/* Register io is not supported for the lwis device, return */
-	if (!lwis_dev->vops.register_io) {
-		dev_err(lwis_dev->dev, "Register IO not supported on this LWIS device\n");
-		return -EINVAL;
-	}
-
-	/* Copy io_entries from userspace */
-	if (copy_from_user(k_msg, (void __user *)u_msg, sizeof(*k_msg))) {
-		dev_err(lwis_dev->dev, "Failed to copy io_entries header from userspace.\n");
-		return -EFAULT;
-	}
 	buf_size = sizeof(struct lwis_io_entry) * k_msg->io.num_io_entries;
 	if (buf_size / sizeof(struct lwis_io_entry) != k_msg->io.num_io_entries) {
 		dev_err(lwis_dev->dev, "Failed to copy io_entries due to integer overflow.\n");
@@ -721,12 +721,26 @@ static int cmd_device_reset(struct lwis_client *lwis_client, struct lwis_cmd_pkt
 {
 	int ret = 0;
 	struct lwis_device *lwis_dev = lwis_client->lwis_dev;
-	struct lwis_cmd_io_entries k_msg;
+	struct lwis_cmd_io_entries_v2 k_msg;
 	struct lwis_io_entry *k_entries = NULL;
 	unsigned long flags;
 	bool device_enabled = false;
 
-	ret = copy_io_entries_from_cmd(lwis_dev, u_msg, &k_msg, &k_entries);
+	/* Register io is not supported for the lwis device, return */
+	if (!lwis_dev->vops.register_io) {
+		dev_err(lwis_dev->dev, "Register IO not supported on this LWIS device\n");
+		return -EINVAL;
+	}
+
+	/* Copy io_entries from userspace */
+	if (copy_from_user((void *)&k_msg, (void __user *)u_msg,
+			   sizeof(struct lwis_cmd_io_entries))) {
+		dev_err(lwis_dev->dev, "Failed to copy io_entries header from userspace.\n");
+		return -EFAULT;
+	}
+	k_msg.skip_error = false;
+
+	ret = copy_io_entries_from_cmd(lwis_dev, &k_msg, &k_entries);
 	if (ret) {
 		goto soft_reset_exit;
 	}
@@ -754,7 +768,7 @@ static int cmd_device_reset(struct lwis_client *lwis_client, struct lwis_cmd_pkt
 	/* Perform reset routine defined by the io_entries */
 	if (device_enabled) {
 		ret = synchronous_process_io_entries(lwis_dev, k_msg.io.num_io_entries, k_entries,
-						     k_msg.io.io_entries);
+						     k_msg.io.io_entries, k_msg.skip_error);
 	} else {
 		dev_warn(lwis_dev->dev,
 			 "Device is not enabled, IoEntries will not be executed in DEVICE_RESET\n");
@@ -1108,17 +1122,67 @@ static int cmd_reg_io(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
 		      struct lwis_cmd_io_entries __user *u_msg)
 {
 	int ret = 0;
-	struct lwis_cmd_io_entries k_msg;
+	struct lwis_cmd_io_entries_v2 k_msg;
 	struct lwis_io_entry *k_entries = NULL;
 
-	ret = copy_io_entries_from_cmd(lwis_dev, u_msg, &k_msg, &k_entries);
+	/* Register io is not supported for the lwis device, return */
+	if (!lwis_dev->vops.register_io) {
+		dev_err(lwis_dev->dev, "Register IO not supported on this LWIS device\n");
+		return -EINVAL;
+	}
+
+	/* Copy io_entries from userspace */
+	if (copy_from_user((void *)&k_msg, (void __user *)u_msg,
+			   sizeof(struct lwis_cmd_io_entries))) {
+		dev_err(lwis_dev->dev, "Failed to copy io_entries header from userspace.\n");
+		return -EFAULT;
+	}
+	k_msg.skip_error = false;
+
+	ret = copy_io_entries_from_cmd(lwis_dev, &k_msg, &k_entries);
 	if (ret) {
 		goto reg_io_exit;
 	}
 
 	/* Walk through and execute the entries */
 	ret = synchronous_process_io_entries(lwis_dev, k_msg.io.num_io_entries, k_entries,
-					     k_msg.io.io_entries);
+					     k_msg.io.io_entries, k_msg.skip_error);
+
+reg_io_exit:
+	if (k_entries) {
+		lwis_allocator_free(lwis_dev, k_entries);
+	}
+	header->ret_code = ret;
+	return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
+}
+
+static int cmd_reg_io_v2(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
+			 struct lwis_cmd_io_entries_v2 __user *u_msg)
+{
+	int ret = 0;
+	struct lwis_cmd_io_entries_v2 k_msg;
+	struct lwis_io_entry *k_entries = NULL;
+
+	/* Register io is not supported for the lwis device, return */
+	if (!lwis_dev->vops.register_io) {
+		dev_err(lwis_dev->dev, "Register IO not supported on this LWIS device\n");
+		return -EINVAL;
+	}
+
+	/* Copy io_entries from userspace */
+	if (copy_from_user((void *)&k_msg, (void __user *)u_msg, sizeof(k_msg))) {
+		dev_err(lwis_dev->dev, "Failed to copy io_entries header from userspace.\n");
+		return -EFAULT;
+	}
+
+	ret = copy_io_entries_from_cmd(lwis_dev, &k_msg, &k_entries);
+	if (ret) {
+		goto reg_io_exit;
+	}
+
+	/* Walk through and execute the entries */
+	ret = synchronous_process_io_entries(lwis_dev, k_msg.io.num_io_entries, k_entries,
+					     k_msg.io.io_entries, k_msg.skip_error);
 
 reg_io_exit:
 	if (k_entries) {
@@ -2233,6 +2297,12 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 	case LWIS_CMD_ID_REG_IO:
 		mutex_lock(&lwis_client->lock);
 		ret = cmd_reg_io(lwis_dev, header, (struct lwis_cmd_io_entries __user *)user_msg);
+		mutex_unlock(&lwis_client->lock);
+		break;
+	case LWIS_CMD_ID_REG_IO_V2:
+		mutex_lock(&lwis_client->lock);
+		ret = cmd_reg_io_v2(lwis_dev, header,
+				    (struct lwis_cmd_io_entries_v2 __user *)user_msg);
 		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_EVENT_CONTROL_GET:

@@ -607,6 +607,7 @@ enum lwis_cmd_id {
 	LWIS_CMD_ID_DMA_BUFFER_FREE = 0x20400,
 
 	LWIS_CMD_ID_REG_IO = 0x30000,
+	LWIS_CMD_ID_REG_IO_V2,
 
 	LWIS_CMD_ID_EVENT_CONTROL_GET = 0x40000,
 	LWIS_CMD_ID_EVENT_CONTROL_SET = 0x40100,
@@ -670,6 +671,12 @@ struct lwis_cmd_get_device_enable_state {
 struct lwis_cmd_io_entries {
 	struct lwis_cmd_pkt header;
 	struct lwis_io_entries io;
+};
+
+struct lwis_cmd_io_entries_v2 {
+	struct lwis_cmd_pkt header;
+	struct lwis_io_entries io;
+	bool skip_error;
 };
 
 struct lwis_cmd_dma_buffer_enroll {
