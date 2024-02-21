@@ -66,30 +66,64 @@ const struct brightness_capability panel_gs_simple_brightness_capability = {
 };
 
 static struct gs_panel_mode_array panel_gs_simple_normal_modes = {
+#ifdef PANEL_FACTORY_BUILD
+	.num_modes = 2,
+#else
 	.num_modes = 1,
+#endif
 	.modes = {
+#ifdef PANEL_FACTORY_BUILD
 		{
 			.mode = {
-				.name = "640x480",
-				/* htotal * vtotal * refresh (22.464MHz) */
-				.clock = (720 * 520 * 60) / 1000,
-				.hdisplay = 640,
-				.hsync_start = 640 + 32, /* add hfp */
-				.hsync_end = 640 + 32 + 12, /* add hsa */
-				.htotal = 640 + 32 + 12 + 36, /* add hbp */
-				.vdisplay = 480,
-				.vsync_start = 480 + 12, /* add vfp */
-				.vsync_end = 480 + 12 + 4, /* add vsa */
-				.vtotal = 480 + 12 + 4 + 24, /* add vbp */
+				.name = "1440x2960@60",
+				DRM_MODE_TIMING(60, 1440, 32, 12, 16, 2960, 12, 4, 16),
+				.flags = 0,
+				.type = DRM_MODE_TYPE_PREFERRED,
+				.width_mm = 80,
+				.height_mm = 120,
+			},
+			.gs_mode = {
+				.mode_flags = MIPI_DSI_MODE_VIDEO,
+				.bpc = 8,
+				.dsc = {
+					.enabled = false,
+				},
+			},
+		},
+		{
+			.mode = {
+				.name = "1440x2960@120",
+				DRM_MODE_TIMING(120, 1440, 32, 12, 16, 2960, 12, 4, 16),
+				.flags = 0,
+				.width_mm = 80,
+				.height_mm = 120,
+			},
+			.gs_mode = {
+				.mode_flags = MIPI_DSI_MODE_VIDEO,
+				.bpc = 8,
+				.dsc = {
+					.enabled = false,
+				},
+			},
+		},
+#else
+		{
+			.mode = {
+				.name = "640x480@60",
+				DRM_MODE_TIMING(60, 640, 32, 12, 36, 480, 12, 4, 24),
 				.flags = 0,
 				.width_mm = 64,
 				.height_mm = 48,
 			},
 			.gs_mode = {
-				.mode_flags = MIPI_DSI_CLOCK_NON_CONTINUOUS,
+				.mode_flags = MIPI_DSI_MODE_VIDEO,
 				.bpc = 8,
+				.dsc = {
+					.enabled = false,
+				},
 			},
 		},
+#endif
 	},
 };
 
