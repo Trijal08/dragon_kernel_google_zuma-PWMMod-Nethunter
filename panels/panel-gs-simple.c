@@ -101,6 +101,19 @@ const struct brightness_capability panel_gs_simple_brightness_capability = {
 	},
 };
 
+#ifdef PANEL_FACTORY_BUILD
+static const struct drm_dsc_config wqhd_pps_config = {
+	.slice_count = 2,
+	.slice_height = 40,
+};
+#endif
+
+#define EMU_WQHD_DSC {\
+	.enabled = true,\
+	.dsc_count = 2,\
+	.cfg = &wqhd_pps_config,\
+}
+
 static struct gs_panel_mode_array panel_gs_simple_normal_modes = {
 #ifdef PANEL_FACTORY_BUILD
 	.num_modes = 2,
@@ -121,9 +134,7 @@ static struct gs_panel_mode_array panel_gs_simple_normal_modes = {
 			.gs_mode = {
 				.mode_flags = MIPI_DSI_MODE_VIDEO,
 				.bpc = 8,
-				.dsc = {
-					.enabled = false,
-				},
+				.dsc = EMU_WQHD_DSC,
 			},
 		},
 		{
@@ -137,9 +148,7 @@ static struct gs_panel_mode_array panel_gs_simple_normal_modes = {
 			.gs_mode = {
 				.mode_flags = MIPI_DSI_MODE_VIDEO,
 				.bpc = 8,
-				.dsc = {
-					.enabled = false,
-				},
+				.dsc = EMU_WQHD_DSC,
 			},
 		},
 #else
