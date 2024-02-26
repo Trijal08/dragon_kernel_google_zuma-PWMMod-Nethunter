@@ -88,7 +88,7 @@ static int lwis_ioreg_device_setup(struct lwis_ioreg_device *ioreg_dev)
 #endif
 
 	if (ioreg_dev->iommu_best_fit_algo) {
-		ret = iommu_dma_enable_best_fit_algo(ioreg_dev->base_dev.dev);
+		ret = iommu_dma_enable_best_fit_algo(ioreg_dev->base_dev.k_dev);
 		if (ret) {
 			dev_warn(ioreg_dev->base_dev.dev, "Cannot enable IOMMU best fit algo\n");
 			/* Skip best fit algo error */

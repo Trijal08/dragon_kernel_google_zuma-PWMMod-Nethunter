@@ -545,6 +545,13 @@ int lwis_initialize_transaction_fences(struct lwis_client *client,
 		return -EINVAL;
 	}
 
+	if (info->trigger_condition.num_nodes > LWIS_TRIGGER_NODES_MAX_NUM) {
+		dev_err(lwis_dev->dev,
+			"Trigger condition contains %lu node, more than the limit of %d\n",
+			info->trigger_condition.num_nodes, LWIS_TRIGGER_NODES_MAX_NUM);
+		return -EINVAL;
+	}
+
 	/* If triggered by trigger_condition */
 	if (lwis_triggered_by_condition(transaction)) {
 		/* Initialize all placeholder fences in the trigger_condition */
