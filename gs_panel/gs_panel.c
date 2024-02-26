@@ -319,6 +319,7 @@ const struct gs_panel_mode *gs_panel_get_mode(struct gs_panel *ctx,
 
 	return NULL;
 }
+EXPORT_SYMBOL(gs_panel_get_mode);
 
 /* TE2 */
 
