@@ -423,6 +423,20 @@ struct gs_panel_funcs {
 	int (*set_op_hz)(struct gs_panel *gs_panel, unsigned int hz);
 
 	/**
+	 * @read_extinfo
+	 *
+	 * This callback is used to override the default behavior for reading
+	 * the extinfo registers of the panel, which contain manufacturer
+	 * information about the exact type of hardware.
+	 *
+	 * While most cases can use the default behavior, certain outliers (such
+	 * as emulated panels) may wish to implement their own versions.
+	 *
+	 * Return: 0 on success, negative value on error
+	 */
+	int (*read_extinfo)(struct gs_panel *gs_panel);
+
+	/**
 	 * @get_panel_rev
 	 *
 	 * This callback is used to get panel HW revision from panel_extinfo.

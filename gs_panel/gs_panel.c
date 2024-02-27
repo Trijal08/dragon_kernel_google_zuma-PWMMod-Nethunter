@@ -266,7 +266,7 @@ static int gs_panel_of_parse_backlight(struct gs_panel *ctx)
 
 /* Panel Info */
 
-static int gs_panel_read_extinfo(struct gs_panel *ctx)
+static int _gs_panel_read_extinfo(struct gs_panel *ctx)
 {
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
 	char buf[EXT_INFO_SIZE];
@@ -287,6 +287,24 @@ static int gs_panel_read_extinfo(struct gs_panel *ctx)
 	bin2hex(ctx->panel_extinfo, buf, EXT_INFO_SIZE);
 
 	return 0;
+}
+
+/**
+ * gs_panel_read_extinfo() - Reads extinfo registers from panel
+ * @ctx: handle for panel data
+ *
+ * If a panel driver has a specific function for reading extinfo registers, such
+ * as for emulated panels that don't have any, uses that. Otherwise,
+ * reads the default extinfo registers.
+ *
+ * Return: 0 on success, negative value on error
+ */
+static int gs_panel_read_extinfo(struct gs_panel *ctx)
+{
+	if (gs_panel_has_func(ctx, read_extinfo))
+		return ctx->desc->gs_panel_func->read_extinfo(ctx);
+	else
+		return _gs_panel_read_extinfo(ctx);
 }
 
 /* Modes */
