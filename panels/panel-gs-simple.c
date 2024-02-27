@@ -34,6 +34,40 @@ static int panel_gs_simple_enable(struct drm_panel *panel)
 	return 0;
 }
 
+/**
+ * panel_gs_simple_read_id() - Stub function for reading panel id
+ * @ctx: Panel handle
+ *
+ * As this driver doubles as the emulator panel, this function makes sure
+ * that we do not use the default functions and attempt dcs reads from
+ * a panel that does not exist.
+ *
+ * Return: Always 0
+ */
+static int panel_gs_simple_read_id(struct gs_panel *ctx)
+{
+	strscpy(ctx->panel_id, "ffffffff", PANEL_ID_MAX);
+
+	return 0;
+}
+
+/**
+ * panel_gs_simple_read_extinfo() - Stub function for reading extinfo
+ * @ctx: Panel handle
+ *
+ * As this driver doubles as the emulator panel, this function makes sure
+ * that we do not use the default functions and attempt dcs reads from
+ * a panel that does not exist.
+ *
+ * Return: Always 0
+ */
+static int panel_gs_simple_read_extinfo(struct gs_panel *ctx)
+{
+	strscpy(ctx->panel_extinfo, "ffffffff", PANEL_EXTINFO_MAX);
+
+	return 0;
+}
+
 /* Module Description */
 
 static const struct drm_panel_funcs panel_gs_simple_drm_funcs = {
@@ -46,6 +80,8 @@ static const struct drm_panel_funcs panel_gs_simple_drm_funcs = {
 
 static const struct gs_panel_funcs panel_gs_simple_panel_funcs = {
 	.set_brightness = gs_dcs_set_brightness,
+	.read_id = panel_gs_simple_read_id,
+	.read_extinfo = panel_gs_simple_read_extinfo,
 };
 
 const struct brightness_capability panel_gs_simple_brightness_capability = {
