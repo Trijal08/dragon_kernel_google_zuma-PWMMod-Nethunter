@@ -175,6 +175,7 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 	int64_t process_duration_ns = -1;
 	int64_t process_timestamp = -1;
 	int64_t triggered_duration_ns = -1;
+	int64_t output_event = LWIS_EVENT_ID_NONE;
 	unsigned long flags;
 
 	const int total_entries = info->num_io_entries;
@@ -408,10 +409,13 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 	}
 
 	if (pending_events) {
-		lwis_pending_event_push(pending_events,
-					resp->error_code ? info->emit_error_event_id :
-							   info->emit_success_event_id,
-					(void *)resp, resp_size);
+		output_event =
+			resp->error_code ? info->emit_error_event_id : info->emit_success_event_id;
+		/* Check to make sure an output event has been specified. */
+		if (output_event != LWIS_EVENT_ID_NONE) {
+			lwis_pending_event_push(pending_events, output_event, (void *)resp,
+						resp_size);
+		}
 	} else {
 		/* No pending events indicates it's cleanup io_entries. */
 		if (entry && resp->error_code) {
@@ -484,8 +488,11 @@ static void cancel_transaction(struct lwis_device *lwis_dev, struct lwis_transac
 	}
 
 	if (pending_events) {
-		lwis_pending_event_push(pending_events, info->emit_error_event_id, &resp,
-					sizeof(resp));
+		/* Check to make sure an error event has been specified. */
+		if (info->emit_error_event_id != LWIS_EVENT_ID_NONE) {
+			lwis_pending_event_push(pending_events, info->emit_error_event_id, &resp,
+						sizeof(resp));
+		}
 	}
 	if (pending_fences) {
 		/*
