@@ -520,8 +520,9 @@ struct gs_panel_funcs {
 	 * @update_ffc
 	 *
 	 * This callback is used to update FFC (Frame Frequency Control) for panel.
+	 * The unit of DSI HS clock is megabits per second.
 	 */
-	void (*update_ffc)(struct gs_panel *gs_panel, unsigned int hs_clk);
+	void (*update_ffc)(struct gs_panel *gs_panel, unsigned int hs_clk_mbps);
 
 	/**
 	 * @pre_update_ffc
@@ -717,8 +718,8 @@ struct gs_panel_desc {
 	const int reset_timing_ms[PANEL_RESET_TIMING_COUNT];
 	const struct gs_panel_reg_ctrl_desc *reg_ctrl_desc;
 	struct gs_display_stats_desc *stats_desc;
-	/** @default_dsi_hs_clk: default MIPI DSI HS clock (Hz) */
-	u32 default_dsi_hs_clk;
+	/** @default_dsi_hs_clk_mbps: default MIPI DSI HS clock (megabits per second) */
+	u32 default_dsi_hs_clk_mbps;
 };
 
 /* PRIV DATA */
@@ -1070,8 +1071,8 @@ struct gs_panel {
 	/* LHBM struct */
 	struct gs_local_hbm lhbm;
 
-	/** @dsi_hs_clk: current MIPI DSI HS clock (Hz) */
-	u32 dsi_hs_clk;
+	/** @dsi_hs_clk_mbps: current MIPI DSI HS clock (megabits per second) */
+	u32 dsi_hs_clk_mbps;
 	/* ACL mode */
 	enum gs_acl_mode acl_mode;
 	/* refresh ctrl settings */

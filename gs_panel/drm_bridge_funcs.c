@@ -197,7 +197,7 @@ static void gs_panel_bridge_enable(struct drm_bridge *bridge,
 
 	if (gs_panel_has_func(ctx, update_ffc) &&
 	    (!ctx->idle_data.self_refresh_active || gs_conn_state->dsi_hs_clk_changed))
-		ctx->desc->gs_panel_func->update_ffc(ctx, gs_conn_state->dsi_hs_clk);
+		ctx->desc->gs_panel_func->update_ffc(ctx, gs_conn_state->dsi_hs_clk_mbps);
 
 	if (ctx->idle_data.self_refresh_active) {
 		dev_dbg(ctx->dev, "self refresh state : %s\n", __func__);
@@ -419,7 +419,7 @@ static void gs_panel_bridge_disable(struct drm_bridge *bridge,
 		mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
 		if (gs_panel_has_func(ctx, pre_update_ffc) &&
-		    (gs_conn_state->dsi_hs_clk_changed || gs_conn_state->pending_dsi_hs_clk))
+		    (gs_conn_state->dsi_hs_clk_changed || gs_conn_state->pending_dsi_hs_clk_mbps))
 			ctx->desc->gs_panel_func->pre_update_ffc(ctx);
 	} else {
 		if (gs_conn_state->blanked_mode) {

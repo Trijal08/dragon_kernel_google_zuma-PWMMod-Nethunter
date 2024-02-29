@@ -144,14 +144,13 @@ struct gs_drm_connector_state {
 	/* @update_operation_rate_to_bts: update panel operation rate to BTS requirement */
 	bool update_operation_rate_to_bts;
 
-	/* TODO(b/318876121): rename the variables and correct the unit */
-	/** @dsi_hs_clk: current MIPI DSI HS clock (Mbps) */
-	u32 dsi_hs_clk;
+	/** @dsi_hs_clk_mbps: current MIPI DSI HS clock (megabits per second) */
+	u32 dsi_hs_clk_mbps;
 	/**
-	 * @pending_dsi_hs_clk: pending MIPI DSI HS clock (Mbps)
+	 * @pending_dsi_hs_clk_mbps: pending MIPI DSI HS clock (megabits per second)
 	 * A non-zero value means the clock hasn't been set.
 	 */
-	u32 pending_dsi_hs_clk;
+	u32 pending_dsi_hs_clk_mbps;
 	/**
 	 * @dsi_hs_clk_changed: indicates the MIPI DSI HS clock has been changed
 	 * so that the specific settings can be updated accordingly.

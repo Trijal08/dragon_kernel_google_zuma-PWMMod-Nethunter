@@ -1444,8 +1444,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	INIT_WORK(&ctx->notify_brightness_changed_work, notify_brightness_changed_worker);
 
 	/* DSI HS Clock */
-	if (ctx->desc->default_dsi_hs_clk)
-		ctx->dsi_hs_clk = ctx->desc->default_dsi_hs_clk;
+	if (ctx->desc->default_dsi_hs_clk_mbps)
+		ctx->dsi_hs_clk_mbps = ctx->desc->default_dsi_hs_clk_mbps;
 
 	/* Initialize mutexes */
 	/*TODO(b/267170999): all*/
