@@ -1488,7 +1488,7 @@ void ical_state_init_cal(struct goog_touch_interface *gti, u32 next_state,
 	int pm_ret = 0;
 	u32 ret;
 
-	pm_ret = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS, true);
+	pm_ret = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS, false);
 	if (pm_ret < 0 && gti->tbn_enabled) {
 		GOOG_ERR(gti, "ical - error: invalid touch bus access!\n");
 		gti->ical_state = ICAL_STATE_IDLE;
@@ -1594,7 +1594,7 @@ void ical_state_init_test(struct goog_touch_interface *gti, u32 next_state,
 	int pm_ret = 0;
 	u32 ret;
 
-	pm_ret = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS, true);
+	pm_ret = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS, false);
 	if (pm_ret < 0 && gti->tbn_enabled) {
 		GOOG_ERR(gti, "ical - error: invalid touch bus access!\n");
 		gti->ical_state = ICAL_STATE_IDLE;
@@ -1707,7 +1707,7 @@ void ical_state_init_reset(struct goog_touch_interface *gti, u32 next_state,
 	int pm_ret = 0;
 	u32 ret;
 
-	pm_ret = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS, true);
+	pm_ret = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SYSFS, false);
 	if (pm_ret < 0 && gti->tbn_enabled) {
 		GOOG_ERR(gti, "ical - error: invalid touch bus access!\n");
 		gti->ical_state = ICAL_STATE_IDLE;
