@@ -152,3 +152,12 @@ Contact: "Gil Liu" <gilliu@google.com>
 Description:
   Userspace client can activate SSC mode to control dynamic OSC clock SSC(Spread Spectrum Clocking).
   This sysfs node by control by RIL team and desense team to avoid signal interference.
+
+What:		/sys/devices/platform/exynos-drm/<panel>/te_info
+Date:		December, 2024
+KernelVersion:	6.1
+Contact:	"Chris Lu" <luchris@google.com>
+Description:
+		This file provides the TE frequency and option (fixed/changeable).
+
+		Valid panels are 'primary-panel' or 'secondary-panel'.
