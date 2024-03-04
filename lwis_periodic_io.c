@@ -534,7 +534,9 @@ int lwis_periodic_io_client_flush(struct lwis_client *client)
 			periodic_io->active = false;
 		}
 		it_periodic_io_list->hr_timer_state = LWIS_HRTIMER_INACTIVE;
+		spin_unlock_irqrestore(&client->periodic_io_lock, flags);
 		hrtimer_cancel(&it_periodic_io_list->hr_timer);
+		spin_lock_irqsave(&client->periodic_io_lock, flags);
 	}
 	spin_unlock_irqrestore(&client->periodic_io_lock, flags);
 
