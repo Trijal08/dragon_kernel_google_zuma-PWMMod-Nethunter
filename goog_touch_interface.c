@@ -43,6 +43,7 @@ void goog_notify_lptw_triggered(struct TbnLptwEvent* lptw, void* data);
 void goog_notify_lptw_left(void* data);
 void goog_track_lptw_slot(struct goog_touch_interface *gti, u16 x, u16 y, int slot_bit);
 #endif
+static void gti_input_set_timestamp(struct goog_touch_interface *gti, ktime_t timestamp);
 
 /*-----------------------------------------------------------------------------
  * GTI/proc: forward declarations, structures and functions.
@@ -917,7 +918,7 @@ static ssize_t gesture_config_store(struct device *dev,
 			gti->cmd.gesture_config_cmd.updating_params[i] = 1;
 			retval = goog_process_vendor_cmd(gti, GTI_CMD_SET_GESTURE_CONFIG);
 			if (retval) {
-				GOOG_ERR(gti, "failed to set param %s, ret = %d!\n",
+				GOOG_ERR(gti, "Fail to set param %s, ret = %d!\n",
 						gesture_params_list[i], retval);
 				retval = -EBADRQC;
 				goto exit;
@@ -2408,7 +2409,7 @@ int goog_get_panel_id(struct device_node *node)
 		err = of_parse_phandle_with_fixed_args(
 			node, "goog,panel_map", 1, index, &panelmap);
 		if (err) {
-			pr_warn("%s: failed to find panel for index: %d!\n", __func__, index);
+			pr_warn("%s: Fail to find panel for index: %d!\n", __func__, index);
 			break;
 		}
 
@@ -2435,7 +2436,7 @@ int goog_get_firmware_name(struct device_node *node, int id, char *name, size_t 
 		strlcpy(name, fw_name, size);
 		pr_info("%s: found firmware name: %s\n", __func__, name);
 	} else {
-		pr_warn("%s: failed to find firmware name!\n", __func__);
+		pr_warn("%s: Fail to find firmware name!\n", __func__);
 	}
 	return err;
 }
@@ -2451,7 +2452,7 @@ int goog_get_config_name(struct device_node *node, int id, char *name, size_t si
 		strncpy(name, config_name, size);
 		pr_info("%s: found config name: %s\n", __func__, name);
 	} else {
-		pr_warn("%s: failed to find config name!\n", __func__);
+		pr_warn("%s: Fail to find config name!\n", __func__);
 	}
 	return err;
 }
@@ -2467,7 +2468,7 @@ int goog_get_test_limits_name(struct device_node *node, int id, char *name, size
 		strncpy(name, limits_name, size);
 		pr_info("%s: found test limits name: %s\n", __func__, name);
 	} else {
-		pr_warn("%s: failed to find test limits name!\n", __func__);
+		pr_warn("%s: Fail to find test limits name!\n", __func__);
 	}
 	return err;
 }
@@ -2894,20 +2895,20 @@ static int goog_get_sensor_data(struct goog_touch_interface *gti,
 
 	err = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_SENSOR_DATA, true);
 	if (err < 0) {
-		GOOG_WARN(gti, "Failed to lock GTI_PM_WAKELOCK_TYPE_SENSOR_DATA: %d!\n", err);
+		GOOG_WARN(gti, "Fail to lock GTI_PM_WAKELOCK_TYPE_SENSOR_DATA: %d!\n", err);
 		ret = err;
 		goto exit;
 	}
 
 	err = goog_process_vendor_cmd(gti, GTI_CMD_GET_SENSOR_DATA);
 	if (err < 0) {
-		GOOG_WARN(gti, "Failed to get sensor data: %d!\n", err);
+		GOOG_WARN(gti, "Fail to get sensor data: %d!\n", err);
 		ret = err;
 	}
 
 	err = goog_pm_wake_unlock(gti, GTI_PM_WAKELOCK_TYPE_SENSOR_DATA);
 	if (err < 0)
-		GOOG_WARN(gti, "Failed to unlock GTI_PM_WAKELOCK_TYPE_SENSOR_DATA: %d!\n", err);
+		GOOG_WARN(gti, "Fail to unlock GTI_PM_WAKELOCK_TYPE_SENSOR_DATA: %d!\n", err);
 
 exit:
 	return ret;
@@ -2916,7 +2917,6 @@ exit:
 void goog_offload_populate_frame(struct goog_touch_interface *gti,
 		struct touch_offload_frame *frame, bool reset_data)
 {
-	static u64 index;
 	char trace_tag[128];
 	u32 channel_type;
 	int i;
@@ -2924,10 +2924,10 @@ void goog_offload_populate_frame(struct goog_touch_interface *gti,
 	struct gti_sensor_data_cmd *cmd = &gti->cmd.sensor_data_cmd;
 
 	scnprintf(trace_tag, sizeof(trace_tag), "%s: IDX=%llu IN_TS=%lld.\n",
-		__func__, index, gti->input_timestamp);
+		__func__, gti->frame_index, gti->input_timestamp);
 	ATRACE_BEGIN(trace_tag);
 
-	frame->header.index = index++;
+	frame->header.index = gti->frame_index;
 	frame->header.timestamp = gti->input_timestamp;
 
 	/*
@@ -2968,7 +2968,7 @@ void goog_offload_populate_frame(struct goog_touch_interface *gti,
 			cmd->type = GTI_SENSOR_DATA_TYPE_MS;
 			ret = goog_get_sensor_data(gti, cmd, reset_data);
 			if (ret) {
-				GOOG_LOGW(gti, "fail to get data(type %#x, ret %d)!\n",
+				GOOG_LOGW(gti, "Fail to get data(type %#x, ret %d)!\n",
 					cmd->type, ret);
 				cmd->buffer = NULL;
 			}
@@ -2983,7 +2983,7 @@ void goog_offload_populate_frame(struct goog_touch_interface *gti,
 			cmd->type = GTI_SENSOR_DATA_TYPE_SS;
 			ret = goog_get_sensor_data(gti, cmd, reset_data);
 			if (ret) {
-				GOOG_LOGW(gti, "fail to get data(type %#x, ret %d)!\n",
+				GOOG_LOGW(gti, "Fail to get data(type %#x, ret %d)!\n",
 					cmd->type, ret);
 				cmd->buffer = NULL;
 			}
@@ -3070,20 +3070,20 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 	gti->cmd.screen_protector_mode_cmd.setting = gti->screen_protector_mode_setting;
 	ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_SCREEN_PROTECTOR_MODE);
 	if (ret != 0)
-		GOOG_ERR(gti, "Failed to %s screen protector mode!\n",
+		GOOG_ERR(gti, "Fail to %s screen protector mode!\n",
 			gti->screen_protector_mode_setting == GTI_SCREEN_PROTECTOR_MODE_ENABLE ?
 			"enable" : "disable");
 
 	gti->cmd.heatmap_cmd.setting = GTI_HEATMAP_ENABLE;
 	ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_HEATMAP_ENABLED);
 	if (ret != 0)
-		GOOG_ERR(gti, "Failed to enable heatmap!\n");
+		GOOG_ERR(gti, "Fail to enable heatmap!\n");
 
 	if (gti->vrr_enabled) {
 		gti->cmd.report_rate_cmd.setting = gti->report_rate_setting_next;
 		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_REPORT_RATE);
 		if (ret != 0)
-			GOOG_ERR(gti, "Failed to set report rate!\n");
+			GOOG_ERR(gti, "Fail to set report rate!\n");
 	}
 
 
@@ -3106,7 +3106,7 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 
 		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_GESTURE_CONFIG);
 		if (ret != 0)
-			GOOG_ERR(gti, "Failed to set gesture configs!\n");
+			GOOG_ERR(gti, "Fail to set gesture configs!\n");
 	}
 
 	/*
@@ -3128,8 +3128,8 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 static void goog_offload_set_running(struct goog_touch_interface *gti, bool running)
 {
 	if (gti->offload.offload_running != running) {
-		GOOG_INFO(gti, "Set offload_running=%d, irq_index=%llu, input_index=%llu\n",
-			running, gti->irq_index, gti->input_index);
+		GOOG_INFO(gti, "Set offload_running=%d irq_index=%llu input_index=%llu IDX=%llu\n",
+			running, gti->irq_index, gti->input_index, gti->frame_index);
 
 		gti->offload.offload_running = running;
 
@@ -3154,6 +3154,7 @@ static void goog_report_lptw_cancel(struct goog_touch_interface *gti,
 	GOOG_INFO(gti, "Report LPTW cancel coord, slot: %#lx.", slot_bit_cancel);
 
 	goog_input_lock(gti);
+	gti_input_set_timestamp(gti, ktime_get());
 	for (i = 0; i < MAX_SLOTS; i++) {
 		if (!test_bit(i, &slot_bit_cancel))
 			continue;
@@ -3225,10 +3226,9 @@ void goog_offload_input_report(void *handle,
 	unsigned long slot_bit_cancel = 0;
 	char trace_tag[128];
 	ktime_t ktime = ktime_get();
-	ktime_t *input_ktime;
 
 	scnprintf(trace_tag, sizeof(trace_tag),
-		"%s: IDX=%lld IN_TS=%lld TS=%lld DELTA=%lld ns.\n",
+		"%s: IDX=%llu IN_TS=%lld TS=%lld DELTA=%lld ns.\n",
 		__func__, report->index,
 		ktime_to_ns(report->timestamp), ktime_to_ns(ktime),
 		ktime_to_ns(ktime_sub(ktime, report->timestamp)));
@@ -3239,20 +3239,18 @@ void goog_offload_input_report(void *handle,
 
 	goog_input_lock(gti);
 
-	input_ktime = goog_input_get_timestamp(gti);
-	if (input_ktime &&
-		ktime_before(report->timestamp, input_ktime[INPUT_CLK_MONO])) {
-		GOOG_WARN(gti, "Drop obsolete input(IDX=%lld IN_TS=%lld TS=%lld DELTA=%lld ns)!\n",
+	if (ktime_before(report->timestamp, gti->input_dev_mono_ktime)) {
+		GOOG_WARN(gti, "Drop obsolete input(IDX=%llu IN_TS=%lld TS=%lld DELTA=%lld ns)!\n",
 			report->index,
 			ktime_to_ns(report->timestamp),
-			ktime_to_ns(input_ktime[INPUT_CLK_MONO]),
-			ktime_to_ns(ktime_sub(input_ktime[INPUT_CLK_MONO], report->timestamp)));
+			ktime_to_ns(gti->input_dev_mono_ktime),
+			ktime_to_ns(ktime_sub(gti->input_dev_mono_ktime, report->timestamp)));
 		goog_input_unlock(gti);
 		ATRACE_END();
 		return;
 	}
 
-	input_set_timestamp(gti->vendor_input_dev, report->timestamp);
+	gti_input_set_timestamp(gti, report->timestamp);
 	for (i = 0; i < MAX_SLOTS; i++) {
 		if (report->coords[i].status != COORD_STATUS_INACTIVE) {
 			switch (report->coords[i].status) {
@@ -3330,17 +3328,6 @@ void goog_offload_input_report(void *handle,
 	}
 	input_report_key(gti->vendor_input_dev, BTN_TOUCH, touch_down);
 	input_sync(gti->vendor_input_dev);
-
-	if ((slot_bit_active ^ gti->slot_bit_active) != 0) {
-		if (gti->slot_bit_last_active != gti->slot_bit_active ||
-				gti->slot_bit_offload_active != slot_bit_active)
-			GOOG_WARN(gti, "Unexpected fingers FW: %lu offload: %lu",
-					hweight_long(gti->slot_bit_active),
-					hweight_long(slot_bit_active));
-	}
-	gti->slot_bit_last_active = gti->slot_bit_active;
-	gti->slot_bit_offload_active = slot_bit_active;
-
 	goog_input_unlock(gti);
 
 	if (touch_down)
@@ -3438,7 +3425,7 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 
 		offload_ids_array = devm_kzalloc(gti->vendor_dev, offload_ids_size, GFP_KERNEL);
 		if (offload_ids_array == NULL) {
-			GOOG_WARN(gti, "Failed to alloc offload_ids_array");
+			GOOG_WARN(gti, "Fail to alloc offload_ids_array");
 			err = -ENOMEM;
 		} else {
 			err = of_property_read_u8_array(np, "goog,touch_offload_ids",
@@ -3452,7 +3439,7 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 					err = -EINVAL;
 				}
 			} else {
-				GOOG_WARN(gti, "Failed to read touch_offload_ids");
+				GOOG_WARN(gti, "Fail to read touch_offload_ids");
 			}
 		}
 	} else {
@@ -3601,7 +3588,7 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 	gti->charger_notifier.notifier_call = gti_charger_state_change;
 	ret = power_supply_reg_notifier(&gti->charger_notifier);
 	if (ret) {
-		GOOG_ERR(gti, "Failed to register power_supply_reg_notifier!\n");
+		GOOG_ERR(gti, "Fail to register power_supply_reg_notifier!\n");
 		goto err_offload_probe;
 	}
 
@@ -3632,7 +3619,7 @@ static void goog_input_flush_offload_fingers(struct goog_touch_interface *gti)
 		GOOG_WARN(gti, "No timestamp set by vendor driver before input report!");
 		timestamp = ktime_get();
 	}
-	input_set_timestamp(gti->vendor_input_dev, timestamp);
+	gti_input_set_timestamp(gti, timestamp);
 	for (i = 0; i < MAX_SLOTS; i++) {
 		input_mt_slot(gti->vendor_input_dev, i);
 		if (coords[i].status != COORD_STATUS_INACTIVE) {
@@ -3662,22 +3649,6 @@ static void goog_input_flush_offload_fingers(struct goog_touch_interface *gti)
 	goog_input_unlock(gti);
 }
 
-ktime_t *goog_input_get_timestamp(struct goog_touch_interface *gti)
-{
-	struct input_dev *dev;
-	const ktime_t invalid_timestamp = ktime_set(0, 0);
-
-	if (!gti || !gti->vendor_input_dev)
-		return NULL;
-
-	dev = gti->vendor_input_dev;
-	if (!ktime_compare(dev->timestamp[INPUT_CLK_MONO], invalid_timestamp))
-		return NULL;
-
-	return dev->timestamp;
-}
-EXPORT_SYMBOL_GPL(goog_input_get_timestamp);
-
 int goog_input_process(struct goog_touch_interface *gti, bool reset_data)
 {
 	int ret = 0;
@@ -3693,6 +3664,7 @@ int goog_input_process(struct goog_touch_interface *gti, bool reset_data)
 		return -EPERM;
 
 	mutex_lock(&gti->input_process_lock);
+	gti->frame_index++;
 
 	/*
 	 * Increase the input index when any slot bit changed which
@@ -3715,7 +3687,8 @@ int goog_input_process(struct goog_touch_interface *gti, bool reset_data)
 		if (ret != 0 || frame == NULL) {
 			if (gti->offload.offload_running && gti->debug_warning_limit) {
 				gti->debug_warning_limit--;
-				GOOG_WARN(gti, "failed to reserve a frame(ret %d)!\n", ret);
+				GOOG_WARN(gti, "Fail to reserve frame, ret=%d IDX=%llu!\n",
+					ret, gti->frame_index);
 			}
 			goog_offload_set_running(gti, false);
 			ret = -EBUSY;
@@ -3726,7 +3699,8 @@ int goog_input_process(struct goog_touch_interface *gti, bool reset_data)
 			goog_offload_populate_frame(gti, *frame, reset_data);
 			ret = touch_offload_queue_frame(&gti->offload, *frame);
 			if (ret) {
-				GOOG_WARN(gti, "failed to queue reserved frame(ret %d)!\n", ret);
+				GOOG_WARN(gti, "Fail to queue frame, ret=%d IDX=%llu!\n",
+					ret, gti->frame_index);
 			} else {
 				gti->offload_frame = NULL;
 				input_flush = false;
@@ -3942,7 +3916,7 @@ void goog_register_tbn(struct goog_touch_interface *gti)
 	gti->tbn_enabled = of_property_read_bool(np, "goog,tbn-enabled");
 	if (gti->tbn_enabled) {
 		if (register_tbn(&gti->tbn_register_mask)) {
-			GOOG_ERR(gti, "failed to register tbn context!\n");
+			GOOG_ERR(gti, "Fail to register tbn context!\n");
 			gti->tbn_enabled = false;
 		} else {
 			GOOG_INFO(gti, "tbn_register_mask = %#x.\n", gti->tbn_register_mask);
@@ -4754,7 +4728,7 @@ static void goog_set_report_rate_work(struct work_struct *work)
 	gti->cmd.report_rate_cmd.setting = gti->report_rate_setting_next;
 	ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_REPORT_RATE);
 	if (ret != 0) {
-		GOOG_ERR(gti, "Failed to set report rate!\n");
+		GOOG_ERR(gti, "Fail to set report rate!\n");
 		return;
 	}
 
@@ -4802,13 +4776,13 @@ static int goog_init_variable_report_rate(struct goog_touch_interface *gti)
 
 	if (of_property_read_u32_array(gti->vendor_dev->of_node, "goog,vrr-display-rate",
 			gti->display_refresh_rate_table, table_size)) {
-		GOOG_ERR(gti, "Failed to parse goog,display-vrr-table.\n");
+		GOOG_ERR(gti, "Fail to parse goog,display-vrr-table.\n");
 		goto init_variable_report_rate_failed;
 	}
 
 	if (of_property_read_u32_array(gti->vendor_dev->of_node, "goog,vrr-touch-rate",
 			gti->touch_report_rate_table, table_size)) {
-		GOOG_ERR(gti, "Failed to parse goog,touch-vrr-table.\n");
+		GOOG_ERR(gti, "Fail to parse goog,touch-vrr-table.\n");
 		goto init_variable_report_rate_failed;
 	}
 
@@ -4892,6 +4866,14 @@ void goog_track_lptw_slot(struct goog_touch_interface *gti, u16 x, u16 y, int sl
 	}
 }
 #endif
+
+static void gti_input_set_timestamp(struct goog_touch_interface *gti, ktime_t timestamp)
+{
+	if (gti) {
+		input_set_timestamp(gti->vendor_input_dev, timestamp);
+		gti->input_dev_mono_ktime = timestamp;
+	}
+}
 
 static irqreturn_t gti_irq_handler(int irq, void *data)
 {
@@ -5044,7 +5026,7 @@ struct goog_touch_interface *goog_touch_interface_probe(
 		gti->event_wq = alloc_workqueue(
 			"gti_wq", WQ_UNBOUND | WQ_HIGHPRI | WQ_CPU_INTENSIVE, 1);
 		if (!gti->event_wq) {
-			GOOG_ERR(gti, "Failed to create work thread for gti!\n");
+			GOOG_ERR(gti, "Fail to create work thread for gti!\n");
 			return NULL;
 		}
 	}
