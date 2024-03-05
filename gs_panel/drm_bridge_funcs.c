@@ -347,7 +347,7 @@ static void gs_panel_bridge_mode_set(struct drm_bridge *bridge, const struct drm
 	dsi->mode_flags = pmode->gs_mode.mode_flags;
 	ctx->timestamps.last_mode_set_ts = ktime_get();
 
-	/* TODO(tknelms) DPU_ATRACE_BEGIN(__func__); */
+	PANEL_ATRACE_BEGIN(__func__);
 	if (funcs) {
 		const bool is_active = gs_is_panel_active(ctx);
 		const bool was_lp_mode = old_mode && old_mode->gs_mode.is_lp_mode;
@@ -395,9 +395,7 @@ static void gs_panel_bridge_mode_set(struct drm_bridge *bridge, const struct drm
 		backlight_update_status(ctx->bl);
 
 	PANEL_ATRACE_INT("panel_fps", drm_mode_vrefresh(mode));
-	/* TODO(tknelms)
-	DPU_ATRACE_END(__func__);
-	*/
+	PANEL_ATRACE_END(__func__);
 }
 
 static void gs_panel_bridge_disable(struct drm_bridge *bridge,
