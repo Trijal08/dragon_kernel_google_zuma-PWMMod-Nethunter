@@ -530,6 +530,16 @@ struct gs_panel_funcs {
 	 * This callback is used to do something before updating FFC for panel.
 	 */
 	void (*pre_update_ffc)(struct gs_panel *gs_panel);
+
+	/**
+	 * @rr_need_te_high
+	 *
+	 * check if a panel needs for rr commands to be sent
+	 * during a TE high window
+	 *
+	 * @pmode: mode that panel is transitioning to
+	 */
+	bool (*rr_need_te_high)(struct gs_panel *gs_panel, const struct gs_panel_mode *pmode);
 };
 
 /* PANEL DESC */
