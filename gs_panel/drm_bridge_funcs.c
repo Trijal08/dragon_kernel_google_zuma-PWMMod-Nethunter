@@ -23,6 +23,13 @@
 
 #define bridge_to_gs_panel(b) container_of((b), struct gs_panel, bridge)
 
+#ifndef DISPLAY_PANEL_INDEX_PRIMARY
+#define DISPLAY_PANEL_INDEX_PRIMARY 0
+#endif
+#ifndef DISPLAY_PANEL_INDEX_SECONDARY
+#define DISPLAY_PANEL_INDEX_SECONDARY 1
+#endif
+
 static unsigned long get_backlight_state_from_panel(struct backlight_device *bl,
 						    enum gs_panel_state panel_state)
 {
@@ -77,16 +84,16 @@ void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state pane
 
 static const char *gs_panel_get_sysfs_name(struct gs_panel *ctx)
 {
-	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
-	const char *p = !IS_ERR(dsi) ? dsi->name : NULL;
-
-	if (p == NULL || p[1] != ':' || p[0] == '0')
+	switch (ctx->gs_connector->panel_index) {
+	case DISPLAY_PANEL_INDEX_PRIMARY:
 		return "primary-panel";
-	if (p[0] == '1')
+	case DISPLAY_PANEL_INDEX_SECONDARY:
 		return "secondary-panel";
-
-	dev_err(ctx->dev, "unsupported dsi device name %s\n", dsi->name);
-	return "primary-panel";
+	default:
+		dev_warn(ctx->dev, "Unsupported panel_index value %d\n",
+			 ctx->gs_connector->panel_index);
+		return "primary-panel";
+	}
 }
 
 void gs_panel_node_attach(struct gs_drm_connector *gs_connector)

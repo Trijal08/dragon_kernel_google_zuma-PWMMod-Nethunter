@@ -1272,10 +1272,9 @@ static int gs_panel_init_backlight(struct gs_panel *ctx)
 {
 	struct device *dev = ctx->dev;
 	char name[32];
-	static atomic_t panel_index = ATOMIC_INIT(-1);
 
 	/* Backlight */
-	scnprintf(name, sizeof(name), "panel%d-backlight", atomic_inc_return(&panel_index));
+	scnprintf(name, sizeof(name), "panel%d-backlight", ctx->gs_connector->panel_index);
 	ctx->bl = devm_backlight_device_register(dev, name, dev, ctx, &gs_backlight_ops, NULL);
 	if (IS_ERR(ctx->bl)) {
 		dev_err(dev, "failed to register backlight device\n");
