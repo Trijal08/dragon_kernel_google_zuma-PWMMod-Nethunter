@@ -795,6 +795,7 @@ struct gti_pm {
  * @proc_heatmap: struct that used for heatmap procfs.
  * @set_op_hz_work: a work to set op_hz.
  * @event_wq: a work queue to run suspend/resume work.
+ * @input_dev_mono_ktime: input timestamp used by input dev and input subsystem.
  * @input_timestamp: input timestamp from touch vendor driver.
  * @mf_downtime: timestamp for motion filter control.
  * @display_vrefresh: display vrefresh in Hz.
@@ -849,8 +850,6 @@ struct gti_pm {
  * @slot_bit_in_use: bitmap of slot in use for this input process cycle.
  * @slot_bit_changed: bitmap of slot state changed for this input process cycle.
  * @slot_bit_active: bitmap of active slot during GTI lifecycle.
- * @slot_bit_last_active: bitmap of last active slot when reporting offload inputs.
- * @slot_bit_offload_active: bitmap of active slot from offload.
  * @slot_bit_lptw_track: bitmap of lptw suppressed fingers.
  * @panel_op_hz: the operating rate of display panel.
  * @dev_id: dev_t used for google interface driver.
@@ -862,6 +861,7 @@ struct gti_pm {
  * @ical_timestamp_ns: time of last interactive calibration state transition.
  * @ical_result: interactive calibration FSM result.
  * @ical_func_result: result returned from the requested interactive function.
+ * @frame_index: the count that handle by goog_input_process().
  * @irq_index: irq count that handle by GTI.
  * @input_index: the count of slot bit changed during goog_input_process().
  * @vendor_irq_handler: irq handler that register by vendor driver.
@@ -895,6 +895,7 @@ struct goog_touch_interface {
 	struct proc_dir_entry *proc_show[GTI_PROC_NUM];
 	struct work_struct set_op_hz_work;
 	struct workqueue_struct *event_wq;
+	ktime_t input_dev_mono_ktime;
 	ktime_t input_timestamp;
 	ktime_t mf_downtime;
 
@@ -966,8 +967,6 @@ struct goog_touch_interface {
 	unsigned long slot_bit_in_use;
 	unsigned long slot_bit_changed;
 	unsigned long slot_bit_active;
-	unsigned long slot_bit_last_active;
-	unsigned long slot_bit_offload_active;
 	unsigned long slot_bit_lptw_track;
 	unsigned int panel_op_hz;
 	dev_t dev_id;
@@ -986,6 +985,7 @@ struct goog_touch_interface {
 	s32 ical_result;
 	s32 ical_func_result;
 
+	u64 frame_index;
 	u64 irq_index;
 	u64 input_index;
 	irq_handler_t vendor_irq_handler;
