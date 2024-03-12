@@ -22,6 +22,7 @@ ddk_headers(
     ],
     visibility = [
         "//private/devices/google:__subpackages__",
+        "//private/google-modules/display/panels:__subpackages__",
         "//private/google-modules/touch:__subpackages__",
     ],
 )
