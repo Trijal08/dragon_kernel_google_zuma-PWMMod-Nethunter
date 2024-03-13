@@ -521,6 +521,7 @@ static int gs_panel_connector_attach_properties(struct gs_panel *ctx)
 	drm_object_attach_property(obj, p->panel_orientation, ctx->orientation);
 	drm_object_attach_property(obj, p->rr_switch_duration, desc->rr_switch_duration);
 	drm_object_attach_property(obj, p->operation_rate, 0);
+	drm_object_attach_property(obj, p->refresh_on_lp, desc->refresh_on_lp);
 
 	if (desc->brightness_desc->brt_capability) {
 		ret = gs_panel_attach_brightness_capability(ctx->gs_connector,
