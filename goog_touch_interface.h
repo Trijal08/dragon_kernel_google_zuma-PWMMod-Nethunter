@@ -588,6 +588,8 @@ struct gti_sensor_data_cmd {
 	enum gti_sensor_data_type type;
 	u8 *buffer;
 	u32 size;
+	/* Set by vendor driver and the default value is false */
+	bool is_unsigned;
 };
 
 /**
