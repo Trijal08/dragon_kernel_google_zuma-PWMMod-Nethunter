@@ -30,6 +30,7 @@
 #include "lwis_event.h"
 #include "lwis_fence.h"
 #include "lwis_i2c.h"
+#include "lwis_io_buffer.h"
 #include "lwis_io_entry.h"
 #include "lwis_ioreg.h"
 #include "lwis_periodic_io.h"
@@ -229,6 +230,9 @@ static int synchronous_process_io_entries(struct lwis_device *lwis_dev, int num_
 		case LWIS_IO_ENTRY_READ_ASSERT:
 			ret = lwis_io_entry_read_assert(lwis_dev, &io_entries[i]);
 			break;
+		case LWIS_IO_ENTRY_WRITE_TO_BUFFER:
+			ret = lwis_io_buffer_write(lwis_dev, &io_entries[i]);
+			break;
 		default:
 			dev_err(lwis_dev->dev, "Unknown io_entry operation\n");
 			ret = -EINVAL;
@@ -305,6 +309,88 @@ static int construct_io_entry(struct lwis_client *client, struct lwis_io_entry *
 					"Failed to copy io write buffer from userspace\n");
 				goto error_free_buf;
 			}
+		} else if (k_entries[i].type == LWIS_IO_ENTRY_WRITE_TO_BUFFER) {
+			struct dma_buf *dma_buffer = dma_buf_get(k_entries[i].write_to_buffer.fd);
+			struct iosys_map *sys_map = NULL;
+			uint8_t *k_bytes_from_userspace = NULL;
+
+			if (IS_ERR(dma_buffer)) {
+				dev_err(lwis_dev->dev,
+					"PDMA buffer IO failed because dma_buf_get failed");
+				ret = -EFAULT;
+				goto error_free_buf;
+			}
+
+			sys_map = kmalloc(sizeof(struct iosys_map), GFP_KERNEL);
+			if (!sys_map) {
+				dev_err(lwis_dev->dev,
+					"PDMA buffer IO failed because kmalloc failed for sys_map");
+				dma_buf_put(dma_buffer);
+				ret = -EFAULT;
+				goto error_free_buf;
+			}
+
+			k_bytes_from_userspace =
+				kmalloc(k_entries[i].write_to_buffer.size_in_bytes, GFP_KERNEL);
+			if (!k_bytes_from_userspace) {
+				dev_err(lwis_dev->dev,
+					"PDMA buffer IO failed because kmalloc failed for k_bytes_from_userspace");
+				dma_buf_put(dma_buffer);
+				ret = -EFAULT;
+				kfree(sys_map);
+				goto error_free_buf;
+			}
+
+			if (copy_from_user(k_bytes_from_userspace,
+					   (void __user *)(k_entries[i].write_to_buffer.bytes),
+					   k_entries[i].write_to_buffer.size_in_bytes)) {
+				dev_err(lwis_dev->dev,
+					"PDMA buffer IO failed because bytes cannot be copied from user space");
+				dma_buf_put(dma_buffer);
+				ret = -EFAULT;
+				kfree(sys_map);
+				kfree(k_bytes_from_userspace);
+				goto error_free_buf;
+			}
+			k_entries[i].write_to_buffer.bytes = k_bytes_from_userspace;
+
+			if (dma_buf_vmap(dma_buffer, sys_map) < 0) {
+				dev_err(lwis_dev->dev, "PDMA buffer IO failed because vmap failed");
+				dma_buf_put(dma_buffer);
+				ret = -EFAULT;
+				kfree(sys_map);
+				kfree(k_bytes_from_userspace);
+				goto error_free_buf;
+			}
+
+			if (dma_buf_begin_cpu_access(dma_buffer, DMA_BIDIRECTIONAL) < 0) {
+				dev_err(lwis_dev->dev,
+					"PDMA buffer IO failed because CPU cannot have access to the buffer");
+				dma_buf_vunmap(dma_buffer, sys_map);
+				dma_buf_put(dma_buffer);
+				ret = -EFAULT;
+				kfree(sys_map);
+				kfree(k_bytes_from_userspace);
+				goto error_free_buf;
+			}
+			k_entries[i].write_to_buffer.buffer =
+				kmalloc(sizeof(struct pdma_buffer), GFP_KERNEL);
+
+			if (!k_entries[i].write_to_buffer.buffer) {
+				dev_err(lwis_dev->dev,
+					"PDMA buffer IO failed because kmalloc failed for k_entries[i].write_to_buffer.buffer");
+				dma_buf_end_cpu_access(dma_buffer, DMA_BIDIRECTIONAL);
+				dma_buf_vunmap(dma_buffer, sys_map);
+				dma_buf_put(dma_buffer);
+				ret = -EFAULT;
+				kfree(sys_map);
+				kfree(k_bytes_from_userspace);
+				goto error_free_buf;
+			}
+
+			k_entries[i].write_to_buffer.buffer->io_sys_map = (void *)(sys_map);
+			k_entries[i].write_to_buffer.buffer->dma_buf = (void *)dma_buffer;
+			last_buf_alloc_idx = i;
 		}
 	}
 
@@ -316,6 +402,15 @@ error_free_buf:
 		if (k_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH) {
 			lwis_allocator_free(lwis_dev, k_entries[i].rw_batch.buf);
 			k_entries[i].rw_batch.buf = NULL;
+		} else if (k_entries[i].type == LWIS_IO_ENTRY_WRITE_TO_BUFFER) {
+			void *sys_map = k_entries[i].write_to_buffer.buffer->io_sys_map;
+			void *dma_buffer = k_entries[i].write_to_buffer.buffer->dma_buf;
+			dma_buf_end_cpu_access(dma_buffer, DMA_BIDIRECTIONAL);
+			dma_buf_vunmap(dma_buffer, sys_map);
+			dma_buf_put(dma_buffer);
+			kfree(sys_map);
+			kfree(k_entries[i].write_to_buffer.bytes);
+			kfree(k_entries[i].write_to_buffer.buffer);
 		}
 	}
 error_free_entries:

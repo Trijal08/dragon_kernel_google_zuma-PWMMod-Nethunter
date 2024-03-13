@@ -13,6 +13,7 @@
 #include "lwis_transaction.h"
 
 #include <linux/delay.h>
+#include <linux/dma-buf.h>
 #include <linux/mm.h>
 #include <linux/preempt.h>
 #include <linux/slab.h>
@@ -23,6 +24,7 @@
 #include "lwis_event.h"
 #include "lwis_fence.h"
 #include "lwis_bus_manager.h"
+#include "lwis_io_buffer.h"
 #include "lwis_io_entry.h"
 #include "lwis_ioreg.h"
 #include "lwis_util.h"
@@ -143,6 +145,30 @@ void lwis_transaction_free(struct lwis_device *lwis_dev, struct lwis_transaction
 		if (transaction->info.io_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH) {
 			lwis_allocator_free(lwis_dev, transaction->info.io_entries[i].rw_batch.buf);
 			transaction->info.io_entries[i].rw_batch.buf = NULL;
+		} else if (transaction->info.io_entries[i].type == LWIS_IO_ENTRY_WRITE_TO_BUFFER) {
+			struct dma_buf *buf =
+				(struct dma_buf *)(transaction->info.io_entries[i]
+							   .write_to_buffer.buffer->dma_buf);
+			if (IS_ERR(buf)) {
+				dev_err(lwis_dev->dev,
+					"Failed finish PDMA buffer IO because buffer has error.");
+			}
+			// Unmap the DMA buffer from kernel space
+			dma_buf_vunmap(
+				buf,
+				(struct iosys_map *)(transaction->info.io_entries[i]
+							     .write_to_buffer.buffer->io_sys_map));
+			kfree(transaction->info.io_entries[i].write_to_buffer.buffer->io_sys_map);
+			kfree(transaction->info.io_entries[i].write_to_buffer.bytes);
+
+			// End CPU access to the DMA buffer
+			dma_buf_end_cpu_access(buf, DMA_BIDIRECTIONAL);
+
+			// Release the DMA buffer
+			dma_buf_put(buf);
+
+			// release memory
+			kfree(transaction->info.io_entries[i].write_to_buffer.buffer);
 		}
 	}
 	lwis_allocator_free(lwis_dev, transaction->info.io_entries);
@@ -350,6 +376,19 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 			}
 		} else if (entry->type == LWIS_IO_ENTRY_READ_ASSERT) {
 			ret = lwis_io_entry_read_assert(lwis_dev, entry);
+			if (ret) {
+				resp->error_code = ret;
+				if (skip_err) {
+					dev_warn(
+						lwis_dev->dev,
+						"transaction type %d processing failed, skip this error and run the next command\n",
+						entry->type);
+					continue;
+				}
+				break;
+			}
+		} else if (entry->type == LWIS_IO_ENTRY_WRITE_TO_BUFFER) {
+			ret = lwis_io_buffer_write(lwis_dev, entry);
 			if (ret) {
 				resp->error_code = ret;
 				if (skip_err) {
