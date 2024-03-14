@@ -335,8 +335,6 @@ static int construct_io_entry(struct lwis_client *client, struct lwis_io_entry *
 
 			sys_map = kmalloc(sizeof(struct iosys_map), GFP_KERNEL);
 			if (!sys_map) {
-				dev_err(lwis_dev->dev,
-					"PDMA buffer IO failed because kmalloc failed for sys_map");
 				dma_buf_put(dma_buffer);
 				ret = -EFAULT;
 				goto error_free_buf;
@@ -345,8 +343,6 @@ static int construct_io_entry(struct lwis_client *client, struct lwis_io_entry *
 			k_bytes_from_userspace =
 				kmalloc(k_entries[i].write_to_buffer.size_in_bytes, GFP_KERNEL);
 			if (!k_bytes_from_userspace) {
-				dev_err(lwis_dev->dev,
-					"PDMA buffer IO failed because kmalloc failed for k_bytes_from_userspace");
 				dma_buf_put(dma_buffer);
 				ret = -EFAULT;
 				kfree(sys_map);
@@ -389,8 +385,6 @@ static int construct_io_entry(struct lwis_client *client, struct lwis_io_entry *
 				kmalloc(sizeof(struct pdma_buffer), GFP_KERNEL);
 
 			if (!k_entries[i].write_to_buffer.buffer) {
-				dev_err(lwis_dev->dev,
-					"PDMA buffer IO failed because kmalloc failed for k_entries[i].write_to_buffer.buffer");
 				dma_buf_end_cpu_access(dma_buffer, DMA_BIDIRECTIONAL);
 				dma_buf_vunmap(dma_buffer, sys_map);
 				dma_buf_put(dma_buffer);
@@ -400,8 +394,8 @@ static int construct_io_entry(struct lwis_client *client, struct lwis_io_entry *
 				goto error_free_buf;
 			}
 
-			k_entries[i].write_to_buffer.buffer->io_sys_map = (void *)(sys_map);
-			k_entries[i].write_to_buffer.buffer->dma_buf = (void *)dma_buffer;
+			k_entries[i].write_to_buffer.buffer->io_sys_map = sys_map;
+			k_entries[i].write_to_buffer.buffer->dma_buf = dma_buffer;
 			last_buf_alloc_idx = i;
 		}
 	}

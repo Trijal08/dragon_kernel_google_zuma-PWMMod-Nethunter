@@ -1,11 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Google LWIS Buffer I/O Implementation
+ * LWIS Buffer I/O Implementation
  *
- * Copyright (c) 2024 Google, LLC
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Copyright (c) 2024 Google LLC.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME "-io_buffer: " fmt
@@ -22,7 +19,7 @@
 int lwis_io_buffer_write(struct lwis_device *lwis_dev, struct lwis_io_entry *entry)
 {
 	void *kernel_address;
-	struct iosys_map *sys_map = (struct iosys_map *)(entry->write_to_buffer.buffer->io_sys_map);
+	struct iosys_map *sys_map = entry->write_to_buffer.buffer->io_sys_map;
 
 	if (sys_map->is_iomem) {
 		kernel_address = sys_map->vaddr_iomem;

@@ -147,27 +147,19 @@ void lwis_transaction_free(struct lwis_device *lwis_dev, struct lwis_transaction
 			transaction->info.io_entries[i].rw_batch.buf = NULL;
 		} else if (transaction->info.io_entries[i].type == LWIS_IO_ENTRY_WRITE_TO_BUFFER) {
 			struct dma_buf *buf =
-				(struct dma_buf *)(transaction->info.io_entries[i]
-							   .write_to_buffer.buffer->dma_buf);
+				transaction->info.io_entries[i].write_to_buffer.buffer->dma_buf;
 			if (IS_ERR(buf)) {
 				dev_err(lwis_dev->dev,
 					"Failed finish PDMA buffer IO because buffer has error.");
 			}
-			// Unmap the DMA buffer from kernel space
+			/* Unmap the DMA buffer from kernel space */
 			dma_buf_vunmap(
 				buf,
-				(struct iosys_map *)(transaction->info.io_entries[i]
-							     .write_to_buffer.buffer->io_sys_map));
+				transaction->info.io_entries[i].write_to_buffer.buffer->io_sys_map);
 			kfree(transaction->info.io_entries[i].write_to_buffer.buffer->io_sys_map);
 			kfree(transaction->info.io_entries[i].write_to_buffer.bytes);
-
-			// End CPU access to the DMA buffer
 			dma_buf_end_cpu_access(buf, DMA_BIDIRECTIONAL);
-
-			// Release the DMA buffer
 			dma_buf_put(buf);
-
-			// release memory
 			kfree(transaction->info.io_entries[i].write_to_buffer.buffer);
 		}
 	}
