@@ -740,6 +740,8 @@ struct gs_panel_desc {
 	struct gs_display_stats_desc *stats_desc;
 	/** @default_dsi_hs_clk_mbps: default MIPI DSI HS clock (megabits per second) */
 	u32 default_dsi_hs_clk_mbps;
+	/** @refresh_on_lp: inform composer that we need a frame update while entering AOD or not */
+	bool refresh_on_lp;
 };
 
 /* PRIV DATA */
