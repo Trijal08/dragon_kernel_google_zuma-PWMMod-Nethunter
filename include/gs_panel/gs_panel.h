@@ -466,6 +466,16 @@ struct gs_panel_funcs {
 	void (*set_acl_mode)(struct gs_panel *gs_panel, enum gs_acl_mode mode);
 
 	/**
+	 * @set_ssc_en:
+	 *
+	 * This callback is used to implement panel specific logic for ssc mode
+	 * enablement. If this is not defined, it means that panel does not
+	 * support ssc.
+	 *
+	 */
+	void (*set_ssc_en)(struct gs_panel *gs_panel, bool enabled);
+
+	/**
 	 * @panel_config:
 	 *
 	 * This callback is used to do one time panel configuration before the
@@ -1087,6 +1097,8 @@ struct gs_panel {
 	enum gs_acl_mode acl_mode;
 	/* refresh ctrl settings */
 	u32 refresh_ctrl;
+	/* SSC mode */
+	bool ssc_en;
 };
 
 /* FUNCTIONS */

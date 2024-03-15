@@ -23,6 +23,7 @@ int gs_panel_disable(struct drm_panel *panel)
 	ctx->idle_data.self_refresh_active = false;
 	ctx->idle_data.panel_idle_vrefresh = 0;
 	ctx->cabc_mode = GCABC_OFF;
+	ctx->ssc_en = false;
 
 	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 
