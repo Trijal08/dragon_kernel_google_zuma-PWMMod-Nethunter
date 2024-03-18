@@ -3008,12 +3008,13 @@ void goog_offload_populate_frame(struct goog_touch_interface *gti,
 	ATRACE_END();
 }
 
-void goog_update_fw_settings(struct goog_touch_interface *gti)
+void goog_update_fw_settings(struct goog_touch_interface *gti, bool force_update)
 {
 	int error;
 	int ret = 0;
 	int i = 0;
 	bool enabled = false;
+	u32 original_setting = 0;
 
 	error = goog_pm_wake_lock_nosync(gti, GTI_PM_WAKELOCK_TYPE_FW_SETTINGS, true);
 	if (error < 0) {
@@ -3022,26 +3023,34 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 	}
 
 	if(!gti->ignore_grip_update) {
+		original_setting = gti->cmd.grip_cmd.setting;
 		if (gti->offload.offload_running && gti->offload.config.filter_grip)
 			gti->cmd.grip_cmd.setting = GTI_GRIP_DISABLE;
 		else
 			gti->cmd.grip_cmd.setting = gti->default_grip_enabled;
-		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_GRIP_MODE);
-		if (ret)
-			GOOG_LOGW(gti, "unexpected return(%d)!", ret);
+
+		if (force_update || (original_setting != gti->cmd.grip_cmd.setting)) {
+			ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_GRIP_MODE);
+			if (ret)
+				GOOG_LOGE(gti, "unexpected return(%d)!", ret);
+		}
 	}
 
 	if(!gti->ignore_palm_update) {
+		original_setting = gti->cmd.palm_cmd.setting;
 		if (gti->offload.offload_running && gti->offload.config.filter_palm)
 			gti->cmd.palm_cmd.setting = GTI_PALM_DISABLE;
 		else
 			gti->cmd.palm_cmd.setting = gti->default_palm_enabled;
-		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_PALM_MODE);
-		if (ret)
-			GOOG_LOGW(gti, "unexpected return(%d)!", ret);
+		if (force_update || (original_setting != gti->cmd.palm_cmd.setting)) {
+			ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_PALM_MODE);
+			if (ret)
+				GOOG_LOGE(gti, "unexpected return(%d)!", ret);
+		}
 	}
 
 	if (gti->coord_filter_enabled) {
+		original_setting = gti->cmd.coord_filter_cmd.setting;
 		if (!gti->ignore_coord_filter_update) {
 			if (gti->offload.offload_running && gti->offload.config.coord_filter)
 				enabled = false;
@@ -3053,9 +3062,11 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 
 		gti->cmd.coord_filter_cmd.setting = enabled ?
 				GTI_COORD_FILTER_ENABLE : GTI_COORD_FILTER_DISABLE;
-		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_COORD_FILTER_ENABLED);
-		if (ret)
-			GOOG_LOGW(gti, "unexpected return(%d)!", ret);
+		if (force_update || (original_setting != gti->cmd.coord_filter_cmd.setting)) {
+			ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_COORD_FILTER_ENABLED);
+			if (ret)
+				GOOG_LOGE(gti, "unexpected return(%d)!", ret);
+		}
 	}
 
 	if (gti->offload.caps.continuous_reporting) {
@@ -3067,38 +3078,49 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 			GOOG_INFO(gti, "Enable GTI_MF_MODE_UNFILTER during coord_filter disabled!");
 	}
 
+	original_setting = gti->cmd.screen_protector_mode_cmd.setting;
 	gti->cmd.screen_protector_mode_cmd.setting = gti->screen_protector_mode_setting;
-	ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_SCREEN_PROTECTOR_MODE);
-	if (ret != 0)
-		GOOG_ERR(gti, "Fail to %s screen protector mode!\n",
-			gti->screen_protector_mode_setting == GTI_SCREEN_PROTECTOR_MODE_ENABLE ?
-			"enable" : "disable");
+	if (force_update || (original_setting != gti->cmd.screen_protector_mode_cmd.setting)) {
+		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_SCREEN_PROTECTOR_MODE);
+		if (ret != 0) {
+			GOOG_ERR(gti, "Fail to %s screen protector mode!\n",
+				gti->screen_protector_mode_setting ==
+					GTI_SCREEN_PROTECTOR_MODE_ENABLE ? "enable" : "disable");
+		}
+	}
 
+	original_setting = gti->cmd.heatmap_cmd.setting;
 	gti->cmd.heatmap_cmd.setting = GTI_HEATMAP_ENABLE;
-	ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_HEATMAP_ENABLED);
-	if (ret != 0)
-		GOOG_ERR(gti, "Fail to enable heatmap!\n");
-
-	if (gti->vrr_enabled) {
-		gti->cmd.report_rate_cmd.setting = gti->report_rate_setting_next;
-		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_REPORT_RATE);
+	if (force_update || (original_setting != gti->cmd.heatmap_cmd.setting)) {
+		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_HEATMAP_ENABLED);
 		if (ret != 0)
 			GOOG_ERR(gti, "Fail to set report rate!\n");
 	}
 
+	if (gti->vrr_enabled) {
+		original_setting = gti->cmd.report_rate_cmd.setting;
+		gti->cmd.report_rate_cmd.setting = gti->report_rate_setting_next;
+		if (force_update || (original_setting != gti->cmd.report_rate_cmd.setting)) {
+			ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_REPORT_RATE);
+			if (ret != 0)
+				GOOG_ERR(gti, "Fail to set report rate!\n");
+		}
+	}
 
 	if (gti->panel_notifier_enabled) {
 		GOOG_LOGI(gti, "set panel op_hz: %d\n", gti->panel_op_hz);
-
+		original_setting = gti->cmd.panel_speed_mode_cmd.setting;
 		gti->cmd.panel_speed_mode_cmd.setting = gti->panel_op_hz == 120 ?
 			GTI_PANEL_SPEED_MODE_HS : GTI_PANEL_SPEED_MODE_NS;
-		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_PANEL_SPEED_MODE);
-		if (ret != 0)
-			GOOG_LOGW(gti, "unexpected return(%d)!", ret);
+		if (force_update || (original_setting != gti->cmd.panel_speed_mode_cmd.setting)) {
+			ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_PANEL_SPEED_MODE);
+			if (ret != 0)
+				GOOG_LOGE(gti, "unexpected return(%d)!", ret);
+		}
 	}
 
 	/* Update LPTW gesture configs. */
-	if (gti->gesture_config_enabled) {
+	if (force_update && gti->gesture_config_enabled) {
 		gti->cmd.gesture_config_cmd.params[GTI_GESTURE_TYPE] = GTI_GESTURE_DISABLE;
 
 		for (i = GTI_LPTW_MIN_X; i < GTI_GESTURE_PARAMS_MAX; i++)
@@ -3113,11 +3135,11 @@ void goog_update_fw_settings(struct goog_touch_interface *gti)
 	 * Enable continuous_report when lptw_track_finger is set otherwise it's
 	 * possible there is no coordinate report if coordinate doesn't change.
 	 */
-	if (gti->lptw_suppress_coords_enabled) {
+	if (force_update && gti->lptw_suppress_coords_enabled) {
 		gti->cmd.continuous_report_cmd.setting = GTI_CONTINUOUS_REPORT_ENABLE;
 		ret = goog_process_vendor_cmd(gti, GTI_CMD_SET_CONTINUOUS_REPORT);
 		if (ret)
-			GOOG_LOGW(gti, "unexpected return(%d)!", ret);
+			GOOG_LOGE(gti, "unexpected return(%d)!", ret);
 	}
 
 	error = goog_pm_wake_unlock_nosync(gti, GTI_PM_WAKELOCK_TYPE_FW_SETTINGS);
@@ -3133,7 +3155,7 @@ static void goog_offload_set_running(struct goog_touch_interface *gti, bool runn
 
 		gti->offload.offload_running = running;
 
-		goog_update_fw_settings(gti);
+		goog_update_fw_settings(gti, false);
 	}
 }
 
@@ -4581,7 +4603,7 @@ void goog_notify_fw_status_changed(struct goog_touch_interface *gti,
 		 */
 		gti->mf_state = GTI_MF_STATE_FILTERED;
 		goog_input_release_all_fingers(gti);
-		goog_update_fw_settings(gti);
+		goog_update_fw_settings(gti, true);
 		break;
 	case GTI_FW_STATUS_PALM_ENTER:
 		GOOG_INFO(gti, "Enter palm mode\n");
@@ -5085,7 +5107,7 @@ struct goog_touch_interface *goog_touch_interface_probe(
 		goog_pm_probe(gti);
 		register_panel_bridge(gti);
 		goog_init_variable_report_rate(gti);
-		goog_update_fw_settings(gti);
+		goog_update_fw_settings(gti, true);
 
 		ret = sysfs_create_group(&gti->dev->kobj, &goog_attr_group);
 		if (ret)
