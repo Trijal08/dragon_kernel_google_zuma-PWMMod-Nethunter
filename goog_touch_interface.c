@@ -102,10 +102,22 @@ static void goog_proc_heatmap_show(struct seq_file *m, void *v)
 	case GTI_SENSOR_DATA_TYPE_MS_RAW:
 		if (cmd->size == TOUCH_OFFLOAD_DATA_SIZE_2D(rx, tx)) {
 			seq_puts(m, "result:\n");
-			for (y = 0; y < rx; y++) {
-				for (x = 0; x < tx; x++)
-					seq_printf(m,  "%5d,", ((s16 *)cmd->buffer)[y * tx + x]);
-				seq_puts(m, "\n");
+			if (cmd->is_unsigned) {
+				for (y = 0; y < rx; y++) {
+					for (x = 0; x < tx; x++) {
+						seq_printf(m,  "%5u,",
+							((u16 *)cmd->buffer)[y * tx + x]);
+					}
+					seq_puts(m, "\n");
+				}
+			} else {
+				for (y = 0; y < rx; y++) {
+					for (x = 0; x < tx; x++) {
+						seq_printf(m,  "%5d,",
+							((s16 *)cmd->buffer)[y * tx + x]);
+					}
+					seq_puts(m, "\n");
+				}
 			}
 		} else {
 			seq_printf(m, "error: invalid buffer %p or size %d!\n",
@@ -121,11 +133,19 @@ static void goog_proc_heatmap_show(struct seq_file *m, void *v)
 		if (cmd->size == TOUCH_OFFLOAD_DATA_SIZE_1D(rx, tx)) {
 			seq_puts(m, "result:\n");
 			seq_puts(m, "TX:");
-			for (x = 0; x < tx; x++)
-				seq_printf(m, "%5d,", ((s16 *)cmd->buffer)[x]);
-			seq_puts(m, "\nRX:");
-			for (y = 0; y < rx; y++)
-				seq_printf(m, "%5d,", ((s16 *)cmd->buffer)[tx + y]);
+			if (cmd->is_unsigned){
+				for (x = 0; x < tx; x++)
+					seq_printf(m, "%5u,", ((u16 *)cmd->buffer)[x]);
+				seq_puts(m, "\nRX:");
+				for (y = 0; y < rx; y++)
+					seq_printf(m, "%5u,", ((u16 *)cmd->buffer)[tx + y]);
+			} else {
+				for (x = 0; x < tx; x++)
+					seq_printf(m, "%5d,", ((s16 *)cmd->buffer)[x]);
+				seq_puts(m, "\nRX:");
+				for (y = 0; y < rx; y++)
+					seq_printf(m, "%5d,", ((s16 *)cmd->buffer)[tx + y]);
+			}
 			seq_puts(m, "\n");
 		} else {
 			seq_printf(m, "error: invalid buffer %p or size %d!\n",
