@@ -4923,7 +4923,7 @@ static irqreturn_t gti_irq_handler(int irq, void *data)
 	struct goog_touch_interface *gti = (struct goog_touch_interface *)data;
 
 	gti->irq_index++;
-	if (gti->vendor_irq_handler)
+	if (gti->vendor_irq_handler != NULL && gti->vendor_irq_cookie != NULL)
 		ret = gti->vendor_irq_handler(irq, gti->vendor_irq_cookie);
 	else
 		ret = IRQ_WAKE_THREAD;
@@ -4960,7 +4960,7 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 	 */
 	mutex_lock(&gti->input_heatmap_lock);
 
-	if (gti->vendor_irq_thread_fn != NULL)
+	if (gti->vendor_irq_thread_fn != NULL && gti->vendor_irq_cookie != NULL)
 		ret = gti->vendor_irq_thread_fn(irq, gti->vendor_irq_cookie);
 	else
 		ret = IRQ_HANDLED;
@@ -4970,7 +4970,8 @@ static irqreturn_t gti_irq_thread_fn(int irq, void *data)
 	mutex_unlock(&gti->input_heatmap_lock);
 
 	if (ret == IRQ_HANDLED && gti->vendor_irq_thread_fn != NULL &&
-			gti->options.post_irq_thread_fn != NULL) {
+			gti->options.post_irq_thread_fn != NULL &&
+			gti->vendor_irq_cookie != NULL) {
 		ret = gti->options.post_irq_thread_fn(irq, gti->vendor_irq_cookie);
 	}
 
@@ -4992,14 +4993,11 @@ int goog_devm_request_threaded_irq(struct goog_touch_interface *gti,
 	int ret;
 
 	if (gti) {
+		gti->vendor_irq_cookie = dev_id;
+		gti->vendor_irq_handler = handler;
+		gti->vendor_irq_thread_fn = thread_fn;
 		ret = devm_request_threaded_irq(dev, irq, gti_irq_handler, gti_irq_thread_fn,
 				irqflags, devname, gti);
-		if (dev_id)
-			gti->vendor_irq_cookie = dev_id;
-		if (handler)
-			gti->vendor_irq_handler = handler;
-		if (thread_fn)
-			gti->vendor_irq_thread_fn = thread_fn;
 	} else {
 		ret = devm_request_threaded_irq(dev, irq, handler, thread_fn,
 				irqflags, devname, dev_id);
@@ -5023,14 +5021,11 @@ int goog_request_threaded_irq(struct goog_touch_interface *gti,
 	int ret;
 
 	if (gti) {
+		gti->vendor_irq_cookie = dev_id;
+		gti->vendor_irq_handler = handler;
+		gti->vendor_irq_thread_fn = thread_fn;
 		ret = request_threaded_irq(irq, gti_irq_handler, gti_irq_thread_fn,
 				irqflags, devname, gti);
-		if (dev_id)
-			gti->vendor_irq_cookie = dev_id;
-		if (handler)
-			gti->vendor_irq_handler = handler;
-		if (thread_fn)
-			gti->vendor_irq_thread_fn = thread_fn;
 	} else {
 		ret = request_threaded_irq(irq, handler, thread_fn, irqflags, devname, dev_id);
 	}
