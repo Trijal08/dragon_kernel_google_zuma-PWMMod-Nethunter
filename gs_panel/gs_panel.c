@@ -1351,7 +1351,7 @@ static void gs_panel_init_te2(struct gs_panel *ctx)
 		}
 	}
 
-	ctx->te2.option = GTE2_OPT_CHANGEABLE;
+	ctx->te2.option = TEX_OPT_CHANGEABLE;
 }
 
 
@@ -1468,6 +1468,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 
 	/* Attach bridge funcs */
 	ctx->bridge.funcs = get_panel_drm_bridge_funcs();
+	ctx->te_opt = TEX_OPT_CHANGEABLE;
+	ctx->te_freq = 60;
 
 	/* panel handoff */
 	gs_panel_handoff(ctx);

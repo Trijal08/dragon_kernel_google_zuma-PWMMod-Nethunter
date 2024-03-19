@@ -514,6 +514,34 @@ static ssize_t available_disp_stats_show(struct device *dev,
 	return len;
 }
 
+static ssize_t te_info_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	int freq;
+	bool changeable;
+
+	if (!gs_is_panel_active(ctx))
+		return -EPERM;
+
+	mutex_lock(&ctx->mode_lock);
+	changeable = (ctx->te_opt == TEX_OPT_CHANGEABLE);
+	if (changeable) {
+		const struct gs_panel_mode *current_mode = ctx->current_mode;
+
+		if (!current_mode) {
+			mutex_unlock(&ctx->mode_lock);
+			return -EINVAL;
+		}
+		freq = drm_mode_vrefresh(&current_mode->mode);
+	} else {
+		freq = ctx->te_freq;
+	}
+	mutex_unlock(&ctx->mode_lock);
+
+	return scnprintf(buf, PAGE_SIZE, "%s@%d\n", changeable ? "changeable" : "fixed", freq);
+}
+
 static DEVICE_ATTR_RO(serial_number);
 static DEVICE_ATTR_RO(panel_extinfo);
 static DEVICE_ATTR_RO(panel_name);
@@ -529,6 +557,7 @@ static DEVICE_ATTR_RW(te2_timing);
 static DEVICE_ATTR_RW(te2_lp_timing);
 static DEVICE_ATTR_RO(time_in_state);
 static DEVICE_ATTR_RO(available_disp_stats);
+static DEVICE_ATTR_RO(te_info);
 /* TODO(tknelms): re-implement below */
 #if 0
 static DEVICE_ATTR_WO(gamma);
@@ -537,20 +566,20 @@ static DEVICE_ATTR_RW(osc2_clk_khz);
 static DEVICE_ATTR_RO(available_osc2_clk_khz);
 #endif
 
-static const struct attribute *panel_attrs[] = {
-	&dev_attr_serial_number.attr,
-	&dev_attr_panel_extinfo.attr,
-	&dev_attr_panel_name.attr,
-	&dev_attr_panel_model.attr,
-	&dev_attr_panel_idle.attr,
-	&dev_attr_panel_need_handle_idle_exit.attr,
-	&dev_attr_idle_delay_ms.attr,
-	&dev_attr_op_hz.attr,
-	&dev_attr_refresh_rate.attr,
-	&dev_attr_refresh_ctrl.attr,
-	&dev_attr_min_vrefresh.attr,
-	&dev_attr_te2_timing.attr,
-	&dev_attr_te2_lp_timing.attr,
+static const struct attribute *panel_attrs[] = { &dev_attr_serial_number.attr,
+						 &dev_attr_panel_extinfo.attr,
+						 &dev_attr_panel_name.attr,
+						 &dev_attr_panel_model.attr,
+						 &dev_attr_panel_idle.attr,
+						 &dev_attr_panel_need_handle_idle_exit.attr,
+						 &dev_attr_idle_delay_ms.attr,
+						 &dev_attr_op_hz.attr,
+						 &dev_attr_refresh_rate.attr,
+						 &dev_attr_refresh_ctrl.attr,
+						 &dev_attr_min_vrefresh.attr,
+						 &dev_attr_te2_timing.attr,
+						 &dev_attr_te2_lp_timing.attr,
+						 &dev_attr_te_info.attr,
 /* TODO(tknelms): re-implement below */
 #if 0
 	&dev_attr_gamma.attr,
@@ -558,8 +587,7 @@ static const struct attribute *panel_attrs[] = {
 	&dev_attr_osc2_clk_khz.attr,
 	&dev_attr_available_osc2_clk_khz.attr,
 #endif
-	NULL
-};
+						 NULL };
 
 int gs_panel_sysfs_create_files(struct device *dev, struct gs_panel *ctx)
 {

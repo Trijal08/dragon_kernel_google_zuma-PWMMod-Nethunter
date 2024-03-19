@@ -157,14 +157,13 @@ enum gs_acl_mode {
 };
 
 /**
- * enum gs_panel_te2_opt - option of TE2 frequency
- * TODO: reword, rethink, refactor (code style for enums relevant)
- * @GTE2_OPT_CHANGEABLE: TE2 frequency follows display refresh rate
- * @GTE2_OPT_FIXED: TE2 frequency is fixed at 120Hz. Only supported on specific panels
+ * enum gs_panel_tex_opt - option of TE/TE2 frequency
+ * @TEX_OPT_CHANGEABLE: TE/TE2 frequency follows display refresh rate
+ * @TEX_OPT_FIXED: TE/TE2 frequency is fixed at a specific value. Only supported on specific panels
  */
-enum gs_panel_te2_opt {
-	GTE2_OPT_CHANGEABLE,
-	GTE2_OPT_FIXED,
+enum gs_panel_tex_opt {
+	TEX_OPT_CHANGEABLE,
+	TEX_OPT_FIXED,
 };
 
 enum gs_cabc_mode {
@@ -844,7 +843,7 @@ struct gs_te2_mode_data {
  */
 struct gs_te2_data {
 	struct gs_te2_mode_data mode_data[MAX_TE2_TYPE];
-	enum gs_panel_te2_opt option;
+	enum gs_panel_tex_opt option;
 	u32 last_rr;
 	int last_rr_te_gpio_value;
 	u64 last_rr_te_counter;
@@ -1101,6 +1100,9 @@ struct gs_panel {
 	u32 refresh_ctrl;
 	/* SSC mode */
 	bool ssc_en;
+	/* TE info */
+	int te_freq;
+	enum gs_panel_tex_opt te_opt;
 };
 
 /* FUNCTIONS */
