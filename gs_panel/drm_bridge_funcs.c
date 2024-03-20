@@ -93,9 +93,14 @@ void gs_panel_node_attach(struct gs_drm_connector *gs_connector)
 {
 	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
 	struct drm_connector *connector = &gs_connector->base;
-	const char *sysfs_name = gs_panel_get_sysfs_name(ctx);
-	struct drm_bridge *bridge = &ctx->bridge;
+	const char *sysfs_name;
+	struct drm_bridge *bridge;
 	int ret;
+
+	if (unlikely(!ctx)) {
+		WARN(1, "%s: failed to get gs_panel\n", __func__);
+		return;
+	}
 
 	/* Create sysfs links from connector to panel */
 	ret = sysfs_create_link(&gs_connector->kdev->kobj, &ctx->dev->kobj, "panel");
@@ -108,6 +113,9 @@ void gs_panel_node_attach(struct gs_drm_connector *gs_connector)
 
 	/* debugfs entries */
 	gs_panel_create_debugfs_entries(ctx, connector->debugfs_entry);
+
+	bridge = &ctx->bridge;
+	sysfs_name = gs_panel_get_sysfs_name(ctx);
 
 	ret = sysfs_create_link(&bridge->dev->dev->kobj, &ctx->dev->kobj, sysfs_name);
 	if (ret)

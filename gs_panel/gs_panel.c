@@ -1373,6 +1373,7 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 
 	/* Connector */
 	ctx->gs_connector = get_gs_drm_connector_parent(ctx);
+	ctx->gs_connector->panel_dsi_device = dsi;
 
 	/* Register connector as bridge */
 #ifdef CONFIG_OF
