@@ -84,7 +84,8 @@ static int register_read(struct lwis_device *lwis_dev, struct lwis_io_entry *rea
 	uint8_t *user_buf;
 	bool batch_mode = false;
 
-	if (read_entry->type == LWIS_IO_ENTRY_READ_BATCH) {
+	if (read_entry->type == LWIS_IO_ENTRY_READ_BATCH ||
+	    read_entry->type == LWIS_IO_ENTRY_READ_BATCH_V2) {
 		batch_mode = true;
 		/* Save the userspace buffer address */
 		user_buf = read_entry->rw_batch.buf;
@@ -96,7 +97,8 @@ static int register_read(struct lwis_device *lwis_dev, struct lwis_io_entry *rea
 					    "Failed to allocate register read buffer\n");
 			return -ENOMEM;
 		}
-	} else if (read_entry->type != LWIS_IO_ENTRY_READ) {
+	} else if (read_entry->type != LWIS_IO_ENTRY_READ &&
+		   read_entry->type != LWIS_IO_ENTRY_READ_V2) {
 		/* Type must be either READ or READ_BATCH */
 		dev_err(lwis_dev->dev, "Invalid io_entry type for REGISTER_READ\n");
 		return -EINVAL;
@@ -140,7 +142,8 @@ static int register_write(struct lwis_device *lwis_dev, struct lwis_io_entry *wr
 	uint8_t *user_buf;
 	bool batch_mode = false;
 
-	if (write_entry->type == LWIS_IO_ENTRY_WRITE_BATCH) {
+	if (write_entry->type == LWIS_IO_ENTRY_WRITE_BATCH ||
+	    write_entry->type == LWIS_IO_ENTRY_WRITE_BATCH_V2) {
 		batch_mode = true;
 		/* Save the userspace buffer address */
 		user_buf = write_entry->rw_batch.buf;
@@ -160,7 +163,8 @@ static int register_write(struct lwis_device *lwis_dev, struct lwis_io_entry *wr
 					    "Failed to copy write buffer from userspace\n");
 			goto reg_write_exit;
 		}
-	} else if (write_entry->type != LWIS_IO_ENTRY_WRITE) {
+	} else if (write_entry->type != LWIS_IO_ENTRY_WRITE &&
+		   write_entry->type != LWIS_IO_ENTRY_WRITE_V2) {
 		/* Type must be either WRITE or WRITE_BATCH */
 		dev_err(lwis_dev->dev, "Invalid io_entry type for REGISTER_WRITE\n");
 		return -EINVAL;
@@ -213,11 +217,15 @@ static int synchronous_process_io_entries(struct lwis_device *lwis_dev, int num_
 			ret = register_modify(lwis_dev, &io_entries[i]);
 			break;
 		case LWIS_IO_ENTRY_READ:
+		case LWIS_IO_ENTRY_READ_V2:
 		case LWIS_IO_ENTRY_READ_BATCH:
+		case LWIS_IO_ENTRY_READ_BATCH_V2:
 			ret = register_read(lwis_dev, &io_entries[i], user_msg + i);
 			break;
 		case LWIS_IO_ENTRY_WRITE:
+		case LWIS_IO_ENTRY_WRITE_V2:
 		case LWIS_IO_ENTRY_WRITE_BATCH:
+		case LWIS_IO_ENTRY_WRITE_BATCH_V2:
 			ret = register_write(lwis_dev, &io_entries[i]);
 			break;
 		case LWIS_IO_ENTRY_POLL:
@@ -301,7 +309,8 @@ static int construct_io_entry(struct lwis_client *client, struct lwis_io_entry *
 	 * will be allocated in the form of lwis_io_result in io processing.
 	 */
 	for (i = 0; i < num_io_entries; ++i) {
-		if (k_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH) {
+		if (k_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH ||
+		    k_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH_V2) {
 			user_buf = k_entries[i].rw_batch.buf;
 			k_buf = lwis_allocator_allocate(
 				lwis_dev, k_entries[i].rw_batch.size_in_bytes, GFP_KERNEL);
@@ -405,7 +414,8 @@ static int construct_io_entry(struct lwis_client *client, struct lwis_io_entry *
 
 error_free_buf:
 	for (i = 0; i <= last_buf_alloc_idx; ++i) {
-		if (k_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH) {
+		if (k_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH ||
+		    k_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH_V2) {
 			lwis_allocator_free(lwis_dev, k_entries[i].rw_batch.buf);
 			k_entries[i].rw_batch.buf = NULL;
 		} else if (k_entries[i].type == LWIS_IO_ENTRY_WRITE_TO_BUFFER) {

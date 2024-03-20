@@ -199,8 +199,9 @@ static int process_io_entries(struct lwis_client *client,
 		}
 		spin_unlock_irqrestore(&client->periodic_io_lock, flags);
 		entry = &info->io_entries[i];
-		if (entry->type == LWIS_IO_ENTRY_WRITE ||
+		if (entry->type == LWIS_IO_ENTRY_WRITE || entry->type == LWIS_IO_ENTRY_WRITE_V2 ||
 		    entry->type == LWIS_IO_ENTRY_WRITE_BATCH ||
+		    entry->type == LWIS_IO_ENTRY_WRITE_BATCH_V2 ||
 		    entry->type == LWIS_IO_ENTRY_MODIFY) {
 			ret = lwis_dev->vops.register_io(lwis_dev, entry,
 							 lwis_dev->native_value_bitwidth);
@@ -208,7 +209,8 @@ static int process_io_entries(struct lwis_client *client,
 				resp->error_code = ret;
 				goto event_push;
 			}
-		} else if (entry->type == LWIS_IO_ENTRY_READ) {
+		} else if (entry->type == LWIS_IO_ENTRY_READ ||
+			   entry->type == LWIS_IO_ENTRY_READ_V2) {
 			io_result = (struct lwis_periodic_io_result *)read_buf;
 			io_result->io_result.bid = entry->rw.bid;
 			io_result->io_result.offset = entry->rw.offset;
@@ -223,7 +225,8 @@ static int process_io_entries(struct lwis_client *client,
 			memcpy(io_result->io_result.values, &entry->rw.val, reg_value_bytewidth);
 			read_buf += sizeof(struct lwis_periodic_io_result) +
 				    io_result->io_result.num_value_bytes;
-		} else if (entry->type == LWIS_IO_ENTRY_READ_BATCH) {
+		} else if (entry->type == LWIS_IO_ENTRY_READ_BATCH ||
+			   entry->type == LWIS_IO_ENTRY_READ_BATCH_V2) {
 			io_result = (struct lwis_periodic_io_result *)read_buf;
 			io_result->io_result.bid = entry->rw_batch.bid;
 			io_result->io_result.offset = entry->rw_batch.offset;
@@ -389,14 +392,15 @@ static int prepare_response(struct lwis_client *client, struct lwis_periodic_io 
 
 	for (i = 0; i < info->num_io_entries; ++i) {
 		struct lwis_io_entry *entry = &info->io_entries[i];
-		if (entry->type == LWIS_IO_ENTRY_READ) {
+		if (entry->type == LWIS_IO_ENTRY_READ || entry->type == LWIS_IO_ENTRY_READ_V2) {
 			/* Check for size_t overflow. */
 			if (read_buf_size + reg_value_bytewidth < read_buf_size) {
 				return -EOVERFLOW;
 			}
 			read_buf_size += reg_value_bytewidth;
 			read_entries++;
-		} else if (entry->type == LWIS_IO_ENTRY_READ_BATCH) {
+		} else if (entry->type == LWIS_IO_ENTRY_READ_BATCH ||
+			   entry->type == LWIS_IO_ENTRY_READ_BATCH_V2) {
 			/* Check for size_t overflow when adding user defined size_in_bytes. */
 			if (read_buf_size + entry->rw_batch.size_in_bytes < read_buf_size) {
 				return -EOVERFLOW;
@@ -454,7 +458,8 @@ void lwis_periodic_io_free(struct lwis_device *lwis_dev, struct lwis_periodic_io
 	int i;
 
 	for (i = 0; i < periodic_io->info.num_io_entries; ++i) {
-		if (periodic_io->info.io_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH) {
+		if (periodic_io->info.io_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH ||
+		    periodic_io->info.io_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH_V2) {
 			lwis_allocator_free(lwis_dev, periodic_io->info.io_entries[i].rw_batch.buf);
 			periodic_io->info.io_entries[i].rw_batch.buf = NULL;
 		}
@@ -488,6 +493,8 @@ int lwis_periodic_io_submit(struct lwis_client *client, struct lwis_periodic_io 
 		struct lwis_io_entry *entry = &info->io_entries[i];
 		if (entry->type == LWIS_IO_ENTRY_WRITE ||
 		    entry->type == LWIS_IO_ENTRY_WRITE_BATCH ||
+		    entry->type == LWIS_IO_ENTRY_WRITE_V2 ||
+		    entry->type == LWIS_IO_ENTRY_WRITE_BATCH_V2 ||
 		    entry->type == LWIS_IO_ENTRY_MODIFY) {
 			if (has_one_write) {
 				periodic_io->contains_multiple_writes = true;
