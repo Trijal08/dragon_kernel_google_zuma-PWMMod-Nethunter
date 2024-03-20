@@ -231,6 +231,9 @@ int lwis_fence_create(struct lwis_device *lwis_dev)
 		return -ENOMEM;
 	}
 
+	/* Set the struct identifier to avoid type-confusion when casting from void pointer */
+	new_fence->struct_id = LWIS_FENCE_IDENTIFIER;
+
 	/* Open a new fd for the new fence */
 	fd_or_err =
 		anon_inode_getfd("lwis_fence_file", &fence_file_ops, new_fence, O_RDWR | O_CLOEXEC);
@@ -249,6 +252,35 @@ int lwis_fence_create(struct lwis_device *lwis_dev)
 		dev_info(lwis_dev->dev, "lwis_fence created new LWIS fence fd: %d", new_fence->fd);
 	}
 	return fd_or_err;
+}
+
+struct file *lwis_fence_get(struct lwis_client *client, int fd)
+{
+	struct file *fence_fp = NULL;
+	struct lwis_fence *fence = NULL;
+
+	fence_fp = fget(fd);
+	if (fence_fp == NULL) {
+		dev_err(client->lwis_dev->dev, "Fence fd %d results in NULL file pointer", fd);
+		return NULL;
+	}
+
+	fence = fence_fp->private_data;
+	if (fence->struct_id != LWIS_FENCE_IDENTIFIER) {
+		fput(fence_fp);
+		dev_err(client->lwis_dev->dev, "Underlying structure for fd %d is not a lwis_fence",
+			fd);
+		return NULL;
+	}
+
+	if (fence->fd != fd) {
+		fput(fence_fp);
+		dev_err(client->lwis_dev->dev,
+			"Invalid lwis_fence with fd %d. Contains stale data \n", fd);
+		return NULL;
+	}
+
+	return fence_fp;
 }
 
 static struct lwis_fence_trigger_transaction_list *transaction_list_find(struct lwis_fence *fence,
@@ -289,7 +321,7 @@ static int trigger_event_add_transaction(struct lwis_client *client,
 					 struct lwis_transaction *transaction,
 					 struct lwis_transaction_trigger_event *event)
 {
-	struct file *precondition_fence_fp;
+	struct file *precondition_fence_fp = NULL;
 	struct lwis_device *lwis_dev = client->lwis_dev;
 	struct lwis_device_event_state *event_state;
 	struct lwis_fence *precondition_fence;
@@ -306,12 +338,10 @@ static int trigger_event_add_transaction(struct lwis_client *client,
 		/* The event is currently level triggered, first we need to check if there is a
 		 * precondition fence associated with the event. */
 		if (event->precondition_fence_fd >= 0) {
-			precondition_fence_fp = fget(event->precondition_fence_fd);
+			precondition_fence_fp =
+				lwis_fence_get(client, event->precondition_fence_fd);
 			if (precondition_fence_fp == NULL) {
-				dev_err(client->lwis_dev->dev,
-					"Precondition fence %d results in NULL file pointer",
-					event->precondition_fence_fd);
-				return -EINVAL;
+				return -EBADF;
 			}
 			precondition_fence = precondition_fence_fp->private_data;
 			precondition_fence_status = get_fence_status(precondition_fence);
@@ -337,7 +367,7 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 					      struct lwis_transaction *transaction)
 {
 	unsigned long flags;
-	struct file *fp;
+	struct file *fp = NULL;
 	struct lwis_fence *lwis_fence;
 	struct lwis_pending_transaction_id *pending_transaction_id;
 	struct lwis_fence_trigger_transaction_list *tx_list;
@@ -349,24 +379,17 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 		return -EINVAL;
 	}
 
-	fp = fget(fence_fd);
+	pending_transaction_id = kmalloc(sizeof(struct lwis_pending_transaction_id), GFP_ATOMIC);
+	if (!pending_transaction_id) {
+		return -ENOMEM;
+	}
+
+	fp = lwis_fence_get(client, fence_fd);
 	if (fp == NULL) {
-		dev_err(client->lwis_dev->dev, "Failed to find lwis_fence with fd %d\n", fence_fd);
 		return -EBADF;
 	}
 	lwis_fence = fp->private_data;
-	if (lwis_fence->fd != fence_fd) {
-		fput(fp);
-		dev_err(client->lwis_dev->dev,
-			"Invalid lwis_fence with fd %d. Contains stale data \n", fence_fd);
-		return -EBADF;
-	}
 
-	pending_transaction_id = kmalloc(sizeof(struct lwis_pending_transaction_id), GFP_ATOMIC);
-	if (!pending_transaction_id) {
-		fput(fp);
-		return -ENOMEM;
-	}
 	pending_transaction_id->id = transaction->info.id;
 
 	spin_lock_irqsave(&lwis_fence->lock, flags);
@@ -628,7 +651,7 @@ int lwis_initialize_transaction_fences(struct lwis_client *client,
 
 int lwis_add_completion_fence(struct lwis_client *client, struct lwis_transaction *transaction)
 {
-	struct file *fp;
+	struct file *fp = NULL;
 	struct lwis_fence *lwis_fence;
 	struct lwis_fence_pending_signal *fence_pending_signal;
 	struct lwis_device *lwis_dev = client->lwis_dev;
@@ -646,9 +669,8 @@ int lwis_add_completion_fence(struct lwis_client *client, struct lwis_transactio
 		return -EPERM;
 	}
 
-	fp = fget(fence_fd);
+	fp = lwis_fence_get(client, fence_fd);
 	if (fp == NULL) {
-		dev_err(lwis_dev->dev, "Failed to find lwis_fence with fd %d\n", fence_fd);
 		return -EBADF;
 	}
 
