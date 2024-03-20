@@ -458,7 +458,7 @@ static int connector_add_mipi_dsi_device(struct gs_drm_connector *gs_connector, 
 	}
 
 	if (info.node) {
-		gs_connector->panel_dsi_device = mipi_dsi_device_register_full(host, &info);
+		mipi_dsi_device_register_full(host, &info);
 		dev_dbg(dev, "%s-\n", __func__);
 		return 0;
 	} else {
