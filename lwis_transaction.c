@@ -142,7 +142,8 @@ void lwis_transaction_free(struct lwis_device *lwis_dev, struct lwis_transaction
 	}
 
 	for (i = 0; i < transaction->info.num_io_entries; ++i) {
-		if (transaction->info.io_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH) {
+		if (transaction->info.io_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH ||
+		    transaction->info.io_entries[i].type == LWIS_IO_ENTRY_WRITE_BATCH_V2) {
 			lwis_allocator_free(lwis_dev, transaction->info.io_entries[i].rw_batch.buf);
 			transaction->info.io_entries[i].rw_batch.buf = NULL;
 		} else if (transaction->info.io_entries[i].type == LWIS_IO_ENTRY_WRITE_TO_BUFFER) {
@@ -271,8 +272,9 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 	}
 	for (i = start_idx; i < end_idx; i++) {
 		entry = &info->io_entries[i];
-		if (entry->type == LWIS_IO_ENTRY_WRITE ||
+		if (entry->type == LWIS_IO_ENTRY_WRITE || entry->type == LWIS_IO_ENTRY_WRITE_V2 ||
 		    entry->type == LWIS_IO_ENTRY_WRITE_BATCH ||
+		    entry->type == LWIS_IO_ENTRY_WRITE_BATCH_V2 ||
 		    entry->type == LWIS_IO_ENTRY_MODIFY) {
 			ret = lwis_dev->vops.register_io(lwis_dev, entry,
 							 lwis_dev->native_value_bitwidth);
@@ -287,7 +289,8 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 				}
 				break;
 			}
-		} else if (entry->type == LWIS_IO_ENTRY_READ) {
+		} else if (entry->type == LWIS_IO_ENTRY_READ ||
+			   entry->type == LWIS_IO_ENTRY_READ_V2) {
 			io_result = (struct lwis_io_result *)read_buf;
 			io_result->bid = entry->rw.bid;
 			io_result->offset = entry->rw.offset;
@@ -307,7 +310,8 @@ static int process_transaction(struct lwis_client *client, struct lwis_transacti
 			}
 			memcpy(io_result->values, &entry->rw.val, reg_value_bytewidth);
 			read_buf += sizeof(struct lwis_io_result) + io_result->num_value_bytes;
-		} else if (entry->type == LWIS_IO_ENTRY_READ_BATCH) {
+		} else if (entry->type == LWIS_IO_ENTRY_READ_BATCH ||
+			   entry->type == LWIS_IO_ENTRY_READ_BATCH_V2) {
 			io_result = (struct lwis_io_result *)read_buf;
 			io_result->bid = entry->rw_batch.bid;
 			io_result->offset = entry->rw_batch.offset;
@@ -611,8 +615,9 @@ void lwis_process_transactions_in_queue(struct lwis_client *client,
 	list_for_each_safe (it_tran, it_tran_tmp, &client->transaction_process_queue) {
 		if (!client->is_enabled && client->lwis_dev->type != DEVICE_TYPE_TOP) {
 			if (lwis_transaction_debug) {
-				dev_info(client->lwis_dev->dev,
-					 "Client is disabled. Please enable client to process transactions.");
+				dev_info(
+					client->lwis_dev->dev,
+					"Client is disabled. Please enable client to process transactions.");
 			}
 			spin_unlock_irqrestore(&client->transaction_lock, flags);
 			return;
@@ -980,10 +985,11 @@ static int prepare_response_locked(struct lwis_client *client, struct lwis_trans
 
 	for (i = 0; i < info->num_io_entries; ++i) {
 		struct lwis_io_entry *entry = &info->io_entries[i];
-		if (entry->type == LWIS_IO_ENTRY_READ) {
+		if (entry->type == LWIS_IO_ENTRY_READ || entry->type == LWIS_IO_ENTRY_READ_V2) {
 			read_buf_size += reg_value_bytewidth;
 			read_entries++;
-		} else if (entry->type == LWIS_IO_ENTRY_READ_BATCH) {
+		} else if (entry->type == LWIS_IO_ENTRY_READ_BATCH ||
+			   entry->type == LWIS_IO_ENTRY_READ_BATCH_V2) {
 			read_buf_size += entry->rw_batch.size_in_bytes;
 			read_entries++;
 		}

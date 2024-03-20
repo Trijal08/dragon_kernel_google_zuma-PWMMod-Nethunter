@@ -164,7 +164,11 @@ enum lwis_io_entry_types {
 	LWIS_IO_ENTRY_READ_ASSERT,
 	LWIS_IO_ENTRY_POLL_SHORT,
 	LWIS_IO_ENTRY_WAIT,
-	LWIS_IO_ENTRY_WRITE_TO_BUFFER
+	LWIS_IO_ENTRY_WRITE_TO_BUFFER,
+	LWIS_IO_ENTRY_READ_V2,
+	LWIS_IO_ENTRY_READ_BATCH_V2,
+	LWIS_IO_ENTRY_WRITE_V2,
+	LWIS_IO_ENTRY_WRITE_BATCH_V2
 };
 
 // For io_entry read and write types.
@@ -174,12 +178,28 @@ struct lwis_io_entry_rw {
 	uint64_t val;
 };
 
+struct lwis_io_entry_rw_v2 {
+	int32_t bid;
+	uint64_t offset;
+	uint64_t val;
+	uint32_t speed_hz;
+};
+
 struct lwis_io_entry_rw_batch {
 	int32_t bid;
 	uint64_t offset;
 	size_t size_in_bytes;
 	uint8_t *buf;
 	bool is_offset_fixed;
+};
+
+struct lwis_io_entry_rw_batch_v2 {
+	int32_t bid;
+	uint64_t offset;
+	size_t size_in_bytes;
+	uint8_t *buf;
+	bool is_offset_fixed;
+	uint32_t speed_hz;
 };
 
 // For io_entry modify types.
@@ -225,6 +245,8 @@ struct lwis_io_entry {
 		struct lwis_io_entry_read_assert read_assert;
 		uint64_t wait_us;
 		struct lwis_io_entry_write_to_buffer write_to_buffer;
+		struct lwis_io_entry_rw_v2 rw_v2;
+		struct lwis_io_entry_rw_batch_v2 rw_batch_v2;
 	};
 };
 
