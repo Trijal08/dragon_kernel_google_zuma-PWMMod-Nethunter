@@ -5,6 +5,8 @@
 #include <media/videobuf2-vmalloc.h>
 #include "heatmap.h"
 
+#undef dev_fmt
+#define dev_fmt(fmt) "gti: " fmt
 static const int FIRST_FREE_NODE = -1;
 
 /**
@@ -77,6 +79,10 @@ void heatmap_read(struct v4l2_heatmap *v4l2, uint64_t timestamp)
 	strength_t *data;
 	int total_bytes = v4l2->format.sizeimage;
 	bool read_success;
+	char index_tag[32] = {0};
+
+	if (v4l2->frame_index_enabled)
+		scnprintf(index_tag, sizeof(index_tag), "IDX=%llu", v4l2->frame_index);
 
 	if (!vb2_is_streaming(&v4l2->queue)) {
 		/* No need to read, no one is viewing the video */
@@ -115,10 +121,15 @@ void heatmap_read(struct v4l2_heatmap *v4l2, uint64_t timestamp)
 		 * slowness in the userspace for reading or
 		 * processing buffers.
 		 */
-		dev_warn(v4l2->parent_dev, "heatmap: No buffers available, dropping frame\n");
+		if (consecutive_frames_dropped == 0)
+			dev_warn(v4l2->parent_dev, "v4l2: No buffers available %s\n", index_tag);
 		consecutive_frames_dropped++;
 		spin_unlock(&v4l2->heatmap_lock);
 		return;
+	}
+	if (consecutive_frames_dropped > 1) {
+		dev_info(v4l2->parent_dev, "v4l2: unhandled frames=%u %s\n",
+				consecutive_frames_dropped, index_tag);
 	}
 	consecutive_frames_dropped = 0;
 	new_buf = list_entry(v4l2->heatmap_buffer_list.next,
@@ -128,7 +139,7 @@ void heatmap_read(struct v4l2_heatmap *v4l2, uint64_t timestamp)
 	vb2_buf = &new_buf->v4l2_vb.vb2_buf;
 	data = vb2_plane_vaddr(vb2_buf, 0);
 	if (!data) {
-		dev_err(v4l2->parent_dev, "heatmap: Error acquiring frame pointer\n");
+		dev_err(v4l2->parent_dev, "v4l2: Error acquiring frame pointer\n");
 		vb2_buffer_done(vb2_buf, VB2_BUF_STATE_ERROR);
 		spin_unlock(&v4l2->heatmap_lock);
 		return;

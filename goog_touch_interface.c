@@ -2726,10 +2726,12 @@ bool goog_v4l2_read_frame_cb(struct v4l2_heatmap *v4l2)
 	return ret;
 }
 
-void goog_v4l2_read(struct goog_touch_interface *gti, ktime_t timestamp)
+void goog_v4l2_read(struct goog_touch_interface *gti, ktime_t timestamp, u64 frame_index)
 {
-	if (gti->v4l2_enabled)
+	if (gti->v4l2_enabled) {
+		gti->v4l2.frame_index = frame_index;
 		heatmap_read(&gti->v4l2, ktime_to_ns(timestamp));
+	}
 }
 
 int goog_get_driver_status(struct goog_touch_interface *gti,
@@ -3373,7 +3375,7 @@ void goog_offload_input_report(void *handle,
 	goog_input_unlock(gti);
 
 	if (touch_down)
-		goog_v4l2_read(gti, report->timestamp);
+		goog_v4l2_read(gti, report->timestamp, report->index);
 
 	if (gti->lptw_suppress_coords_enabled) {
 		if (slot_bit_cancel || (gti->lptw_track_finger && gti->slot_bit_lptw_track == 0))
@@ -3605,6 +3607,7 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 	gti->v4l2.read_frame = goog_v4l2_read_frame_cb;
 	gti->v4l2.width = gti->offload.caps.tx_size;
 	gti->v4l2.height = gti->offload.caps.rx_size;
+	gti->v4l2.frame_index_enabled = true;
 
 	/* 120 Hz operation */
 	gti->v4l2.timeperframe.numerator = 1;
@@ -3729,7 +3732,7 @@ int goog_input_process(struct goog_touch_interface *gti, bool reset_data)
 		if (ret != 0 || frame == NULL) {
 			if (gti->offload.offload_running && gti->debug_warning_limit) {
 				gti->debug_warning_limit--;
-				GOOG_WARN(gti, "Fail to reserve frame, ret=%d IDX=%llu!\n",
+				GOOG_WARN(gti, "offload: No buffers available, ret=%d IDX=%llu!\n",
 					ret, gti->frame_index);
 			}
 			goog_offload_set_running(gti, false);
@@ -3767,7 +3770,7 @@ int goog_input_process(struct goog_touch_interface *gti, bool reset_data)
 		ret = goog_get_sensor_data(gti, cmd, reset_data);
 		if (ret == 0 && cmd->buffer && cmd->size)
 			memcpy(gti->heatmap_buf, cmd->buffer, cmd->size);
-		goog_v4l2_read(gti, gti->input_timestamp);
+		goog_v4l2_read(gti, gti->input_timestamp, gti->frame_index);
 		goog_update_motion_filter(gti, gti->slot_bit_active);
 	}
 
