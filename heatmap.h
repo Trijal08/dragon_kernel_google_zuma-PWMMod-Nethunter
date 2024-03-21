@@ -19,6 +19,8 @@ struct v4l2_heatmap {
 	struct vb2_queue queue;
 	struct mutex lock;
 	unsigned int input_index;
+	u64 frame_index;
+	bool frame_index_enabled;
 
 	size_t width;
 	size_t height;
