@@ -218,6 +218,11 @@ struct gs_drm_connector {
 	 */
 	struct mipi_dsi_host *dsi_host_device;
 	/**
+	 * @panel_index: which display this connector is for
+	 * Read from the device tree; indicates primary or secondary panel
+	 */
+	int panel_index;
+	/**
 	 * @panel_id: panel_id read from bootloader. Parsed by the connector,
 	 * stored here for use by the panel on init
 	 */
@@ -281,6 +286,7 @@ int gs_connector_bind(struct device *dev, struct device *master, void *data);
  *
  * @new_name: Name of the panel
  * @len: Length of the panel name
+ * @idx: Index of which display this is for (primary or secondary)
  *
  * When possible, we would like to use the panel name and panel_id read and set
  * by the bootloader. On older systems, this involves passing the information to
@@ -289,7 +295,7 @@ int gs_connector_bind(struct device *dev, struct device *master, void *data);
  * The expected form is "panel_name.panel_id", where the period and panel_id are
  * optional, and the panel_id is a 6-8 character hex string.
  */
-void gs_connector_set_panel_name(const char *new_name, size_t len);
+void gs_connector_set_panel_name(const char *new_name, size_t len, int idx);
 
 int gs_drm_mode_bts_fps(const struct drm_display_mode *mode);
 int gs_bts_fps_to_drm_mode_clock(const struct drm_display_mode *mode, int bts_fps);

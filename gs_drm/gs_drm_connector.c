@@ -30,9 +30,19 @@
 #define HOST_PORT 0
 #define HOST_ENDPOINT 0
 
+#ifndef DISPLAY_PANEL_INDEX_PRIMARY
+#define DISPLAY_PANEL_INDEX_PRIMARY 0
+#endif
+#ifndef DISPLAY_PANEL_INDEX_SECONDARY
+#define DISPLAY_PANEL_INDEX_SECONDARY 1
+#endif
+
 static char panel_name[PANEL_DRV_LEN] = "panel-gs-simple";
 module_param_string(panel_name, panel_name, sizeof(panel_name), 0644);
 MODULE_PARM_DESC(panel_name, "preferred panel name");
+static char sec_panel_name[PANEL_DRV_LEN] = "panel-gs-simple";
+module_param_string(sec_panel_name, sec_panel_name, sizeof(sec_panel_name), 0644);
+MODULE_PARM_DESC(sec_panel_name, "preferred panel name for secondary panel");
 
 int gs_drm_mode_bts_fps(const struct drm_display_mode *mode)
 {
@@ -55,12 +65,18 @@ gs_drm_connector_get_properties(struct gs_drm_connector *gs_connector)
 }
 EXPORT_SYMBOL(gs_drm_connector_get_properties);
 
-void gs_connector_set_panel_name(const char *new_name, size_t len)
+void gs_connector_set_panel_name(const char *new_name, size_t len, int idx)
 {
-	strscpy(panel_name, new_name, sizeof(panel_name));
-
-	if (len < sizeof(panel_name))
-		panel_name[len] = '\0';
+	switch (idx) {
+	case DISPLAY_PANEL_INDEX_PRIMARY:
+		strscpy(panel_name, new_name, sizeof(panel_name));
+		break;
+	case DISPLAY_PANEL_INDEX_SECONDARY:
+		strscpy(sec_panel_name, new_name, sizeof(sec_panel_name));
+		break;
+	default:
+		pr_warn("Unsupported panel index %d\n", idx);
+	}
 }
 EXPORT_SYMBOL(gs_connector_set_panel_name);
 
@@ -452,7 +468,7 @@ static int connector_add_mipi_dsi_device(struct gs_drm_connector *gs_connector, 
 		found = !strncmp(node_label, pname, cmp_len);
 		if (found) {
 			/*TODO(tknelms): case for no pname provided */
-			strlcpy(info.type, node_label, sizeof(info.type));
+			strscpy(info.type, node_label, sizeof(info.type));
 			info.node = of_node_get(node);
 		}
 	}
@@ -555,7 +571,12 @@ static u32 dsim_get_panel_id(const char *name)
  */
 static int parse_panel_name(struct gs_drm_connector *gs_connector)
 {
-	const char *pref_panel_name = get_panel_name(gs_connector, panel_name);
+	const char *pref_panel_name;
+
+	if (gs_connector->panel_index == DISPLAY_PANEL_INDEX_SECONDARY)
+		pref_panel_name = get_panel_name(gs_connector, sec_panel_name);
+	else
+		pref_panel_name = get_panel_name(gs_connector, panel_name);
 
 	if (pref_panel_name && pref_panel_name[0]) {
 		gs_connector->panel_id = dsim_get_panel_id(pref_panel_name);
@@ -564,6 +585,31 @@ static int parse_panel_name(struct gs_drm_connector *gs_connector)
 	}
 
 	return -ENODEV;
+}
+
+/**
+ * gs_drm_connector_parse_panel_index() - parses display-index DT entry
+ * @gs_connector: Pointer to gs_connector
+ *
+ * Return: 0 on success, negative value on fatal error
+ */
+static int gs_drm_connector_parse_panel_index(struct gs_drm_connector *gs_connector)
+{
+	struct device *dev = gs_connector->kdev;
+	struct device_node *node = dev->of_node;
+	int ret;
+
+	ret = of_property_read_s32(node, "google,device-index", &gs_connector->panel_index);
+	if (ret == -EINVAL) {
+		dev_dbg(dev,
+			"No value found for \"google,device-index\", defaulting to primary panel\n");
+		gs_connector->panel_index = DISPLAY_PANEL_INDEX_PRIMARY;
+		ret = 0;
+	} else if (ret) {
+		dev_warn(dev, "ret value %d while parsing google,device-index; exiting\n", ret);
+	}
+
+	return ret;
 }
 
 /*
@@ -617,6 +663,10 @@ static int gs_drm_connector_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, gs_connector);
 
 	ret = gs_drm_connector_find_host(gs_connector, HOST_PORT, HOST_ENDPOINT);
+	if (ret)
+		return ret;
+
+	ret = gs_drm_connector_parse_panel_index(gs_connector);
 	if (ret)
 		return ret;
 
