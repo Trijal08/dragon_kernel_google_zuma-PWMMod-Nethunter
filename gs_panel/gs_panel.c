@@ -186,6 +186,36 @@ static int gs_panel_parse_regulators(struct gs_panel *ctx)
 		gs_reg->vddr = reg;
 	}
 
+	ret = of_property_read_u32(dev->of_node, "avdd-microvolt", &gs_reg->avdd_uV);
+	if (ret) {
+		gs_reg->avdd_uV = 0;
+		dev_dbg(dev, "no avdd-microvolt found for panel\n");
+	}
+
+	ret = of_property_read_u32(dev->of_node, "avee-microvolt", &gs_reg->avee_uV);
+	if (ret) {
+		gs_reg->avee_uV = 0;
+		dev_dbg(dev, "no avee-microvolt found for panel\n");
+	}
+
+	reg = devm_regulator_get_optional(dev, "disp_avdd");
+	if (!IS_ERR_OR_NULL(reg)) {
+		dev_dbg(dev, "panel disp_avdd found\n");
+		gs_reg->avdd = reg;
+	} else if (gs_reg->avdd_uV != 0) {
+		dev_err(dev, "found avdd-microvolt but failed to get disp_avdd (%pe)\n", reg);
+		return -EPROBE_DEFER;
+	}
+
+	reg = devm_regulator_get_optional(dev, "disp_avee");
+	if (!IS_ERR_OR_NULL(reg)) {
+		dev_dbg(dev, "panel disp_avee found\n");
+		gs_reg->avee = reg;
+	} else if (gs_reg->avee_uV != 0) {
+		dev_err(dev, "found avee-microvolt but failed to get disp_avee (%pe)\n", reg);
+		return -EPROBE_DEFER;
+	}
+
 	return 0;
 }
 
@@ -1127,6 +1157,8 @@ static int _gs_panel_reg_ctrl(struct gs_panel *ctx, const struct panel_reg_ctrl 
 		[PANEL_REG_ID_VDDI] = ctx->regulator.vddi,
 		[PANEL_REG_ID_VDDR_EN] = ctx->regulator.vddr_en,
 		[PANEL_REG_ID_VDDR] = ctx->regulator.vddr,
+		[PANEL_REG_ID_AVDD] = ctx->regulator.avdd,
+		[PANEL_REG_ID_AVEE] = ctx->regulator.avee,
 	};
 	u32 i;
 
@@ -1149,6 +1181,16 @@ static int _gs_panel_reg_ctrl(struct gs_panel *ctx, const struct panel_reg_ctrl 
 			dev_err(ctx->dev, "failed to %s regulator id=%d\n",
 				enable ? "enable" : "disable", id);
 			return ret;
+		}
+
+		if (enable) {
+			u32 avdd_uV = ctx->regulator.avdd_uV;
+			u32 avee_uV = ctx->regulator.avee_uV;
+
+			if (id == PANEL_REG_ID_AVDD)
+				regulator_set_voltage(reg, avdd_uV, avdd_uV);
+			else if (id == PANEL_REG_ID_AVEE)
+				regulator_set_voltage(reg, avee_uV, avee_uV);
 		}
 
 		if (delay_ms)

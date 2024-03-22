@@ -705,6 +705,8 @@ enum panel_reg_id {
 	PANEL_REG_ID_VDDD,
 	PANEL_REG_ID_VDDR_EN,
 	PANEL_REG_ID_VDDR,
+	PANEL_REG_ID_AVDD,
+	PANEL_REG_ID_AVEE,
 	PANEL_REG_ID_MAX,
 };
 
@@ -834,8 +836,12 @@ struct gs_panel_regulator {
 	struct regulator *vddd;
 	struct regulator *vddr_en;
 	struct regulator *vddr;
+	struct regulator *avdd;
+	struct regulator *avee;
 	u32 vddd_normal_uV;
 	u32 vddd_lp_uV;
+	u32 avdd_uV;
+	u32 avee_uV;
 	/** @need_post_vddd_lp: indicates need to adjust vddd lp in self refresh */
 	bool need_post_vddd_lp;
 	/** @post_vddd_lp_enabled: adjust lp vddd in self refresh instead of mode set */
