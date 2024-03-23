@@ -341,7 +341,7 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 	if (!conn_state->pending_update_flags)
 		return;
 
-	dev_info(ctx->dev, "%s: mipi_sync(0x%lx) pending_update_flags(0x%x)\n", __func__,
+	dev_dbg(ctx->dev, "%s: mipi_sync(0x%lx) pending_update_flags(0x%x)\n", __func__,
 		 conn_state->mipi_sync, conn_state->pending_update_flags);
 	/*TODO(tknelms) DPU_ATRACE_BEGIN(__func__);*/
 	mipi_sync = conn_state->mipi_sync &
