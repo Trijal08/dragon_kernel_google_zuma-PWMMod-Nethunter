@@ -832,6 +832,7 @@ struct gti_pm {
  * @fw_coord_filter_enabled: the current setting of coordinate filter.
  * @default_coord_filter_enabled: the default setting of coordinate filter.
  * @panel_notifier_enabled: enable flag for receiving panel notifications.
+ * @reset_after_selftest: reset FW after running self-test.
  * @lptw_triggered: LPTW is triggered or not.
  * @lptw_suppress_coords_enabled: enable flag for suppressing the coords after lptw.
  * @lptw_track_finger: flag for tracking the suppressed fingers.
@@ -941,6 +942,7 @@ struct goog_touch_interface {
 	bool fw_coord_filter_enabled;
 	bool default_coord_filter_enabled;
 	bool panel_notifier_enabled;
+	bool reset_after_selftest;
 	bool lptw_triggered;
 	bool lptw_suppress_coords_enabled;
 	bool lptw_track_finger;
