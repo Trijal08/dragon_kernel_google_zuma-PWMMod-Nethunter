@@ -1037,11 +1037,6 @@ struct gs_panel {
 	 */
 	int max_vrefresh;
 	/**
-	 * @throttled_min_vrefresh: indicates current minimum refresh rate while
-	 * in auto mode, if 0 it means auto mode is not enabled
-	 */
-	int throttled_min_vrefresh;
-	/**
 	 * indicates the supported max bts fps in the panel.
 	 */
 	int peak_bts_fps;
