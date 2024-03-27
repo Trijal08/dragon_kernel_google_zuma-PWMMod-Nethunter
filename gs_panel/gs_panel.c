@@ -31,7 +31,7 @@
 /* CONSTANTS */
 
 /* ext_info registers */
-static const char ext_info_regs[] = { 0xDA, 0xDB, 0xDC };
+static const char ext_info_regs[] = { 0xDA, 0xDB, 0xDC, 0xA1 };
 #define EXT_INFO_SIZE ARRAY_SIZE(ext_info_regs)
 #define NORMAL_MODE_WORK_DELAY_MS 30000
 
@@ -1230,7 +1230,8 @@ int gs_panel_first_enable(struct gs_panel *ctx)
 				dev_warn(dev, "failed to get panel extinfo, default to latest\n");
 				ctx->panel_rev = PANEL_REV_LATEST;
 			} else
-				funcs->get_panel_rev(ctx, id);
+				/* reverse here to match the id order read from bootloader */
+				funcs->get_panel_rev(ctx, __swab32(id));
 		} else {
 			dev_warn(dev, "unable to get panel rev, default to latest\n");
 			ctx->panel_rev = PANEL_REV_LATEST;
