@@ -38,6 +38,7 @@ static void goog_lookup_touch_report_rate(struct goog_touch_interface *gti);
 static int goog_precheck_heatmap(struct goog_touch_interface *gti);
 static void goog_set_display_state(struct goog_touch_interface *gti,
 	enum gti_display_state_setting display_state);
+static int goog_do_selftest(struct goog_touch_interface *gti);
 #if IS_ENABLED(CONFIG_QCOM_QBT_HANDLER)
 void goog_notify_lptw_triggered(struct TbnLptwEvent* lptw, void* data);
 void goog_notify_lptw_left(void* data);
@@ -1304,7 +1305,7 @@ static ssize_t self_test_show(struct device *dev,
 
 	gti->cmd.selftest_cmd.result = GTI_SELFTEST_RESULT_NA;
 	memset(gti->cmd.selftest_cmd.buffer, 0, sizeof(gti->cmd.selftest_cmd.buffer));
-	ret = goog_process_vendor_cmd(gti, GTI_CMD_SELFTEST);
+	ret = goog_do_selftest(gti);
 	if (ret == -EOPNOTSUPP) {
 		buf_idx += sysfs_emit_at(buf, buf_idx, "error: not supported!\n");
 	} else if (ret) {
@@ -1632,7 +1633,7 @@ void ical_state_init_test(struct goog_touch_interface *gti, u32 next_state,
 		gti->cmd.selftest_cmd.result = GTI_SELFTEST_RESULT_NA;
 		memset(gti->cmd.selftest_cmd.buffer, 0,
 		       sizeof(gti->cmd.selftest_cmd.buffer));
-		ret = goog_process_vendor_cmd(gti, GTI_CMD_SELFTEST);
+		ret = goog_do_selftest(gti);
 		if (ret == 0) {
 			if (gti->cmd.selftest_cmd.result ==
 					GTI_SELFTEST_RESULT_DONE) {
@@ -2377,6 +2378,17 @@ static void goog_set_display_state(struct goog_touch_interface *gti,
 	ret = goog_process_vendor_cmd(gti, GTI_CMD_NOTIFY_DISPLAY_STATE);
 	if (ret && ret != -EOPNOTSUPP)
 		GOOG_WARN(gti, "Unexpected vendor_cmd return(%d)!\n", ret);
+}
+
+static int goog_do_selftest(struct goog_touch_interface *gti)
+{
+	int ret = 0;
+	ret = goog_process_vendor_cmd(gti, GTI_CMD_SELFTEST);
+	if (gti->reset_after_selftest && ret != EOPNOTSUPP) {
+		gti->cmd.reset_cmd.setting = GTI_RESET_MODE_AUTO;
+		goog_process_vendor_cmd(gti, GTI_CMD_RESET);
+	}
+	return ret;
 }
 
 bool goog_check_spi_dma_enabled(struct spi_device *spi_dev)
@@ -4250,6 +4262,8 @@ void goog_init_options(struct goog_touch_interface *gti,
 		}
 		gti->panel_notifier_enabled = of_property_read_bool(np,
 				"goog,panel-notifier-enabled");
+		gti->reset_after_selftest = of_property_read_bool(np,
+				"goog,reset-after-selftest");
 
 		gti->panel_id = goog_get_panel_id(np);
 		if (gti->panel_id >= 0) {
