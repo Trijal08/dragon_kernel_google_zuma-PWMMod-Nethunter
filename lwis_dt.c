@@ -30,36 +30,6 @@
 /* Uncomment this to help debug device tree parsing. */
 // #define LWIS_DT_DEBUG
 
-static int parse_gpios(struct lwis_device *lwis_dev, char *name, bool *is_present)
-{
-	int count;
-	struct device *dev;
-	struct gpio_descs *list;
-
-	*is_present = false;
-
-	dev = lwis_dev->k_dev;
-
-	count = gpiod_count(dev, name);
-
-	/* No GPIO pins found, just return */
-	if (count <= 0) {
-		return 0;
-	}
-
-	list = lwis_gpio_list_get(dev, name);
-	if (IS_ERR_OR_NULL(list)) {
-		pr_err("Error parsing GPIO list %s (%ld)\n", name, PTR_ERR(list));
-		return PTR_ERR(list);
-	}
-
-	/* The GPIO pins are valid, release the list as we do not need to hold
-	   on to the pins yet */
-	lwis_gpio_list_put(list, dev);
-	*is_present = true;
-	return 0;
-}
-
 static int parse_irq_gpios(struct lwis_device *lwis_dev)
 {
 	int count;
@@ -203,86 +173,6 @@ error_parse_irq_gpios:
 	return ret;
 }
 
-static int parse_settle_time(struct lwis_device *lwis_dev)
-{
-	struct device_node *dev_node;
-	struct device *dev;
-
-	dev = lwis_dev->k_dev;
-	dev_node = dev->of_node;
-	lwis_dev->enable_gpios_settle_time = 0;
-
-	of_property_read_u32(dev_node, "enable-gpios-settle-time",
-			     &lwis_dev->enable_gpios_settle_time);
-	return 0;
-}
-
-static int parse_regulators(struct lwis_device *lwis_dev)
-{
-	int i;
-	int ret;
-	int count;
-	struct device_node *dev_node;
-	struct device_node *dev_node_reg;
-	const char *name;
-	struct device *dev;
-	int voltage;
-	int voltage_count;
-
-	dev = lwis_dev->k_dev;
-	dev_node = dev->of_node;
-
-	count = of_property_count_elems_of_size(dev_node, "regulators", sizeof(u32));
-
-	/* No regulators found, or entry does not exist, just return */
-	if (count <= 0) {
-		lwis_dev->regulators = NULL;
-		return 0;
-	}
-
-	/* Voltage count is allowed to be less than regulator count,
-	   regulator_set_voltage will not be called for the ones with
-	   unspecified voltage */
-	voltage_count =
-		of_property_count_elems_of_size(dev_node, "regulator-voltages", sizeof(u32));
-
-	lwis_dev->regulators = lwis_regulator_list_alloc(count);
-	if (IS_ERR_OR_NULL(lwis_dev->regulators)) {
-		pr_err("Cannot allocate regulator list\n");
-		ret = PTR_ERR(lwis_dev->regulators);
-		lwis_dev->regulators = NULL;
-		return ret;
-	}
-
-	/* Parse regulator list and acquire the regulator pointers */
-	for (i = 0; i < count; ++i) {
-		dev_node_reg = of_parse_phandle(dev_node, "regulators", i);
-		of_property_read_string(dev_node_reg, "regulator-name", &name);
-		voltage = 0;
-		if (i < voltage_count) {
-			of_property_read_u32_index(dev_node, "regulator-voltages", i, &voltage);
-		}
-		ret = lwis_regulator_get(lwis_dev->regulators, (char *)name, voltage, dev);
-		if (ret < 0) {
-			pr_err("Cannot find regulator: %s\n", name);
-			goto error_parse_reg;
-		}
-	}
-
-#ifdef LWIS_DT_DEBUG
-	lwis_regulator_print(lwis_dev->regulators);
-#endif
-
-	return 0;
-
-error_parse_reg:
-	/* In case of error, free all the other regulators that were alloc'ed */
-	lwis_regulator_put_all(lwis_dev->regulators);
-	lwis_regulator_list_free(lwis_dev->regulators);
-	lwis_dev->regulators = NULL;
-	return ret;
-}
-
 static int parse_clocks(struct lwis_device *lwis_dev)
 {
 	int i;
@@ -365,51 +255,6 @@ error_parse_clk:
 	lwis_clock_list_free(lwis_dev->clocks);
 	lwis_dev->clocks = NULL;
 	return ret;
-}
-
-static int parse_pinctrls(struct lwis_device *lwis_dev, char *expected_state)
-{
-	int count;
-	struct device *dev;
-	struct device_node *dev_node;
-	struct pinctrl *pc;
-	struct pinctrl_state *pinctrl_state;
-
-	dev = lwis_dev->k_dev;
-	dev_node = dev->of_node;
-
-	lwis_dev->mclk_present = false;
-	lwis_dev->shared_pinctrl = 0;
-	count = of_property_count_strings(dev_node, "pinctrl-names");
-
-	/* No pinctrl found, just return */
-	if (count <= 0)
-		return 0;
-
-	/* Set up pinctrl */
-	pc = devm_pinctrl_get(dev);
-	if (IS_ERR_OR_NULL(pc)) {
-		pr_err("Cannot allocate pinctrl\n");
-		return PTR_ERR(pc);
-	}
-
-	pinctrl_state = pinctrl_lookup_state(pc, expected_state);
-	if (IS_ERR_OR_NULL(pinctrl_state)) {
-		pr_err("Cannot find pinctrl state %s\n", expected_state);
-		devm_pinctrl_put(pc);
-		return PTR_ERR(pinctrl_state);
-	}
-
-	/* Indicate if the pinctrl shared with other devices */
-	of_property_read_u32(dev_node, "shared-pinctrl", &lwis_dev->shared_pinctrl);
-
-	/* The pinctrl is valid, release it as we do not need to hold on to
-	   the pins yet */
-	devm_pinctrl_put(pc);
-
-	lwis_dev->mclk_present = true;
-
-	return 0;
 }
 
 static int parse_irq_reg_bits(struct device_node *info, int *bits_num_result, u32 **reg_bits_result)
@@ -1241,24 +1086,6 @@ int lwis_base_parse_dt(struct lwis_device *lwis_dev)
 
 	pr_debug("Device tree entry [%s] - begin\n", lwis_dev->name);
 
-	ret = parse_gpios(lwis_dev, "shared-enable", &lwis_dev->shared_enable_gpios_present);
-	if (ret) {
-		pr_err("Error parsing shared-enable-gpios\n");
-		return ret;
-	}
-
-	ret = parse_gpios(lwis_dev, "enable", &lwis_dev->enable_gpios_present);
-	if (ret) {
-		pr_err("Error parsing enable-gpios\n");
-		return ret;
-	}
-
-	ret = parse_gpios(lwis_dev, "reset", &lwis_dev->reset_gpios_present);
-	if (ret) {
-		pr_err("Error parsing reset-gpios\n");
-		return ret;
-	}
-
 	ret = parse_irq_gpios(lwis_dev);
 	if (ret) {
 		pr_err("Error parsing irq-gpios\n");
@@ -1300,31 +1127,14 @@ int lwis_base_parse_dt(struct lwis_device *lwis_dev)
 		return ret;
 	}
 
-	ret = parse_settle_time(lwis_dev);
-	if (ret) {
-		pr_err("Error parsing settle-time\n");
-		return ret;
-	}
-
-	if (lwis_dev->regulators == NULL) {
-		ret = parse_regulators(lwis_dev);
-		if (ret) {
-			pr_err("Error parsing regulators\n");
-			return ret;
-		}
-	}
-
 	ret = parse_clocks(lwis_dev);
 	if (ret) {
 		pr_err("Error parsing clocks\n");
 		return ret;
 	}
 
-	ret = parse_pinctrls(lwis_dev, "mclk_on");
-	if (ret) {
-		pr_err("Error parsing mclk pinctrls\n");
-		return ret;
-	}
+	/* Indicate if the pinctrl shared with other devices */
+	of_property_read_u32(dev_node, "shared-pinctrl", &lwis_dev->shared_pinctrl);
 
 	ret = parse_interrupts(lwis_dev);
 	if (ret) {
