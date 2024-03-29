@@ -886,7 +886,6 @@ static int disp_stats_update_state(struct gs_panel *ctx)
 	return 0;
 }
 
-
 static void notify_panel_mode_changed_worker(struct work_struct *work)
 {
 	struct gs_panel *ctx =
@@ -902,6 +901,22 @@ static void notify_brightness_changed_worker(struct work_struct *work)
 		container_of(work, struct gs_panel, notify_brightness_changed_work);
 
 	sysfs_notify(&ctx->bl->dev.kobj, NULL, "brightness");
+}
+
+static void notify_panel_te2_rate_changed_worker(struct work_struct *work)
+{
+	struct gs_panel *ctx =
+		container_of(work, struct gs_panel, notify_panel_te2_rate_changed_work);
+
+	sysfs_notify(&ctx->bl->dev.kobj, NULL, "te2_rate_hz");
+}
+
+static void notify_panel_te2_option_changed_worker(struct work_struct *work)
+{
+	struct gs_panel *ctx =
+		container_of(work, struct gs_panel, notify_panel_te2_option_changed_work);
+
+	sysfs_notify(&ctx->bl->dev.kobj, NULL, "te2_option");
 }
 
 /* BACKLIGHT */
@@ -1353,7 +1368,6 @@ static void gs_panel_init_te2(struct gs_panel *ctx)
 	ctx->te2.option = TEX_OPT_CHANGEABLE;
 }
 
-
 int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 {
 	struct device *dev = &dsi->dev;
@@ -1442,6 +1456,9 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 
 	INIT_WORK(&ctx->notify_panel_mode_changed_work, notify_panel_mode_changed_worker);
 	INIT_WORK(&ctx->notify_brightness_changed_work, notify_brightness_changed_worker);
+	INIT_WORK(&ctx->notify_panel_te2_rate_changed_work, notify_panel_te2_rate_changed_worker);
+	INIT_WORK(&ctx->notify_panel_te2_option_changed_work,
+		  notify_panel_te2_option_changed_worker);
 
 	/* DSI HS Clock */
 	if (ctx->desc->default_dsi_hs_clk_mbps)

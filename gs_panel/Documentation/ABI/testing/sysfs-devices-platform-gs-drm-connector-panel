@@ -153,11 +153,25 @@ Description:
   Userspace client can activate SSC mode to control dynamic OSC clock SSC(Spread Spectrum Clocking).
   This sysfs node by control by RIL team and desense team to avoid signal interference.
 
-What:		/sys/devices/platform/exynos-drm/<panel>/te_info
-Date:		December, 2024
-KernelVersion:	6.1
-Contact:	"Chris Lu" <luchris@google.com>
+What: /sys/devices/platform/gs-drm-connector/panel/te_info
+Date: March 2024
+KernelVersion: 6.1
+Contact: "Chris Lu" <luchris@google.com>
 Description:
-		This file provides the TE frequency and option (fixed/changeable).
+  This file provides the TE frequency and option (fixed/changeable).
+  Valid panels are 'primary-panel' or 'secondary-panel'.
 
-		Valid panels are 'primary-panel' or 'secondary-panel'.
+What: /sys/devices/platform/gs-drm-connector/panel/te2_rate_hz
+Date: March 2024
+KernelVersion: 6.1
+Contact: "Chris Lu" <luchris@google.com>
+Description:
+  Userspace client uses this to write and read the TE2 rate. The unit is Hz.
+
+What: /sys/devices/platform/gs-drm-connector/panel/te2_option
+Date: March 2024
+KernelVersion: 6.1
+Contact: "Chris Lu" <luchris@google.com>
+Description:
+  Userspace client uses this to write and read TE2 option. The value could be 0 (changeable)
+  or 1 (fixed).
