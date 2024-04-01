@@ -377,6 +377,42 @@ static int generate_register_io_history(struct lwis_device *lwis_dev, char *buff
 					reg_io->io_entry.mod.bid, reg_io->io_entry.mod.offset,
 					reg_io->access_size, reg_io->start_timestamp);
 				strlcat(buffer, tmp_buf, buffer_size);
+			} else if (reg_io->io_entry.type == LWIS_IO_ENTRY_READ_V2) {
+				scnprintf(
+					tmp_buf, sizeof(tmp_buf),
+					"READ: bid %d, offset %llu, val %llu, speed_hz %u, access_size %lu, start_timestamp %llu\n",
+					reg_io->io_entry.rw_v2.bid, reg_io->io_entry.rw_v2.offset,
+					reg_io->io_entry.rw_v2.val, reg_io->io_entry.rw_v2.speed_hz,
+					reg_io->access_size, reg_io->start_timestamp);
+				strlcat(buffer, tmp_buf, buffer_size);
+			} else if (reg_io->io_entry.type == LWIS_IO_ENTRY_READ_BATCH_V2) {
+				scnprintf(
+					tmp_buf, sizeof(tmp_buf),
+					"READ_BATCH: bid %d, offset %llu, size_in_bytes %lu, speed_hz %u, access_size %lu, start_timestamp %llu\n",
+					reg_io->io_entry.rw_batch_v2.bid,
+					reg_io->io_entry.rw_batch_v2.offset,
+					reg_io->io_entry.rw_batch_v2.size_in_bytes,
+					reg_io->io_entry.rw_batch_v2.speed_hz, reg_io->access_size,
+					reg_io->start_timestamp);
+				strlcat(buffer, tmp_buf, buffer_size);
+			} else if (reg_io->io_entry.type == LWIS_IO_ENTRY_WRITE_V2) {
+				scnprintf(
+					tmp_buf, sizeof(tmp_buf),
+					"WRITE: bid %d, offset %llu, val %llu, speed_hz %u,  access_size %lu, start_timestamp %llu\n",
+					reg_io->io_entry.rw_v2.bid, reg_io->io_entry.rw_v2.offset,
+					reg_io->io_entry.rw_v2.val, reg_io->io_entry.rw_v2.speed_hz,
+					reg_io->access_size, reg_io->start_timestamp);
+				strlcat(buffer, tmp_buf, buffer_size);
+			} else if (reg_io->io_entry.type == LWIS_IO_ENTRY_WRITE_BATCH_V2) {
+				scnprintf(
+					tmp_buf, sizeof(tmp_buf),
+					"WRITE_BATCH: bid %d, offset %llu, size_in_bytes %lu, speed_hz %u, access_size %lu, start_timestamp %llu\n",
+					reg_io->io_entry.rw_batch_v2.bid,
+					reg_io->io_entry.rw_batch_v2.offset,
+					reg_io->io_entry.rw_batch_v2.size_in_bytes,
+					reg_io->io_entry.rw_batch_v2.speed_hz, reg_io->access_size,
+					reg_io->start_timestamp);
+				strlcat(buffer, tmp_buf, buffer_size);
 			}
 		}
 		hist_idx++;

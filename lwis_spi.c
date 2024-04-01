@@ -36,7 +36,8 @@ static inline bool check_bitwidth(const int bitwidth, const int min, const int m
 	return (bitwidth >= min) && (bitwidth <= max) && ((bitwidth % 8) == 0);
 }
 
-static int lwis_spi_read(struct lwis_spi_device *spi_dev, uint64_t offset, uint64_t *value)
+static int lwis_spi_read(struct lwis_spi_device *spi_dev, uint64_t offset, uint64_t *value,
+			 uint32_t speed_hz)
 {
 	int ret = 0;
 	unsigned int offset_bits;
@@ -82,11 +83,13 @@ static int lwis_spi_read(struct lwis_spi_device *spi_dev, uint64_t offset, uint6
 	lwis_value_to_be_buf(offset, (uint8_t *)&wbuf, offset_bytes);
 	tx.len = offset_bytes;
 	tx.tx_buf = &wbuf;
+	tx.speed_hz = speed_hz;
 	spi_message_add_tail(&tx, &msg);
 
 	memset(&rx, 0, sizeof(rx));
 	rx.len = value_bytes;
 	rx.rx_buf = &rbuf;
+	rx.speed_hz = speed_hz;
 	spi_message_add_tail(&rx, &msg);
 
 	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "spi_read_%s", spi_dev->base_dev.name);
@@ -105,7 +108,8 @@ static int lwis_spi_read(struct lwis_spi_device *spi_dev, uint64_t offset, uint6
 	return ret;
 }
 
-static int lwis_spi_write(struct lwis_spi_device *spi_dev, uint64_t offset, uint64_t value)
+static int lwis_spi_write(struct lwis_spi_device *spi_dev, uint64_t offset, uint64_t value,
+			  uint32_t speed_hz)
 {
 	int ret = 0;
 	unsigned int offset_bits;
@@ -159,12 +163,13 @@ static int lwis_spi_write(struct lwis_spi_device *spi_dev, uint64_t offset, uint
 	spi_message_init(&msg);
 
 	wbuf = (uint8_t *)&wbuf_val;
-	memset(&tx, 0, sizeof(struct spi_transfer));
+	memset(&tx, 0, sizeof(tx));
 	offset |= offset_overflow_value;
 	lwis_value_to_be_buf(offset, wbuf, offset_bytes);
 	lwis_value_to_be_buf(value, wbuf + offset_bytes, value_bytes);
 	tx.len = offset_bytes + value_bytes;
 	tx.tx_buf = wbuf;
+	tx.speed_hz = speed_hz;
 	spi_message_add_tail(&tx, &msg);
 
 	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "spi_write_%s", spi_dev->base_dev.name);
@@ -181,7 +186,7 @@ static int lwis_spi_write(struct lwis_spi_device *spi_dev, uint64_t offset, uint
 }
 
 static int lwis_spi_read_batch(struct lwis_spi_device *spi_dev, uint64_t offset, uint8_t *read_buf,
-			       int read_buf_size)
+			       int read_buf_size, uint32_t speed_hz)
 {
 	int ret = 0;
 	unsigned int offset_bits;
@@ -217,11 +222,13 @@ static int lwis_spi_read_batch(struct lwis_spi_device *spi_dev, uint64_t offset,
 	lwis_value_to_be_buf(offset, (uint8_t *)&wbuf, offset_bytes);
 	tx.len = offset_bytes;
 	tx.tx_buf = &wbuf;
+	tx.speed_hz = speed_hz;
 	spi_message_add_tail(&tx, &msg);
 
 	memset(&rx, 0, sizeof(rx));
 	rx.len = read_buf_size;
 	rx.rx_buf = read_buf;
+	rx.speed_hz = speed_hz;
 	spi_message_add_tail(&rx, &msg);
 
 	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "spi_read_batch_%s",
@@ -240,7 +247,7 @@ static int lwis_spi_read_batch(struct lwis_spi_device *spi_dev, uint64_t offset,
 }
 
 static int lwis_spi_write_batch(struct lwis_spi_device *spi_dev, uint64_t offset,
-				uint8_t *write_buf, int write_buf_size)
+				uint8_t *write_buf, int write_buf_size, uint32_t speed_hz)
 {
 	int ret = 0;
 	unsigned int offset_bits;
@@ -283,12 +290,13 @@ static int lwis_spi_write_batch(struct lwis_spi_device *spi_dev, uint64_t offset
 
 	spi_message_init(&msg);
 
-	memset(&tx, 0, sizeof(struct spi_transfer));
+	memset(&tx, 0, sizeof(tx));
 	offset |= offset_overflow_value;
 	lwis_value_to_be_buf(offset, buf, offset_bytes);
 	memcpy(buf + offset_bytes, write_buf, write_buf_size);
 	tx.len = msg_bytes;
 	tx.tx_buf = buf;
+	tx.speed_hz = speed_hz;
 	spi_message_add_tail(&tx, &msg);
 
 	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "spi_write_batch_%s",
@@ -318,29 +326,48 @@ int lwis_spi_io_entry_rw(struct lwis_spi_device *spi_dev, struct lwis_io_entry *
 	}
 
 	if (entry->type == LWIS_IO_ENTRY_READ) {
-		return lwis_spi_read(spi_dev, entry->rw.offset, &entry->rw.val);
+		return lwis_spi_read(spi_dev, entry->rw.offset, &entry->rw.val, /*speed_hz=*/0);
 	}
 	if (entry->type == LWIS_IO_ENTRY_WRITE) {
-		return lwis_spi_write(spi_dev, entry->rw.offset, entry->rw.val);
+		return lwis_spi_write(spi_dev, entry->rw.offset, entry->rw.val, /*speed_hz=*/0);
 	}
 	if (entry->type == LWIS_IO_ENTRY_MODIFY) {
 		int ret;
 		uint64_t reg_value;
-		ret = lwis_spi_read(spi_dev, entry->mod.offset, &reg_value);
+		ret = lwis_spi_read(spi_dev, entry->mod.offset, &reg_value, /*speed_hz=*/0);
 		if (ret) {
 			return ret;
 		}
 		reg_value &= ~entry->mod.val_mask;
 		reg_value |= entry->mod.val_mask & entry->mod.val;
-		return lwis_spi_write(spi_dev, entry->mod.offset, reg_value);
+		return lwis_spi_write(spi_dev, entry->mod.offset, reg_value, /*speed_hz=*/0);
 	}
 	if (entry->type == LWIS_IO_ENTRY_READ_BATCH) {
 		return lwis_spi_read_batch(spi_dev, entry->rw_batch.offset, entry->rw_batch.buf,
-					   entry->rw_batch.size_in_bytes);
+					   entry->rw_batch.size_in_bytes, /*speed_hz=*/0);
 	}
 	if (entry->type == LWIS_IO_ENTRY_WRITE_BATCH) {
 		return lwis_spi_write_batch(spi_dev, entry->rw_batch.offset, entry->rw_batch.buf,
-					    entry->rw_batch.size_in_bytes);
+					    entry->rw_batch.size_in_bytes, /*speed_hz=*/0);
+	}
+	if (entry->type == LWIS_IO_ENTRY_READ_V2) {
+		return lwis_spi_read(spi_dev, entry->rw_v2.offset, &entry->rw_v2.val,
+				     entry->rw_v2.speed_hz);
+	}
+	if (entry->type == LWIS_IO_ENTRY_WRITE_V2) {
+		return lwis_spi_write(spi_dev, entry->rw_v2.offset, entry->rw_v2.val,
+				      entry->rw_v2.speed_hz);
+	}
+	if (entry->type == LWIS_IO_ENTRY_READ_BATCH_V2) {
+		return lwis_spi_read_batch(spi_dev, entry->rw_batch_v2.offset,
+					   entry->rw_batch_v2.buf, entry->rw_batch_v2.size_in_bytes,
+					   entry->rw_batch_v2.speed_hz);
+	}
+	if (entry->type == LWIS_IO_ENTRY_WRITE_BATCH_V2) {
+		return lwis_spi_write_batch(spi_dev, entry->rw_batch_v2.offset,
+					    entry->rw_batch_v2.buf,
+					    entry->rw_batch_v2.size_in_bytes,
+					    entry->rw_batch_v2.speed_hz);
 	}
 	dev_err(spi_dev->base_dev.dev, "Invalid IO entry type: %d\n", entry->type);
 	return -EINVAL;
