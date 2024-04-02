@@ -479,6 +479,22 @@ ssize_t gs_set_te2_timing(struct gs_panel *ctx, size_t count, const char *buf, b
 	return count;
 }
 
+static void notify_panel_te2_rate_changed_worker(struct work_struct *work)
+{
+	struct gs_panel *ctx =
+		container_of(work, struct gs_panel, notify_panel_te2_rate_changed_work);
+
+	sysfs_notify(&ctx->dev->kobj, NULL, "te2_rate_hz");
+}
+
+static void notify_panel_te2_option_changed_worker(struct work_struct *work)
+{
+	struct gs_panel *ctx =
+		container_of(work, struct gs_panel, notify_panel_te2_option_changed_work);
+
+	sysfs_notify(&ctx->dev->kobj, NULL, "te2_option");
+}
+
 /* IDLE MODE */
 
 unsigned int gs_panel_get_idle_time_delta(struct gs_panel *ctx)
@@ -901,22 +917,6 @@ static void notify_brightness_changed_worker(struct work_struct *work)
 		container_of(work, struct gs_panel, notify_brightness_changed_work);
 
 	sysfs_notify(&ctx->bl->dev.kobj, NULL, "brightness");
-}
-
-static void notify_panel_te2_rate_changed_worker(struct work_struct *work)
-{
-	struct gs_panel *ctx =
-		container_of(work, struct gs_panel, notify_panel_te2_rate_changed_work);
-
-	sysfs_notify(&ctx->bl->dev.kobj, NULL, "te2_rate_hz");
-}
-
-static void notify_panel_te2_option_changed_worker(struct work_struct *work)
-{
-	struct gs_panel *ctx =
-		container_of(work, struct gs_panel, notify_panel_te2_option_changed_work);
-
-	sysfs_notify(&ctx->bl->dev.kobj, NULL, "te2_option");
 }
 
 /* BACKLIGHT */
