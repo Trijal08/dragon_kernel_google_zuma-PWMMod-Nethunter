@@ -656,6 +656,19 @@ static ssize_t te2_option_show(struct device *dev, struct device_attribute *attr
 	return sysfs_emit(buf, "%s\n", (option == TEX_OPT_CHANGEABLE) ? "changeable" : "fixed");
 }
 
+static ssize_t power_state_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bl = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bl);
+	enum display_stats_state state;
+
+	mutex_lock(&ctx->bl_state_lock);
+	state = gs_get_current_display_state_locked(ctx);
+	mutex_unlock(&ctx->bl_state_lock);
+
+	return sysfs_emit(buf, "%s\n", get_disp_state_str(state));
+}
+
 static DEVICE_ATTR_RO(serial_number);
 static DEVICE_ATTR_RO(panel_extinfo);
 static DEVICE_ATTR_RO(panel_name);
@@ -674,6 +687,7 @@ static DEVICE_ATTR_RO(available_disp_stats);
 static DEVICE_ATTR_RO(te_info);
 static DEVICE_ATTR_RW(te2_rate_hz);
 static DEVICE_ATTR_RW(te2_option);
+static DEVICE_ATTR_RO(power_state);
 /* TODO(tknelms): re-implement below */
 #if 0
 static DEVICE_ATTR_WO(gamma);
@@ -698,6 +712,7 @@ static const struct attribute *panel_attrs[] = { &dev_attr_serial_number.attr,
 						 &dev_attr_te_info.attr,
 						 &dev_attr_te2_rate_hz.attr,
 						 &dev_attr_te2_option.attr,
+						 &dev_attr_power_state.attr,
 /* TODO(tknelms): re-implement below */
 #if 0
 						 &dev_attr_gamma.attr,
@@ -915,6 +930,10 @@ static ssize_t state_show(struct device *dev, struct device_attribute *attr, cha
 			if (ret_cnt > 0)
 				rc += ret_cnt;
 		}
+	} else if (rc > 0) {
+		ret_cnt = sysfs_emit_at(buf, ret_cnt, "\n");
+		if (ret_cnt > 0)
+			rc += ret_cnt;
 	}
 
 	dev_dbg(ctx->dev, "%s: %s\n", __func__, rc > 0 ? buf : "");

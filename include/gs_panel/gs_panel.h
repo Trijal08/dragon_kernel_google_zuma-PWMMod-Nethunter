@@ -1121,6 +1121,7 @@ struct gs_panel {
 	struct work_struct notify_brightness_changed_work;
 	struct delayed_work notify_panel_te2_rate_changed_work;
 	struct work_struct notify_panel_te2_option_changed_work;
+	enum display_stats_state notified_power_mode;
 
 	/* use for display stats residence */
 	struct display_stats disp_stats;
