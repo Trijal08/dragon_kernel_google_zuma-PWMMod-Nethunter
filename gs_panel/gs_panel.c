@@ -170,6 +170,8 @@ static int gs_panel_parse_regulators(struct gs_panel *ctx)
 			pr_warn("ignore vddd normal %u\n", gs_reg->vddd_normal_uV);
 			gs_reg->vddd_normal_uV = 0;
 		}
+	} else {
+		gs_reg->post_vddd_lp_enabled = of_property_read_bool(dev->of_node, "post-vddd-lp");
 	}
 
 	reg = devm_regulator_get_optional(dev, "vddr_en");
