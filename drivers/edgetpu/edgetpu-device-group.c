@@ -79,12 +79,14 @@ static int edgetpu_group_activate(struct edgetpu_device_group *group)
 {
 	u8 mailbox_id;
 	int ret;
+	int pasid;
 
 	if (edgetpu_group_mailbox_detached_locked(group))
 		return 0;
 
 	mailbox_id = edgetpu_group_context_id_locked(group);
-	edgetpu_soc_activate_context(group->etdev, mailbox_id);
+	pasid = group->etdomain ? group->etdomain->pasid : 0;
+	edgetpu_soc_activate_context(group->etdev, mailbox_id, pasid);
 	ret = edgetpu_mailbox_activate(group->etdev, mailbox_id, group->mbox_attr.client_priv,
 				       group->vcid, !group->activated);
 	if (ret) {
@@ -176,7 +178,7 @@ static int do_attach_mailbox_locked(struct edgetpu_device_group *group)
 		edgetpu_mmu_detach_domain(group->etdev, group->etdomain);
 		return ret;
 	}
-	group->context_id = group->vii.mailbox->mailbox_id;
+	group->etdomain->context_id = group->context_id = group->vii.mailbox->mailbox_id;
 	return 0;
 }
 
