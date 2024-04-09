@@ -339,11 +339,11 @@ static int debugfs_add_misc_panel_entries(struct gs_panel *ctx, struct dentry *p
 	debugfs_create_u32("rev", 0600, panel_entry, &ctx->panel_rev);
 	debugfs_create_bool("lhbm_postwork_disabled", 0600, panel_entry,
 			    &ctx->lhbm.post_work_disabled);
+	debugfs_create_u32("normal_mode_work_delay_ms", 0600, panel_entry,
+			   &ctx->normal_mode_work_delay_ms);
 	/*
 	 * TODO(tknelms)
 	const struct gs_panel_desc *desc = ctx->desc;
-	debugfs_create_u32("normal_mode_work_delay_ms", 0600, panel_entry,
-			   &ctx->normal_mode_work_delay_ms);
 
 	if (!funcs)
 		return -EINVAL;

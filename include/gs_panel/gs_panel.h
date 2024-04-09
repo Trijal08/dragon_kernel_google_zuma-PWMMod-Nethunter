@@ -784,6 +784,8 @@ struct gs_panel_desc {
 	u32 default_dsi_hs_clk_mbps;
 	/** @refresh_on_lp: inform composer that we need a frame update while entering AOD or not */
 	bool refresh_on_lp;
+	/** @normal_mode_work_delay_ms: period of the periodic work in normal mode */
+	const u32 normal_mode_work_delay_ms;
 };
 
 /* PRIV DATA */
@@ -1145,6 +1147,11 @@ struct gs_panel {
 	/* TE info */
 	int te_freq;
 	enum gs_panel_tex_opt te_opt;
+
+	/** @normal_mode_work_delay_ms: period of the periodic work in normal mode */
+	u32 normal_mode_work_delay_ms;
+	/** @normal_mode_work: periodic work for each panel in normal mode */
+	struct delayed_work normal_mode_work;
 };
 
 /* FUNCTIONS */

@@ -234,6 +234,12 @@ static void gs_panel_bridge_enable(struct drm_bridge *bridge,
 	if (need_update_backlight && ctx->bl) {
 		backlight_update_status(ctx->bl);
 	}
+
+	if (!is_active && gs_panel_has_func(ctx, run_normal_mode_work)) {
+		dev_dbg(ctx->dev, "%s: schedule normal_mode_work\n", __func__);
+		schedule_delayed_work(&ctx->normal_mode_work,
+				      msecs_to_jiffies(ctx->normal_mode_work_delay_ms));
+	}
 }
 
 /**
@@ -530,6 +536,11 @@ static void bridge_mode_set_enter_lp_mode(struct gs_panel *ctx, const struct gs_
 		/*TODO(b/279521693) _gs_panel_disable_normal_feat_locked(ctx);*/
 		ctx->desc->gs_panel_func->set_lp_mode(ctx, pmode);
 		ctx->panel_state = GPANEL_STATE_LP;
+
+		if (gs_panel_has_func(ctx, run_normal_mode_work)) {
+			dev_dbg(ctx->dev, "%s: cancel normal_mode_work\n", __func__);
+			cancel_delayed_work(&ctx->normal_mode_work);
+		}
 	}
 	gs_panel_set_vddd_voltage(ctx, true);
 }
@@ -542,6 +553,12 @@ static void bridge_mode_set_leave_lp_mode(struct gs_panel *ctx, const struct gs_
 		ctx->desc->gs_panel_func->set_nolp_mode(ctx, pmode);
 		ctx->panel_state = GPANEL_STATE_NORMAL;
 		/*TODO(b/279521693): lhbm_on_delay_frames*/
+
+		if (gs_panel_has_func(ctx, run_normal_mode_work)) {
+			dev_dbg(ctx->dev, "%s: schedule normal_mode_work\n", __func__);
+			schedule_delayed_work(&ctx->normal_mode_work,
+					      msecs_to_jiffies(ctx->normal_mode_work_delay_ms));
+		}
 	}
 	ctx->current_binned_lp = NULL;
 
@@ -722,6 +739,11 @@ static void gs_panel_bridge_disable(struct drm_bridge *bridge,
 			ctx->panel_state = GPANEL_STATE_BLANK;
 		} else {
 			ctx->panel_state = GPANEL_STATE_OFF;
+
+			if (gs_panel_has_func(ctx, run_normal_mode_work)) {
+				dev_dbg(dev, "%s: cancel normal_mode_work\n", __func__);
+				cancel_delayed_work(&ctx->normal_mode_work);
+			}
 		}
 
 		drm_panel_disable(&ctx->base);

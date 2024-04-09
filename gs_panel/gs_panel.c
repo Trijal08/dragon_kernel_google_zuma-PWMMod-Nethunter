@@ -33,6 +33,7 @@
 /* ext_info registers */
 static const char ext_info_regs[] = { 0xDA, 0xDB, 0xDC };
 #define EXT_INFO_SIZE ARRAY_SIZE(ext_info_regs)
+#define NORMAL_MODE_WORK_DELAY_MS 30000
 
 /* INTERNAL ACCESSORS */
 
@@ -1188,6 +1189,20 @@ void gs_panel_set_vddd_voltage(struct gs_panel *ctx, bool is_lp)
 	}
 }
 
+/* Miscellaneous */
+
+static void gs_panel_normal_mode_work(struct work_struct *work)
+{
+	struct gs_panel *ctx = container_of(work, struct gs_panel, normal_mode_work.work);
+
+	dev_dbg(ctx->dev, "%s\n", __func__);
+	mutex_lock(&ctx->mode_lock);
+	ctx->desc->gs_panel_func->run_normal_mode_work(ctx);
+	mutex_unlock(&ctx->mode_lock);
+	schedule_delayed_work(&ctx->normal_mode_work,
+			      msecs_to_jiffies(ctx->normal_mode_work_delay_ms));
+}
+
 /* INITIALIZATION */
 
 int gs_panel_first_enable(struct gs_panel *ctx)
@@ -1227,6 +1242,12 @@ int gs_panel_first_enable(struct gs_panel *ctx)
 
 	if (funcs && funcs->panel_init)
 		funcs->panel_init(ctx);
+
+	if (gs_panel_has_func(ctx, run_normal_mode_work)) {
+		dev_dbg(dev, "%s: schedule normal_mode_work\n", __func__);
+		schedule_delayed_work(&ctx->normal_mode_work,
+				      msecs_to_jiffies(ctx->normal_mode_work_delay_ms));
+	}
 
 	return ret;
 }
@@ -1453,6 +1474,12 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	/* Idle work */
 	ctx->idle_data.panel_idle_enabled = gs_panel_has_func(ctx, set_self_refresh);
 	INIT_DELAYED_WORK(&ctx->idle_data.idle_work, panel_idle_work);
+
+	if (gs_panel_has_func(ctx, run_normal_mode_work)) {
+		ctx->normal_mode_work_delay_ms =
+			ctx->desc->normal_mode_work_delay_ms ? : NORMAL_MODE_WORK_DELAY_MS;
+		INIT_DELAYED_WORK(&ctx->normal_mode_work, gs_panel_normal_mode_work);
+	}
 
 	INIT_WORK(&ctx->notify_panel_mode_changed_work, notify_panel_mode_changed_worker);
 	INIT_WORK(&ctx->notify_brightness_changed_work, notify_brightness_changed_worker);
