@@ -6,6 +6,8 @@ menu "GS Display Configuration"
 config GS_DRM_PANEL_UNIFIED
 	tristate "Support for GS Unified panel driver"
 	depends on OF && DRM
+	select DRM_DISPLAY_HELPER
+	select DRM_DISPLAY_DP_HELPER
 	help
 	  Choose this option to support the unified panel driver framework.
 	  This option is designed to be decoupled from DPU code
