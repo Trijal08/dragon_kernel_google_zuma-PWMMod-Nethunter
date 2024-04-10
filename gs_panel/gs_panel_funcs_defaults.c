@@ -247,8 +247,14 @@ EXPORT_SYMBOL(gs_panel_set_binned_lp_helper);
 
 void gs_panel_set_lp_mode_helper(struct gs_panel *ctx, const struct gs_panel_mode *pmode)
 {
-	if (ctx->desc->lp_cmdset)
+	const u16 brightness = gs_panel_get_brightness(ctx);
+
+	if (ctx->desc->lp_cmdset) {
 		gs_panel_send_cmdset(ctx, ctx->desc->lp_cmdset);
-	dev_info(ctx->dev, "enter %dhz LP mode\n", drm_mode_vrefresh(&pmode->mode));
+		gs_panel_set_binned_lp_helper(ctx, brightness);
+		dev_info(ctx->dev, "enter %dhz LP mode\n", drm_mode_vrefresh(&pmode->mode));
+	} else {
+		dev_err(ctx->dev, "No LP cmdset in panel description\n");
+	}
 }
 EXPORT_SYMBOL(gs_panel_set_lp_mode_helper);
