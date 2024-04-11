@@ -302,6 +302,7 @@ int gs_panel_set_op_hz(struct gs_panel *ctx, unsigned int hz)
 	struct device *dev = ctx->dev;
 	const struct gs_panel_funcs *funcs = ctx->desc->gs_panel_func;
 	int ret = 0;
+	bool need_update = false;
 
 	if (!gs_is_panel_initialized(ctx))
 		return -EAGAIN;
@@ -316,21 +317,24 @@ int gs_panel_set_op_hz(struct gs_panel *ctx, unsigned int hz)
 	mutex_lock(&ctx->mode_lock);
 	if (ctx->op_hz != hz) {
 		ret = funcs->set_op_hz(ctx, hz);
-		if (ret) {
+		if (ret)
 			dev_err(dev, "failed to set op rate: %u Hz\n", hz);
-		} else {
-			/*TODO(b/333697598): Use async notify or work queue to notify.*/
-			PANEL_ATRACE_BEGIN("notify_op_hz");
-			blocking_notifier_call_chain(&ctx->op_hz_notifier_head,
-						     GS_PANEL_NOTIFIER_SET_OP_HZ, &ctx->op_hz);
-			PANEL_ATRACE_END("notify_op_hz");
-			sysfs_notify(&dev->kobj, NULL, "op_hz");
-		}
+		else
+			need_update = true;
 	} else {
 		dev_dbg(dev, "%s: skip the same op rate: %u Hz\n", __func__, hz);
 	}
 	/*TODO(b/267170999): MODE*/
 	mutex_unlock(&ctx->mode_lock);
+
+	if (need_update) {
+		/*TODO(b/333697598): Use async notify or work queue to notify.*/
+		PANEL_ATRACE_BEGIN("notify_op_hz");
+		blocking_notifier_call_chain(&ctx->op_hz_notifier_head, GS_PANEL_NOTIFIER_SET_OP_HZ,
+					     &ctx->op_hz);
+		PANEL_ATRACE_END("notify_op_hz");
+		sysfs_notify(&dev->kobj, NULL, "op_hz");
+	}
 
 	/*TODO(tknelms) DPU_ATRACE_END("set_op_hz");*/
 
@@ -349,7 +353,7 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 		return;
 
 	dev_dbg(ctx->dev, "%s: mipi_sync(0x%lx) pending_update_flags(0x%x)\n", __func__,
-		 conn_state->mipi_sync, conn_state->pending_update_flags);
+		conn_state->mipi_sync, conn_state->pending_update_flags);
 	/*TODO(tknelms) DPU_ATRACE_BEGIN(__func__);*/
 	mipi_sync = conn_state->mipi_sync &
 		    (GS_MIPI_CMD_SYNC_LHBM | GS_MIPI_CMD_SYNC_GHBM | GS_MIPI_CMD_SYNC_BL);
@@ -393,7 +397,7 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 	}
 
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_LHBM_UPDATE) &&
-		gs_panel_has_func(ctx, set_local_hbm_mode)){
+	    gs_panel_has_func(ctx, set_local_hbm_mode)) {
 		/* TODO(b/261073288) PANEL_ATRACE_BEGIN("set_lhbm"); */
 		dev_dbg(ctx->dev, "%s: set LHBM to %d\n", __func__, conn_state->local_hbm_on);
 		/* TODO(b/267170999): MODE */
@@ -581,4 +585,3 @@ int gs_panel_initialize_gs_connector(struct gs_panel *ctx, struct drm_device *dr
 
 	return 0;
 }
-
