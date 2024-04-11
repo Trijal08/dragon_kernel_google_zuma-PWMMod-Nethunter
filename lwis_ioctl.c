@@ -2388,7 +2388,7 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 		mutex_unlock(&lwis_client->lock);
 		break;
 	default:
-		dev_err_ratelimited(lwis_dev->dev, "Unknown command id 0x%x\n", header->cmd_id);
+		dev_warn_ratelimited(lwis_dev->dev, "Unknown command id 0x%x\n", header->cmd_id);
 		header->ret_code = -ENOSYS;
 		ret = copy_pkt_to_user(lwis_dev, user_msg, (void *)header, sizeof(*header));
 	}
