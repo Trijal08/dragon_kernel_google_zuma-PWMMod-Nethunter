@@ -226,7 +226,7 @@ static void stop_kthread_workers(struct lwis_bus_manager *bus_manager, struct lw
 	if (!bus_manager)
 		return;
 
-	if (bus_manager->bus_worker_thread) {
+	if (!IS_ERR(bus_manager->bus_worker_thread)) {
 		if (lwis_bus_manager_debug) {
 			dev_err(lwis_dev->dev,
 				"stop_kthread_workers: destroying LWIS Bus Manager thread\n");
