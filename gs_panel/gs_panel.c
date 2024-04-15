@@ -1574,8 +1574,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 
 	/* Attach bridge funcs */
 	ctx->bridge.funcs = get_panel_drm_bridge_funcs();
-	ctx->te_opt = TEX_OPT_CHANGEABLE;
-	ctx->te_freq = 60;
+	ctx->sw_status.te.option = TEX_OPT_CHANGEABLE;
+	ctx->sw_status.te.rate_hz = 60;
 
 	/* panel handoff */
 	gs_panel_handoff(ctx);
