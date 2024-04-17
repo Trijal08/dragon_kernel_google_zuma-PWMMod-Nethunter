@@ -771,16 +771,16 @@ int lwis_interrupt_event_enable(struct lwis_interrupt_list *list, int64_t event_
 		return -EINVAL;
 	}
 
+	spin_lock_irqsave(&list->lwis_dev->lock, flags);
 	for (index = 0; index < list->count; index++) {
-		spin_lock_irqsave(&list->irq[index].lock, flags);
 		event = interrupt_get_single_event_info_locked(&list->irq[index], event_id);
 		if (event) {
 			list->irq[index].has_mask_value = true;
 			ret = interrupt_single_event_enable_locked(&list->irq[index], event,
 								   enabled);
 		}
-		spin_unlock_irqrestore(&list->irq[index].lock, flags);
 	}
+	spin_unlock_irqrestore(&list->lwis_dev->lock, flags);
 	return ret;
 }
 
