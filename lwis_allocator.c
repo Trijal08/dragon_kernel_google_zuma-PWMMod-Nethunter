@@ -373,12 +373,14 @@ void lwis_allocator_free(struct lwis_device *lwis_dev, void *ptr)
 		dev_err(lwis_dev->dev, "block_mgr is NULL\n");
 		return;
 	}
+	spin_lock_irqsave(&block_mgr->lock, flags);
 	hash_for_each_possible (block_mgr->allocated_blocks, blk, node, (unsigned long long)ptr) {
 		if (blk->ptr == ptr) {
 			block = blk;
 			break;
 		}
 	}
+	spin_unlock_irqrestore(&block_mgr->lock, flags);
 
 	if (block == NULL) {
 		dev_err(lwis_dev->dev, "Allocator free ptr not found\n");
