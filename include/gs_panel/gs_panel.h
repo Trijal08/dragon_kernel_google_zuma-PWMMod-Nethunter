@@ -786,6 +786,11 @@ struct gs_panel_desc {
 	bool refresh_on_lp;
 	/** @normal_mode_work_delay_ms: period of the periodic work in normal mode */
 	const u32 normal_mode_work_delay_ms;
+	/**
+	 * @notify_te2_rate_changed_work_delay_ms: delay the work to call sysfs_notify
+	 *                                         for TE2 rate change
+	 */
+	const u32 notify_te2_rate_changed_work_delay_ms;
 };
 
 /* PRIV DATA */
@@ -1120,7 +1125,7 @@ struct gs_panel {
 	/* use for notify state changed */
 	struct work_struct notify_panel_mode_changed_work;
 	struct work_struct notify_brightness_changed_work;
-	struct work_struct notify_panel_te2_rate_changed_work;
+	struct delayed_work notify_panel_te2_rate_changed_work;
 	struct work_struct notify_panel_te2_option_changed_work;
 
 	/* use for display stats residence */
@@ -1236,9 +1241,10 @@ static inline void notify_panel_mode_changed(struct gs_panel *ctx)
 	schedule_work(&ctx->notify_panel_mode_changed_work);
 }
 
-static inline void notify_panel_te2_rate_changed(struct gs_panel *ctx)
+static inline void notify_panel_te2_rate_changed(struct gs_panel *ctx, u32 delay_ms)
 {
-	schedule_work(&ctx->notify_panel_te2_rate_changed_work);
+	schedule_delayed_work(&ctx->notify_panel_te2_rate_changed_work,
+			      msecs_to_jiffies(delay_ms));
 }
 
 static inline void notify_panel_te2_option_changed(struct gs_panel *ctx)
