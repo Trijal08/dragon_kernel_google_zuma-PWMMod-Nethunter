@@ -19,6 +19,8 @@
 #include "gs_panel/gs_panel.h"
 #include "trace/panel_trace.h"
 
+#include "trace/dpu_trace.h"
+
 /* drm_connector_helper_funcs */
 
 static int gs_panel_connector_modes(struct drm_connector *connector)
@@ -310,7 +312,7 @@ int gs_panel_set_op_hz(struct gs_panel *ctx, unsigned int hz)
 	if (!gs_panel_has_func(ctx, set_op_hz))
 		return -ENOTSUPP;
 
-	/*TODO(tknelms) DPU_ATRACE_BEGIN("set_op_hz");*/
+	DPU_ATRACE_BEGIN("set_op_hz");
 	dev_dbg(dev, "%s: set op_hz to %d\n", __func__, hz);
 
 	/*TODO(b/267170999): MODE*/
@@ -336,7 +338,7 @@ int gs_panel_set_op_hz(struct gs_panel *ctx, unsigned int hz)
 		sysfs_notify(&dev->kobj, NULL, "op_hz");
 	}
 
-	/*TODO(tknelms) DPU_ATRACE_END("set_op_hz");*/
+	DPU_ATRACE_END("set_op_hz");
 
 	return ret;
 }
@@ -354,7 +356,7 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 
 	dev_dbg(ctx->dev, "%s: mipi_sync(0x%lx) pending_update_flags(0x%x)\n", __func__,
 		conn_state->mipi_sync, conn_state->pending_update_flags);
-	/*TODO(tknelms) DPU_ATRACE_BEGIN(__func__);*/
+	DPU_ATRACE_BEGIN(__func__);
 	mipi_sync = conn_state->mipi_sync &
 		    (GS_MIPI_CMD_SYNC_LHBM | GS_MIPI_CMD_SYNC_GHBM | GS_MIPI_CMD_SYNC_BL);
 
@@ -377,23 +379,23 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_GHBM_UPDATE) &&
 	    gs_panel_has_func(ctx, set_hbm_mode) &&
 	    (ctx->hbm_mode != conn_state->global_hbm_mode)) {
-		/*TODO(tknelms) DPU_ATRACE_BEGIN("set_hbm");*/
+		DPU_ATRACE_BEGIN("set_hbm");
 		/*TODO(b/267170999): MODE*/
 		mutex_lock(&ctx->mode_lock);
 		gs_panel_func->set_hbm_mode(ctx, conn_state->global_hbm_mode);
 		notify_panel_mode_changed(ctx);
 		/*TODO(b/267170999): MODE*/
 		mutex_unlock(&ctx->mode_lock);
-		/*TODO(tknelms) DPU_ATRACE_END("set_hbm");*/
+		DPU_ATRACE_END("set_hbm");
 		ghbm_updated = true;
 	}
 
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_BL_UPDATE) &&
 	    (ctx->bl->props.brightness != conn_state->brightness_level)) {
-		/*TODO(tknelms) DPU_ATRACE_BEGIN("set_bl");*/
+		DPU_ATRACE_BEGIN("set_bl");
 		ctx->bl->props.brightness = conn_state->brightness_level;
 		backlight_update_status(ctx->bl);
-		/*TODO(tknelms) DPU_ATRACE_END("set_bl");*/
+		DPU_ATRACE_END("set_bl");
 	}
 
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_LHBM_UPDATE) &&
@@ -429,20 +431,20 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 		* panel needs one extra VSYNC period to apply GHBM/dbv. The frame
 		* update should be delayed.
 		*/
-		/*TODO(tknelms) DPU_ATRACE_BEGIN("dbv_wait");*/
+		DPU_ATRACE_BEGIN("dbv_wait");
 		if (!drm_crtc_vblank_get(conn_state->base.crtc)) {
 			drm_crtc_wait_one_vblank(conn_state->base.crtc);
 			drm_crtc_vblank_put(conn_state->base.crtc);
 		} else {
 			pr_warn("%s failed to get vblank for dbv wait\n", __func__);
 		}
-		/*TODO(tknelms) DPU_ATRACE_END("dbv_wait");*/
+		DPU_ATRACE_END("dbv_wait");
 	}
 
 	if (ghbm_updated)
 		sysfs_notify(&ctx->bl->dev.kobj, NULL, "hbm_mode");
 
-	/*TODO(tknelms) DPU_ATRACE_END(__func__);*/
+	DPU_ATRACE_END(__func__);
 }
 
 static void gs_panel_connector_atomic_pre_commit(struct gs_drm_connector *gs_connector,
