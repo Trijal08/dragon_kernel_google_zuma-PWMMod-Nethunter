@@ -1491,6 +1491,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	INIT_WORK(&ctx->notify_panel_te2_option_changed_work,
 		  notify_panel_te2_option_changed_worker);
 
+	BLOCKING_INIT_NOTIFIER_HEAD(&ctx->op_hz_notifier_head);
+
 	/* DSI HS Clock */
 	if (ctx->desc->default_dsi_hs_clk_mbps)
 		ctx->dsi_hs_clk_mbps = ctx->desc->default_dsi_hs_clk_mbps;
@@ -1827,6 +1829,39 @@ u32 panel_calc_linear_luminance(const u32 value, const u32 coef_x_1k, const int 
 	return mult_frac(value, coef_x_1k, 1000) + offset;
 }
 EXPORT_SYMBOL(panel_calc_linear_luminance);
+
+int gs_panel_register_op_hz_notifier(struct drm_connector *connector, struct notifier_block *nb)
+{
+	int retval;
+
+	if (is_gs_drm_connector(connector)) {
+		struct gs_drm_connector *gs_connector = to_gs_connector(connector);
+		struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+
+		retval = blocking_notifier_chain_register(&ctx->op_hz_notifier_head, nb);
+		if (retval != 0)
+			dev_warn(ctx->dev, "register notifier failed(%d)\n", retval);
+		else
+			blocking_notifier_call_chain(&ctx->op_hz_notifier_head,
+						     GS_PANEL_NOTIFIER_SET_OP_HZ, &ctx->op_hz);
+	} else {
+		dev_warn(connector->kdev,
+			 "register notifier failed(unexpected type of connector)\n");
+		retval = -EINVAL;
+	}
+
+	return retval;
+}
+EXPORT_SYMBOL_GPL(gs_panel_register_op_hz_notifier);
+
+int gs_panel_unregister_op_hz_notifier(struct drm_connector *connector, struct notifier_block *nb)
+{
+	struct gs_drm_connector *gs_connector = to_gs_connector(connector);
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+
+	return blocking_notifier_chain_unregister(&ctx->op_hz_notifier_head, nb);
+}
+EXPORT_SYMBOL_GPL(gs_panel_unregister_op_hz_notifier);
 
 MODULE_AUTHOR("Taylor Nelms <tknelms@google.com>");
 MODULE_DESCRIPTION("MIPI-DSI panel driver abstraction for use across panel vendors");
