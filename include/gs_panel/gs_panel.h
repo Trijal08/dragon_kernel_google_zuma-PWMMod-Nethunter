@@ -824,6 +824,10 @@ struct gs_panel_regulator {
 	struct regulator *vddr;
 	u32 vddd_normal_uV;
 	u32 vddd_lp_uV;
+	/** @need_post_vddd_lp: indicates need to adjust vddd lp in self refresh */
+	bool need_post_vddd_lp;
+	/** @post_vddd_lp_enabled: adjust lp vddd in self refresh instead of mode set */
+	bool post_vddd_lp_enabled;
 };
 
 /**
