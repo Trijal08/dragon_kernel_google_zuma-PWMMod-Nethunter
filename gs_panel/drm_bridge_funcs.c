@@ -542,7 +542,10 @@ static void bridge_mode_set_enter_lp_mode(struct gs_panel *ctx, const struct gs_
 			cancel_delayed_work(&ctx->normal_mode_work);
 		}
 	}
-	gs_panel_set_vddd_voltage(ctx, true);
+	if (!ctx->regulator.post_vddd_lp_enabled)
+		gs_panel_set_vddd_voltage(ctx, true);
+	else
+		ctx->regulator.need_post_vddd_lp = true;
 }
 
 static void bridge_mode_set_leave_lp_mode(struct gs_panel *ctx, const struct gs_panel_mode *pmode,
@@ -667,6 +670,7 @@ static void gs_panel_bridge_mode_set(struct drm_bridge *bridge, const struct drm
 			if (is_active)
 				need_update_backlight = true;
 		} else if (was_lp_mode && !is_lp_mode) {
+			ctx->regulator.need_post_vddd_lp = false;
 			bridge_mode_set_leave_lp_mode(ctx, pmode, is_active);
 			if (is_active) {
 				state_changed = true;
@@ -723,6 +727,11 @@ static void gs_panel_bridge_disable(struct drm_bridge *bridge,
 		ctx->idle_data.self_refresh_active = true;
 		panel_update_idle_mode_locked(ctx, false);
 		mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+
+		if (ctx->regulator.post_vddd_lp_enabled && ctx->regulator.need_post_vddd_lp) {
+			gs_panel_set_vddd_voltage(ctx, true);
+			ctx->regulator.need_post_vddd_lp = false;
+		}
 
 		if (gs_panel_has_func(ctx, pre_update_ffc) &&
 		    (gs_conn_state->dsi_hs_clk_changed || gs_conn_state->pending_dsi_hs_clk_mbps))
