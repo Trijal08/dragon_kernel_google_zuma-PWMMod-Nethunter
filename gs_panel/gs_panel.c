@@ -483,8 +483,9 @@ ssize_t gs_set_te2_timing(struct gs_panel *ctx, size_t count, const char *buf, b
 static void notify_panel_te2_rate_changed_worker(struct work_struct *work)
 {
 	struct gs_panel *ctx =
-		container_of(work, struct gs_panel, notify_panel_te2_rate_changed_work);
+		container_of(work, struct gs_panel, notify_panel_te2_rate_changed_work.work);
 
+	dev_dbg(ctx->dev, "%s\n", __func__);
 	sysfs_notify(&ctx->dev->kobj, NULL, "te2_rate_hz");
 }
 
@@ -493,6 +494,7 @@ static void notify_panel_te2_option_changed_worker(struct work_struct *work)
 	struct gs_panel *ctx =
 		container_of(work, struct gs_panel, notify_panel_te2_option_changed_work);
 
+	dev_dbg(ctx->dev, "%s\n", __func__);
 	sysfs_notify(&ctx->dev->kobj, NULL, "te2_option");
 }
 
@@ -1483,7 +1485,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 
 	INIT_WORK(&ctx->notify_panel_mode_changed_work, notify_panel_mode_changed_worker);
 	INIT_WORK(&ctx->notify_brightness_changed_work, notify_brightness_changed_worker);
-	INIT_WORK(&ctx->notify_panel_te2_rate_changed_work, notify_panel_te2_rate_changed_worker);
+	INIT_DELAYED_WORK(&ctx->notify_panel_te2_rate_changed_work,
+			  notify_panel_te2_rate_changed_worker);
 	INIT_WORK(&ctx->notify_panel_te2_option_changed_work,
 		  notify_panel_te2_option_changed_worker);
 

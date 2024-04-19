@@ -562,7 +562,23 @@ static ssize_t te2_rate_hz_store(struct device *dev, struct device_attribute *at
 		dev_warn(ctx->dev, "%s: cache rate(%u)\n", __func__, rate_hz);
 		ctx->te2.rate_hz = rate_hz;
 	} else if (ctx->desc->gs_panel_func->set_te2_rate(ctx, rate_hz)) {
-		notify_panel_te2_rate_changed(ctx);
+		/**
+		 * The TE2 rate reflects the display refresh rate. And we're interested in the
+		 * rates while the display is active or idle. Notify immediately if the it's
+		 * active since we usually hope to jump to the peak refresh rate soon. If it's
+		 * idle, we may have several inserted frames before dropping to the lower refresh
+		 * rate to avoid flickers. Adding an estimated delay can help make the notification
+		 * more accurate.
+		 */
+		int vrefresh =
+			ctx->current_mode ? drm_mode_vrefresh(&ctx->current_mode->mode) : 0;
+		bool need_delay = (ctx->te2.option == TEX_OPT_CHANGEABLE) && vrefresh &&
+				  (rate_hz != vrefresh);
+		u32 delay_ms = need_delay ? ctx->desc->notify_te2_rate_changed_work_delay_ms : 0;
+
+		dev_dbg(dev, "%s: vrefresh %d, rate_hz %u, delay_ms %u\n", __func__,
+			vrefresh, rate_hz, delay_ms);
+		notify_panel_te2_rate_changed(ctx, delay_ms);
 	}
 	mutex_unlock(&ctx->mode_lock);
 
