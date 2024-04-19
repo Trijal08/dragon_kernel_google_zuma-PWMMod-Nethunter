@@ -19,6 +19,7 @@ kernel_module(
         "//private/devices/google:__subpackages__",
         "//private/google-modules/display/common/panels:__subpackages__",
         "//private/google-modules/display/panels:__subpackages__",
+        "//private/google-modules/touch:__subpackages__",
     ],
     deps = [
         "//private/google-modules/display/common/gs_drm",

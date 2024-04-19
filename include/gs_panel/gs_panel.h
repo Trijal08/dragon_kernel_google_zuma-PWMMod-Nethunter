@@ -1147,6 +1147,9 @@ struct gs_panel {
 	u32 normal_mode_work_delay_ms;
 	/** @normal_mode_work: periodic work for each panel in normal mode */
 	struct delayed_work normal_mode_work;
+
+	/* use for notify op hz changed */
+	struct blocking_notifier_head op_hz_notifier_head;
 };
 
 /* FUNCTIONS */
@@ -1462,6 +1465,14 @@ u32 panel_calc_gamma_2_2_luminance(const u32 value, const u32 max_value, const u
  * Return: prorated luminance
  */
 u32 panel_calc_linear_luminance(const u32 value, const u32 coef_x_1k, const int offset);
+
+/* notifer */
+enum gs_panel_notifier_action {
+	GS_PANEL_NOTIFIER_SET_OP_HZ = 0,
+};
+
+int gs_panel_register_op_hz_notifier(struct drm_connector *connector, struct notifier_block *nb);
+int gs_panel_unregister_op_hz_notifier(struct drm_connector *connector, struct notifier_block *nb);
 
 /* HBM */
 

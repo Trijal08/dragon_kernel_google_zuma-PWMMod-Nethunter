@@ -17,6 +17,7 @@
 #include <drm/drm_vblank.h>
 
 #include "gs_panel/gs_panel.h"
+#include "trace/panel_trace.h"
 
 /* drm_connector_helper_funcs */
 
@@ -315,10 +316,16 @@ int gs_panel_set_op_hz(struct gs_panel *ctx, unsigned int hz)
 	mutex_lock(&ctx->mode_lock);
 	if (ctx->op_hz != hz) {
 		ret = funcs->set_op_hz(ctx, hz);
-		if (ret)
+		if (ret) {
 			dev_err(dev, "failed to set op rate: %u Hz\n", hz);
-		else
+		} else {
+			/*TODO(b/333697598): Use async notify or work queue to notify.*/
+			PANEL_ATRACE_BEGIN("notify_op_hz");
+			blocking_notifier_call_chain(&ctx->op_hz_notifier_head,
+						     GS_PANEL_NOTIFIER_SET_OP_HZ, &ctx->op_hz);
+			PANEL_ATRACE_END("notify_op_hz");
 			sysfs_notify(&dev->kobj, NULL, "op_hz");
+		}
 	} else {
 		dev_dbg(dev, "%s: skip the same op rate: %u Hz\n", __func__, hz);
 	}
