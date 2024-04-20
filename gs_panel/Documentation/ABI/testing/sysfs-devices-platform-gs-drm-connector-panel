@@ -175,3 +175,11 @@ Contact: "Chris Lu" <luchris@google.com>
 Description:
   Userspace client uses this to write and read TE2 option. The value could be 0 (changeable)
   or 1 (fixed).
+
+What: /sys/devices/platform/gs-drm-connector/panel/power_state
+Date: April 2024
+KernelVersion: 6.1
+Contact: "Kevin Ying" <kevinying@google.com>
+Description:
+  Userspace client uses this to read panel power state. This information includes only if the panel
+  is on, off, in low-power mode, or in a HBM state.
