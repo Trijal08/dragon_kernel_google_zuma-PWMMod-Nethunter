@@ -10,6 +10,7 @@
 struct hdcp_device {
 	struct device *dev;
 	struct delayed_work hdcp_work;
+	struct delayed_work hdcp_wv_work;
 
 	/* HDCP Telemetry */
 	uint32_t hdcp2_success_count;
