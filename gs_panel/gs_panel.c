@@ -911,9 +911,20 @@ static void notify_panel_mode_changed_worker(struct work_struct *work)
 {
 	struct gs_panel *ctx =
 		container_of(work, struct gs_panel, notify_panel_mode_changed_work);
+	enum display_stats_state power_state;
 
 	disp_stats_update_state(ctx);
 	sysfs_notify(&ctx->bl->dev.kobj, NULL, "state");
+
+	mutex_lock(&ctx->bl_state_lock);
+	power_state = gs_get_current_display_state_locked(ctx);
+	mutex_unlock(&ctx->bl_state_lock);
+
+	/* Avoid spurious notifications */
+	if (power_state != ctx->notified_power_mode) {
+		sysfs_notify(&ctx->dev->kobj, NULL, "power_state");
+		ctx->notified_power_mode = power_state;
+	}
 }
 
 static void notify_brightness_changed_worker(struct work_struct *work)
@@ -1492,6 +1503,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 			  notify_panel_te2_rate_changed_worker);
 	INIT_WORK(&ctx->notify_panel_te2_option_changed_work,
 		  notify_panel_te2_option_changed_worker);
+
+	ctx->notified_power_mode = DISPLAY_STATE_MAX;
 
 	BLOCKING_INIT_NOTIFIER_HEAD(&ctx->op_hz_notifier_head);
 
