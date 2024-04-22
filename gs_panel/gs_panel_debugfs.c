@@ -208,7 +208,7 @@ void gs_panel_debugfs_create_cmdset(struct dentry *parent, const struct gs_dsi_c
 
 	debugfs_create_file(name, 0600, parent, (void *)cmdset, &panel_cmdset_fops);
 }
-EXPORT_SYMBOL(gs_panel_debugfs_create_cmdset);
+EXPORT_SYMBOL_GPL(gs_panel_debugfs_create_cmdset);
 
 /* High-level Functions */
 

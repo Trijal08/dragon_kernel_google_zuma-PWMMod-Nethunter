@@ -49,21 +49,21 @@ int gs_drm_mode_bts_fps(const struct drm_display_mode *mode)
 	/* TODO: get bts fps*/
 	return drm_mode_vrefresh(mode);
 }
-EXPORT_SYMBOL(gs_drm_mode_bts_fps);
+EXPORT_SYMBOL_GPL(gs_drm_mode_bts_fps);
 
 int gs_bts_fps_to_drm_mode_clock(const struct drm_display_mode *mode, int bts_fps)
 {
 	/* TODO: calculate required mode clock correctly */
 	return DIV_ROUND_UP(mode->htotal * mode->vtotal * bts_fps, 1000);
 }
-EXPORT_SYMBOL(gs_bts_fps_to_drm_mode_clock);
+EXPORT_SYMBOL_GPL(gs_bts_fps_to_drm_mode_clock);
 
 struct gs_drm_connector_properties *
 gs_drm_connector_get_properties(struct gs_drm_connector *gs_connector)
 {
 	return &gs_connector->properties;
 }
-EXPORT_SYMBOL(gs_drm_connector_get_properties);
+EXPORT_SYMBOL_GPL(gs_drm_connector_get_properties);
 
 void gs_connector_set_panel_name(const char *new_name, size_t len, int idx)
 {
@@ -78,7 +78,7 @@ void gs_connector_set_panel_name(const char *new_name, size_t len, int idx)
 		pr_warn("Unsupported panel index %d\n", idx);
 	}
 }
-EXPORT_SYMBOL(gs_connector_set_panel_name);
+EXPORT_SYMBOL_GPL(gs_connector_set_panel_name);
 
 static void gs_drm_connector_destroy(struct drm_connector *connector)
 {
@@ -206,7 +206,7 @@ bool is_gs_drm_connector(const struct drm_connector *connector)
 {
 	return connector->funcs == &base_drm_connector_funcs;
 }
-EXPORT_SYMBOL(is_gs_drm_connector);
+EXPORT_SYMBOL_GPL(is_gs_drm_connector);
 
 static int gs_drm_connector_create_brightness_properties(struct gs_drm_connector *gs_connector)
 {
@@ -384,7 +384,7 @@ int gs_drm_connector_create_properties(struct drm_connector *connector)
 	dev_dbg(dev, "%s-\n", __func__);
 	return ret;
 }
-EXPORT_SYMBOL(gs_drm_connector_create_properties);
+EXPORT_SYMBOL_GPL(gs_drm_connector_create_properties);
 
 /* Component Model Functions */
 
@@ -408,7 +408,7 @@ int gs_connector_bind(struct device *dev, struct device *master, void *data)
 	dev_dbg(dev, "%s-\n", __func__);
 	return ret;
 }
-EXPORT_SYMBOL(gs_connector_bind);
+EXPORT_SYMBOL_GPL(gs_connector_bind);
 
 /* Parsing */
 
