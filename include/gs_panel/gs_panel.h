@@ -79,20 +79,20 @@ struct brightness_capability {
 	 GS_PANEL_REFRESH_CTRL_MIN_REFRESH_RATE_OFFSET)
 
 #define GS_PANEL_REFRESH_CTRL_FI_AUTO BIT(31)
-#define GS_PANEL_REFRESH_CTRL_IDLE_ENABLED BIT(30)
-#define GS_PANEL_REFRESH_CTRL_TE_TYPE_CHANGEABLE BIT(29)
+#define GS_PANEL_REFRESH_CTRL_MRR_V1_OVER_V2 BIT(30)
 #define GS_PANEL_REFRESH_CTRL_FEATURE_MASK (GS_PANEL_REFRESH_CTRL_FI_AUTO |\
-					    GS_PANEL_REFRESH_CTRL_IDLE_ENABLED |\
-					    GS_PANEL_REFRESH_CTRL_TE_TYPE_CHANGEABLE)
+					    GS_PANEL_REFRESH_CTRL_MRR_V1_OVER_V2)
 
 /**
  * enum gs_panel_feature - features supported by this panel
  * @FEAT_HBM: high brightness mode
  * @FEAT_EARLY_EXIT: early exit from a long frame
  * @FEAT_OP_NS: normal speed (not high speed)
- * @FEAT_FRAME_AUTO: automatic (not manual) frame control
+ * @FEAT_FRAME_AUTO: automatic (not manual) frame control, should be set only
+ * 		     when FEAT_FRAME_MANUAL_FI = 0
+ * @FEAT_FRAME_MANUAL_FI: use DDIC frame insertion for manual mode, should be
+ * 			  set only when FEAT_FRAME_AUTO = 0
  * @FEAT_ZA: zonal attenuation
- * @FEAT_FI_AUTO: automatic frame insertion control
  * @FEAT_MAX: placeholder, counter for number of features
  *
  * The following features are correlated, if one or more of them change, the others need
@@ -103,8 +103,8 @@ enum gs_panel_feature {
 	FEAT_EARLY_EXIT,
 	FEAT_OP_NS,
 	FEAT_FRAME_AUTO,
+	FEAT_FRAME_MANUAL_FI,
 	FEAT_ZA,
-	FEAT_FI_AUTO,
 	FEAT_MAX,
 };
 
