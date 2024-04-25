@@ -27,6 +27,8 @@
 #include "gs_drm/gs_drm_connector.h"
 #include "gs_panel/dcs_helper.h"
 
+#define MAX_BL_RANGES 10
+
 struct attribute_range {
 	__u32 min;
 	__u32 max;
@@ -1050,6 +1052,18 @@ struct display_stats {
 };
 
 /**
+ * struct gs_bl_notifier - info for notifying brightness changes to ALS
+ * @ranges: brightness levels to use as thresholds
+ * @num_ranges: how many brightness levels we're using
+ * @current_range: which index of brightness threshold is current
+ */
+struct gs_bl_notifier {
+	u32 ranges[MAX_BL_RANGES];
+	u32 num_ranges;
+	u32 current_range;
+};
+
+/**
  * struct gs_panel - data associated with panel driver operation
  * TODO: better documentation
  */
@@ -1115,6 +1129,9 @@ struct gs_panel {
 	struct gs_panel_timestamps timestamps;
 
 	struct gs_thermal_data *thermal;
+
+	/** @bl_notifier: Struct for notifying ALS about brightness changes */
+	struct gs_bl_notifier bl_notifier;
 
 	/* use for notify state changed */
 	struct work_struct notify_panel_mode_changed_work;
@@ -1237,6 +1254,11 @@ static inline ssize_t gs_get_te2_type_len(const struct gs_panel_desc *desc, bool
 static inline void notify_panel_mode_changed(struct gs_panel *ctx)
 {
 	schedule_work(&ctx->notify_panel_mode_changed_work);
+}
+
+static inline void notify_brightness_changed(struct gs_panel *ctx)
+{
+	schedule_work(&ctx->notify_brightness_changed_work);
 }
 
 static inline void notify_panel_te2_rate_changed(struct gs_panel *ctx, u32 delay_ms)

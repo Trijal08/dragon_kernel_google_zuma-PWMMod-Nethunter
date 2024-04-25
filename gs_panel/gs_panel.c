@@ -344,20 +344,7 @@ EXPORT_SYMBOL_GPL(gs_panel_get_mode);
 
 /* TE2 */
 
-/**
- * parse_u32_buf() - Parses a user-provided list of ints into a buffer
- * @src: Source buffer
- * @src_len: Size of source buffer
- * @out: Output buffer for parsed u32s
- * @out_len: Size out output buffer
- *
- * This is a convenience function for parsing a user-provided list of unsigned
- * integers into a buffer. It is meant primarily for handling command-line
- * input, like for a sysfs node.
- *
- * Return: Number of integers parsed
- */
-static int parse_u32_buf(char *src, size_t src_len, u32 *out, size_t out_len)
+int parse_u32_buf(char *src, size_t src_len, u32 *out, size_t out_len)
 {
 	int rc = 0, cnt = 0;
 	char *str;
@@ -948,12 +935,46 @@ u16 gs_panel_get_brightness(struct gs_panel *panel)
 }
 EXPORT_SYMBOL_GPL(gs_panel_get_brightness);
 
+/**
+ * gs_bl_find_range() - finds bl range given brightness is within
+ * @ctx: panel reference
+ * @brightness: brightness value to query
+ * @range: output parameter for index found
+ * Return: 0 on success, negative value otherwise
+ */
+static int gs_bl_find_range(struct gs_panel *ctx, int brightness, u32 *range)
+{
+	u32 i;
+
+	if (!brightness) {
+		*range = 0;
+		return 0;
+	}
+
+	mutex_lock(&ctx->bl_state_lock); /* TODO(b/267170999): BL */
+	if (!ctx->bl_notifier.num_ranges) {
+		mutex_unlock(&ctx->bl_state_lock);
+		return -EOPNOTSUPP;
+	}
+
+	for (i = 0; i < ctx->bl_notifier.num_ranges; ++i) {
+		if (brightness <= ctx->bl_notifier.ranges[i])
+			break;
+	}
+	mutex_unlock(&ctx->bl_state_lock); /* TODO(b/267170999): BL */
+
+	*range = i + 1;
+	return 0;
+}
+
 static int gs_update_status(struct backlight_device *bl)
 {
 	struct gs_panel *ctx = bl_get_data(bl);
 	struct device *dev = ctx->dev;
 	int brightness = bl->props.brightness;
+	u32 bl_range = 0;
 	int min_brightness = ctx->desc->brightness_desc->min_brightness;
+
 	if (min_brightness == 0)
 		min_brightness = 1;
 
@@ -980,6 +1001,13 @@ static int gs_update_status(struct backlight_device *bl)
 	} else {
 		dev_info(dev, "Setting brightness via dcs\n");
 		gs_dcs_set_brightness(ctx, brightness);
+	}
+
+	if ((ctx->hbm_mode == GS_HBM_OFF) && !gs_bl_find_range(ctx, brightness, &bl_range) &&
+	    bl_range != ctx->bl_notifier.current_range) {
+		ctx->bl_notifier.current_range = bl_range;
+		notify_brightness_changed(ctx);
+		dev_dbg(dev, "bl range is changed to %d\n", bl_range);
 	}
 
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
@@ -1324,6 +1352,7 @@ static int gs_panel_init_backlight(struct gs_panel *ctx)
 {
 	struct device *dev = ctx->dev;
 	char name[32];
+	int i;
 
 	/* Backlight */
 	scnprintf(name, sizeof(name), "panel%d-backlight", ctx->gs_connector->panel_index);
@@ -1335,6 +1364,18 @@ static int gs_panel_init_backlight(struct gs_panel *ctx)
 
 	ctx->bl->props.max_brightness = ctx->desc->brightness_desc->max_brightness;
 	ctx->bl->props.brightness = ctx->desc->brightness_desc->default_brightness;
+
+	/* Backlight Notifier */
+	if (ctx->desc->bl_num_ranges) {
+		ctx->bl_notifier.num_ranges = ctx->desc->bl_num_ranges;
+		if (ctx->bl_notifier.num_ranges > MAX_BL_RANGES) {
+			dev_warn(dev, "Number of BL ranges %d exceeds maximum %d\n",
+				 ctx->bl_notifier.num_ranges, MAX_BL_RANGES);
+			ctx->bl_notifier.num_ranges = MAX_BL_RANGES;
+		}
+		for (i = 0; i < ctx->bl_notifier.num_ranges; ++i)
+			ctx->bl_notifier.ranges[i] = ctx->desc->bl_range[i];
+	}
 
 	return 0;
 }
