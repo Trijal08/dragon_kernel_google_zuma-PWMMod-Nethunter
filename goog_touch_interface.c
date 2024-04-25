@@ -3681,6 +3681,7 @@ err_offload_probe:
 
 void goog_offload_remove(struct goog_touch_interface *gti)
 {
+	power_supply_unreg_notifier(&gti->charger_notifier);
 	touch_offload_cleanup(&gti->offload);
 }
 
