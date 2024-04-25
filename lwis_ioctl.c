@@ -44,6 +44,8 @@
 #define IOCTL_ARG_SIZE(x) _IOC_SIZE(x)
 #define STRINGIFY(x) #x
 
+#define MAX_CMD_COUNT 10
+
 static void create_top_device_worker_thread(struct lwis_client *client)
 {
 	lwis_start_top_device_worker(client);
@@ -2403,8 +2405,9 @@ static int ioctl_handle_cmd_pkt(struct lwis_client *lwis_client,
 	struct lwis_cmd_pkt header;
 	int ret = 0;
 	bool device_disabled;
+	int cmd_count = 0;
 
-	while (user_msg) {
+	while (user_msg && cmd_count < MAX_CMD_COUNT) {
 		/* Copy cmd packet header from userspace */
 		if (copy_from_user(&header, (void __user *)user_msg, sizeof(header))) {
 			dev_err(lwis_dev->dev,
@@ -2437,6 +2440,11 @@ static int ioctl_handle_cmd_pkt(struct lwis_client *lwis_client,
 			return ret;
 		}
 		user_msg = header.next;
+		++cmd_count;
+	}
+
+	if (cmd_count >= MAX_CMD_COUNT) {
+		return -EOVERFLOW;
 	}
 
 	return ret;
