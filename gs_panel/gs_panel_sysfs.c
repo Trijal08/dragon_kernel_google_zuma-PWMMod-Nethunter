@@ -512,7 +512,7 @@ static ssize_t available_disp_stats_show(struct device *dev,
 	return len;
 }
 
-static ssize_t te_info_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t te_rate_hz_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
 	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
@@ -537,7 +537,23 @@ static ssize_t te_info_show(struct device *dev, struct device_attribute *attr, c
 	}
 	mutex_unlock(&ctx->mode_lock);
 
-	return scnprintf(buf, PAGE_SIZE, "%s@%d\n", changeable ? "changeable" : "fixed", freq);
+	return sysfs_emit(buf, "%d\n", freq);
+}
+
+static ssize_t te_option_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	bool changeable;
+
+	if (!gs_is_panel_active(ctx))
+		return -EPERM;
+
+	mutex_lock(&ctx->mode_lock);
+	changeable = (ctx->hw_status.te.option == TEX_OPT_CHANGEABLE);
+	mutex_unlock(&ctx->mode_lock);
+
+	return sysfs_emit(buf, "%s\n", changeable ? "changeable" : "fixed");
 }
 
 static ssize_t te2_rate_hz_store(struct device *dev, struct device_attribute *attr,
@@ -711,7 +727,8 @@ static DEVICE_ATTR_RW(te2_timing);
 static DEVICE_ATTR_RW(te2_lp_timing);
 static DEVICE_ATTR_RO(time_in_state);
 static DEVICE_ATTR_RO(available_disp_stats);
-static DEVICE_ATTR_RO(te_info);
+static DEVICE_ATTR_RO(te_rate_hz);
+static DEVICE_ATTR_RO(te_option);
 static DEVICE_ATTR_RW(te2_rate_hz);
 static DEVICE_ATTR_RW(te2_option);
 static DEVICE_ATTR_RO(power_state);
@@ -738,7 +755,8 @@ static const struct attribute *panel_attrs[] = { &dev_attr_serial_number.attr,
 						 &dev_attr_min_vrefresh.attr,
 						 &dev_attr_te2_timing.attr,
 						 &dev_attr_te2_lp_timing.attr,
-						 &dev_attr_te_info.attr,
+						 &dev_attr_te_rate_hz.attr,
+						 &dev_attr_te_option.attr,
 						 &dev_attr_te2_rate_hz.attr,
 						 &dev_attr_te2_option.attr,
 						 &dev_attr_power_state.attr,
