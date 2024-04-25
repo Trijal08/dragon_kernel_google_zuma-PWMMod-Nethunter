@@ -97,6 +97,8 @@ void lwis_interrupt_free_leaves(struct lwis_interrupt *irq)
 void lwis_interrupt_list_free(struct lwis_interrupt_list *list)
 {
 	int i;
+	unsigned long flags;
+
 	if (!list) {
 		return;
 	}
@@ -107,8 +109,10 @@ void lwis_interrupt_list_free(struct lwis_interrupt_list *list)
 	}
 
 	for (i = 0; i < list->count; ++i) {
+		spin_lock_irqsave(&list->irq[i].lock, flags);
 		lwis_interrupt_free_leaves(&list->irq[i]);
 		free_irq(list->irq[i].irq, &list->irq[i]);
+		spin_unlock_irqrestore(&list->irq[i].lock, flags);
 	}
 	kfree(list->irq);
 }
