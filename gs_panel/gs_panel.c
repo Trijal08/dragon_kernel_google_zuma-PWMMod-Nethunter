@@ -340,7 +340,7 @@ const struct gs_panel_mode *gs_panel_get_mode(struct gs_panel *ctx,
 
 	return NULL;
 }
-EXPORT_SYMBOL(gs_panel_get_mode);
+EXPORT_SYMBOL_GPL(gs_panel_get_mode);
 
 /* TE2 */
 
@@ -432,7 +432,7 @@ int gs_panel_get_current_mode_te2(struct gs_panel *ctx, struct gs_panel_te2_timi
 
 	return -EINVAL;
 }
-EXPORT_SYMBOL(gs_panel_get_current_mode_te2);
+EXPORT_SYMBOL_GPL(gs_panel_get_current_mode_te2);
 
 void gs_panel_update_te2(struct gs_panel *ctx)
 {
@@ -441,7 +441,7 @@ void gs_panel_update_te2(struct gs_panel *ctx)
 
 	ctx->desc->gs_panel_func->update_te2(ctx);
 }
-EXPORT_SYMBOL(gs_panel_update_te2);
+EXPORT_SYMBOL_GPL(gs_panel_update_te2);
 
 ssize_t gs_set_te2_timing(struct gs_panel *ctx, size_t count, const char *buf, bool is_lp_mode)
 {
@@ -523,7 +523,7 @@ unsigned int gs_panel_get_idle_time_delta(struct gs_panel *ctx)
 
 	return delta_ms;
 }
-EXPORT_SYMBOL(gs_panel_get_idle_time_delta);
+EXPORT_SYMBOL_GPL(gs_panel_get_idle_time_delta);
 
 static bool panel_idle_queue_delayed_work(struct gs_panel *ctx)
 {
@@ -946,7 +946,7 @@ u16 gs_panel_get_brightness(struct gs_panel *panel)
 {
 	return gs_get_brightness(panel->bl);
 }
-EXPORT_SYMBOL(gs_panel_get_brightness);
+EXPORT_SYMBOL_GPL(gs_panel_get_brightness);
 
 static int gs_update_status(struct backlight_device *bl)
 {
@@ -1020,7 +1020,7 @@ int gs_panel_update_brightness_desc(struct gs_panel_brightness_desc *desc,
 	return 0;
 
 }
-EXPORT_SYMBOL(gs_panel_update_brightness_desc);
+EXPORT_SYMBOL_GPL(gs_panel_update_brightness_desc);
 
 void gs_panel_set_dimming(struct gs_panel *ctx, bool dimming_on)
 {
@@ -1182,7 +1182,7 @@ int gs_panel_set_power_helper(struct gs_panel *ctx, bool on)
 
 	return 0;
 }
-EXPORT_SYMBOL(gs_panel_set_power_helper);
+EXPORT_SYMBOL_GPL(gs_panel_set_power_helper);
 
 void gs_panel_set_vddd_voltage(struct gs_panel *ctx, bool is_lp)
 {
@@ -1575,7 +1575,7 @@ err_panel:
 
 	return ret;
 }
-EXPORT_SYMBOL(gs_dsi_panel_common_init);
+EXPORT_SYMBOL_GPL(gs_dsi_panel_common_init);
 
 int gs_dsi_panel_common_probe(struct mipi_dsi_device *dsi)
 {
@@ -1587,7 +1587,7 @@ int gs_dsi_panel_common_probe(struct mipi_dsi_device *dsi)
 
 	return gs_dsi_panel_common_init(dsi, ctx);
 }
-EXPORT_SYMBOL(gs_dsi_panel_common_probe);
+EXPORT_SYMBOL_GPL(gs_dsi_panel_common_probe);
 
 static void _gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi)
 {
@@ -1612,7 +1612,7 @@ int gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi)
 	return 0;
 }
 #endif
-EXPORT_SYMBOL(gs_dsi_panel_common_remove);
+EXPORT_SYMBOL_GPL(gs_dsi_panel_common_remove);
 
 /* DRM panel funcs */
 
@@ -1655,7 +1655,7 @@ void gs_panel_reset_helper(struct gs_panel *ctx)
 
 	gs_panel_post_power_on(ctx);
 }
-EXPORT_SYMBOL(gs_panel_reset_helper);
+EXPORT_SYMBOL_GPL(gs_panel_reset_helper);
 
 /* Timing */
 
@@ -1686,7 +1686,7 @@ int gs_panel_wait_for_vblank(struct gs_panel *ctx)
 	WARN_ON(1);
 	return -ENODEV;
 }
-EXPORT_SYMBOL(gs_panel_wait_for_vblank);
+EXPORT_SYMBOL_GPL(gs_panel_wait_for_vblank);
 
 void gs_panel_wait_for_vsync_done(struct gs_panel *ctx, u32 te_us, u32 period_us)
 {
@@ -1701,7 +1701,7 @@ void gs_panel_wait_for_vsync_done(struct gs_panel *ctx, u32 te_us, u32 period_us
 	delay_us = gs_panel_vsync_start_time_us(te_us, period_us);
 	usleep_range(delay_us, delay_us + 10);
 }
-EXPORT_SYMBOL(gs_panel_wait_for_vsync_done);
+EXPORT_SYMBOL_GPL(gs_panel_wait_for_vsync_done);
 
 enum display_stats_state gs_get_current_display_state_locked(struct gs_panel *ctx)
 {
@@ -1723,7 +1723,7 @@ void gs_panel_msleep(u32 delay_ms)
 {
 	trace_msleep(delay_ms);
 }
-EXPORT_SYMBOL(gs_panel_msleep);
+EXPORT_SYMBOL_GPL(gs_panel_msleep);
 
 /* Helper Utilities */
 
@@ -1837,13 +1837,13 @@ u32 panel_calc_gamma_2_2_luminance(const u32 value, const u32 max_value, const u
 
 	return mult_frac(gamma_2_2_coef_x_1m[i], nit, 1000000);
 }
-EXPORT_SYMBOL(panel_calc_gamma_2_2_luminance);
+EXPORT_SYMBOL_GPL(panel_calc_gamma_2_2_luminance);
 
 u32 panel_calc_linear_luminance(const u32 value, const u32 coef_x_1k, const int offset)
 {
 	return mult_frac(value, coef_x_1k, 1000) + offset;
 }
-EXPORT_SYMBOL(panel_calc_linear_luminance);
+EXPORT_SYMBOL_GPL(panel_calc_linear_luminance);
 
 int gs_panel_register_op_hz_notifier(struct drm_connector *connector, struct notifier_block *nb)
 {

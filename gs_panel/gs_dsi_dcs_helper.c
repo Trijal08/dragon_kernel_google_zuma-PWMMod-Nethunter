@@ -72,14 +72,14 @@ void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_c
 			usleep_range(delay_ms * 1000, delay_ms * 1000 + 10);
 	}
 }
-EXPORT_SYMBOL(gs_dsi_send_cmdset_flags);
+EXPORT_SYMBOL_GPL(gs_dsi_send_cmdset_flags);
 
 void gs_dsi_send_cmdset(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmdset,
 			u32 panel_rev)
 {
 	gs_dsi_send_cmdset_flags(dsi, cmdset, panel_rev, 0);
 }
-EXPORT_SYMBOL(gs_dsi_send_cmdset);
+EXPORT_SYMBOL_GPL(gs_dsi_send_cmdset);
 
 ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *data, size_t len,
 			    u16 flags)
@@ -138,7 +138,7 @@ ssize_t gs_dsi_dcs_write_buffer(struct mipi_dsi_device *dsi, const void *data, s
 		gs_dcs_write_print_err(&dsi->dev, data, len, ret);
 	return ret;
 }
-EXPORT_SYMBOL(gs_dsi_dcs_write_buffer);
+EXPORT_SYMBOL_GPL(gs_dsi_dcs_write_buffer);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 19, 0)) || IS_ENABLED(CONFIG_DRM_DISPLAY_DP_HELPER)
 int gs_dcs_write_dsc_config(struct device *dev, const struct drm_dsc_config *dsc_cfg)
@@ -154,5 +154,5 @@ int gs_dcs_write_dsc_config(struct device *dev, const struct drm_dsc_config *dsc
 	}
 	return ret;
 }
-EXPORT_SYMBOL(gs_dcs_write_dsc_config);
+EXPORT_SYMBOL_GPL(gs_dcs_write_dsc_config);
 #endif
