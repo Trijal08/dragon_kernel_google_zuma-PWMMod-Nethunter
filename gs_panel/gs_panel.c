@@ -1703,6 +1703,23 @@ void gs_panel_wait_for_vsync_done(struct gs_panel *ctx, u32 te_us, u32 period_us
 }
 EXPORT_SYMBOL_GPL(gs_panel_wait_for_vsync_done);
 
+void gs_panel_wait_for_flip_done(struct gs_panel *ctx, u32 timeout_ms)
+{
+	struct drm_crtc *crtc = NULL;
+	struct drm_crtc_commit *commit = NULL;
+
+	if (ctx->gs_connector->base.state)
+		crtc = ctx->gs_connector->base.state->crtc;
+
+	if (crtc) {
+		commit = crtc->state->commit;
+		if (commit &&
+		    !wait_for_completion_timeout(&commit->flip_done, msecs_to_jiffies(timeout_ms)))
+			dev_warn(ctx->dev, "timeout when waiting for flip done\n");
+	}
+}
+EXPORT_SYMBOL_GPL(gs_panel_wait_for_flip_done);
+
 enum display_stats_state gs_get_current_display_state_locked(struct gs_panel *ctx)
 {
 	struct backlight_device *bl = ctx->bl;

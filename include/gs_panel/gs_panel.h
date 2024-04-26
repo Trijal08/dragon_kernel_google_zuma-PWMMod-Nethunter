@@ -1414,6 +1414,13 @@ int gs_panel_wait_for_vblank(struct gs_panel *ctx);
 void gs_panel_wait_for_vsync_done(struct gs_panel *ctx, u32 te_us, u32 period_us);
 
 /**
+ * gs_panel_wait_for_vsync_done - wait for the flip done
+ * @ctx: handle for gs_panel that is waiting
+ * @timeout_ms: length of timeout, in ms
+ */
+void gs_panel_wait_for_flip_done(struct gs_panel *ctx, u32 timeout_ms);
+
+/**
  * gs_panel_msleep - sleeps for a given number of ms
  * @delay_ms: Length of time to sleep
  *
