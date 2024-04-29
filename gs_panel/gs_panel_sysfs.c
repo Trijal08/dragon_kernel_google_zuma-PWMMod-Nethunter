@@ -1039,6 +1039,69 @@ static ssize_t ssc_en_show(struct device *dev,
 	return sysfs_emit(buf, "%d\n", ctx->ssc_en);
 }
 
+static ssize_t als_table_store(struct device *dev, struct device_attribute *attr, const char *buf,
+			       size_t count)
+{
+	struct backlight_device *bl = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bl);
+	ssize_t bl_num_ranges;
+	char *buf_dup;
+	u32 ranges[MAX_BL_RANGES] = { 0 };
+	int ret = 0;
+	u32 i;
+
+	if (count == 0)
+		return -EINVAL;
+
+	buf_dup = kstrndup(buf, count, GFP_KERNEL);
+	if (!buf_dup)
+		return -ENOMEM;
+
+	if (strlen(buf_dup) != count) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	bl_num_ranges = parse_u32_buf(buf_dup, count + 1, ranges, MAX_BL_RANGES);
+	if (bl_num_ranges < 0) {
+		dev_warn(ctx->dev, "error parsing als_table input buf (%ld)\n", bl_num_ranges);
+		ret = bl_num_ranges;
+		goto out;
+	}
+
+	mutex_lock(&ctx->bl_state_lock); /* TODO(b/267170999): BL */
+
+	ctx->bl_notifier.num_ranges = bl_num_ranges;
+	for (i = 0; i < ctx->bl_notifier.num_ranges; i++)
+		ctx->bl_notifier.ranges[i] = ranges[i];
+
+	mutex_unlock(&ctx->bl_state_lock); /* TODO(b/267170999): BL */
+
+	ret = count;
+out:
+	kfree(buf_dup);
+	return ret;
+}
+
+static ssize_t als_table_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bl = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bl);
+	size_t len = 0;
+	u32 i;
+
+	mutex_lock(&ctx->bl_state_lock); /* TODO(b/267170999): BL */
+
+	for (i = 0; i < ctx->bl_notifier.num_ranges; i++)
+		len += sysfs_emit_at(buf, len, "%u ", ctx->bl_notifier.ranges[i]);
+
+	mutex_unlock(&ctx->bl_state_lock); /* TODO(b/267170999): BL */
+
+	len += sysfs_emit_at(buf, len, "\n");
+
+	return len;
+}
+
 static DEVICE_ATTR_RW(hbm_mode);
 static DEVICE_ATTR_RW(dimming_on);
 static DEVICE_ATTR_RW(local_hbm_mode);
@@ -1046,6 +1109,7 @@ static DEVICE_ATTR_RW(local_hbm_max_timeout);
 static DEVICE_ATTR_RO(state);
 static DEVICE_ATTR_RW(acl_mode);
 static DEVICE_ATTR_RW(ssc_en);
+static DEVICE_ATTR_RW(als_table);
 
 static struct attribute *bl_device_attrs[] = { &dev_attr_hbm_mode.attr,
 					       &dev_attr_dimming_on.attr,
@@ -1054,6 +1118,7 @@ static struct attribute *bl_device_attrs[] = { &dev_attr_hbm_mode.attr,
 					       &dev_attr_acl_mode.attr,
 					       &dev_attr_state.attr,
 					       &dev_attr_ssc_en.attr,
+					       &dev_attr_als_table.attr,
 					       NULL };
 ATTRIBUTE_GROUPS(bl_device);
 
