@@ -129,6 +129,16 @@ Description:
   Userspace client can activate ACL mode to reduce panel voltage at higher brightness levels.
   This prevents potential damage to the PMIC.
 
+What: /sys/devices/platform/gs-drm-connector/panel/backlight/panel0-backlight/als_table
+Date: April 2024
+KernelVersion: 6.1
+Contact: "Taylor Nelms" <tknelms@google.com>
+Description:
+  Userspace client can adjust thresholds at which the ambient light sensor (als)
+  is notified of changes in panel brightness. This has the same range as the `brightness`
+  and `actual_brightness` nodes (0-4096), and is input as a space-delimited list
+  of whole positive integers.
+
 What: /sys/devices/platform/gs-drm-connector/panel/time_in_state
 Date: January 2024
 KernelVersion:	6.1
