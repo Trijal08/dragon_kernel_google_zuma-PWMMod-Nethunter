@@ -587,23 +587,6 @@ int lwis_parse_trigger_condition(struct lwis_client *client, struct lwis_transac
 	return 0;
 }
 
-int ioctl_lwis_fence_create(struct lwis_device *lwis_dev, int32_t __user *msg)
-{
-	int32_t fd_or_err;
-
-	fd_or_err = lwis_fence_create(lwis_dev);
-	if (fd_or_err < 0) {
-		return fd_or_err;
-	}
-
-	if (copy_to_user((void __user *)msg, &fd_or_err, sizeof(int32_t))) {
-		dev_err(lwis_dev->dev, "failed to copy to user\n");
-		return -EFAULT;
-	}
-
-	return 0;
-}
-
 int lwis_initialize_transaction_fences(struct lwis_client *client,
 				       struct lwis_transaction *transaction)
 {

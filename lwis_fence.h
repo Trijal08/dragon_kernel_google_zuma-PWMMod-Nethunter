@@ -55,8 +55,6 @@ struct lwis_fence_pending_signal {
  */
 int lwis_fence_create(struct lwis_device *lwis_dev);
 
-int ioctl_lwis_fence_create(struct lwis_device *lwis_dev, int32_t __user *msg);
-
 /*
  *  lwis_fence_get: Get the file pointer for the lwis_fence associated with the fd.
  */
