@@ -523,7 +523,7 @@ static ssize_t te_info_show(struct device *dev, struct device_attribute *attr, c
 		return -EPERM;
 
 	mutex_lock(&ctx->mode_lock);
-	changeable = (ctx->te_opt == TEX_OPT_CHANGEABLE);
+	changeable = (ctx->hw_status.te.option == TEX_OPT_CHANGEABLE);
 	if (changeable) {
 		const struct gs_panel_mode *current_mode = ctx->current_mode;
 
@@ -533,7 +533,7 @@ static ssize_t te_info_show(struct device *dev, struct device_attribute *attr, c
 		}
 		freq = drm_mode_vrefresh(&current_mode->mode);
 	} else {
-		freq = ctx->te_freq;
+		freq = ctx->hw_status.te.rate_hz;
 	}
 	mutex_unlock(&ctx->mode_lock);
 

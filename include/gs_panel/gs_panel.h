@@ -833,6 +833,16 @@ struct gs_panel_regulator {
 };
 
 /**
+ * struct gs_te_info - stores te-related data
+ */
+struct gs_te_info {
+	/** @freq: panel TE frequency, in Hz */
+	u32 rate_hz;
+	/** @option: panel frequency option */
+	enum gs_panel_tex_opt option;
+};
+
+/**
  * struct gs_panel_status - hw or sw status of panel
  *
  * For some features, we would like to have a record of both the intended state
@@ -849,8 +859,6 @@ struct gs_panel_status {
 	DECLARE_BITMAP(feat, FEAT_MAX);
 	/** @vrefresh: vrefresh rate effective in panel, in Hz */
 	u32 vrefresh;
-	/** @te_freq: panel TE frequency, in Hz */
-	u32 te_freq;
 	/** @idle_vrefresh: idle vrefresh rate effective in panel, in Hz */
 	u32 idle_vrefresh;
 	/** @dbv: brightness */
@@ -859,6 +867,8 @@ struct gs_panel_status {
 	enum gs_acl_mode acl_mode;
 	/** @irc_mode: IR compensation mode */
 	enum irc_mode irc_mode;
+	/** @te: TE-related status */
+	struct gs_te_info te;
 };
 
 struct gs_panel_idle_data {
@@ -1161,9 +1171,6 @@ struct gs_panel {
 	u32 refresh_ctrl;
 	/* SSC mode */
 	bool ssc_en;
-	/* TE info */
-	int te_freq;
-	enum gs_panel_tex_opt te_opt;
 
 	/** @normal_mode_work_delay_ms: period of the periodic work in normal mode */
 	u32 normal_mode_work_delay_ms;
