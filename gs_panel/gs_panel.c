@@ -220,7 +220,7 @@ err:
 	return ret;
 }
 
-#ifdef CONFIG_OF
+#if IS_ENABLED(CONFIG_OF)
 static void devm_backlight_release(void *data)
 {
 	struct backlight_device *bd = data;
@@ -232,7 +232,7 @@ static void devm_backlight_release(void *data)
 
 static int gs_panel_of_parse_backlight(struct gs_panel *ctx)
 {
-#ifdef CONFIG_OF
+#if IS_ENABLED(CONFIG_OF)
 	struct device *dev;
 	struct device_node *np;
 	struct backlight_device *bd;
@@ -1466,12 +1466,6 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	ctx->gs_connector = get_gs_drm_connector_parent(ctx);
 	ctx->gs_connector->panel_dsi_device = dsi;
 
-	/* Register connector as bridge */
-#ifdef CONFIG_OF
-	ctx->bridge.of_node = ctx->gs_connector->kdev->of_node;
-#endif
-	drm_bridge_add(&ctx->bridge);
-
 	/* Parse device tree */
 	ret = gs_panel_parse_dt(ctx);
 	if (ret) {
@@ -1565,6 +1559,12 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	/* Add the panel officially */
 	drm_panel_add(&ctx->base);
 
+	/* Register connector as bridge */
+#if IS_ENABLED(CONFIG_OF)
+	ctx->bridge.of_node = ctx->gs_connector->kdev->of_node;
+#endif
+	devm_drm_bridge_add(dev, &ctx->bridge);
+
 	/* Parse device tree - Backlight */
 	ret = gs_panel_of_parse_backlight(ctx);
 	if (ret) {
@@ -1610,7 +1610,6 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	return 0;
 
 err_panel:
-	drm_bridge_remove(&ctx->bridge);
 	drm_panel_remove(&ctx->base);
 	dev_err(dev, "failed to probe gs common panel driver (%d)\n", ret);
 
@@ -1636,7 +1635,6 @@ static void _gs_dsi_panel_common_remove(struct mipi_dsi_device *dsi)
 
 	mipi_dsi_detach(dsi);
 	drm_panel_remove(&ctx->base);
-	drm_bridge_remove(&ctx->bridge);
 
 	devm_backlight_device_unregister(ctx->dev, ctx->bl);
 }
