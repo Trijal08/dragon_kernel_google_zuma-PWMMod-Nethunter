@@ -1515,6 +1515,20 @@ int gs_panel_get_current_mode_te2(struct gs_panel *ctx, struct gs_panel_te2_timi
  */
 void gs_panel_update_te2(struct gs_panel *ctx);
 
+/**
+ * gs_panel_update_lhbm_hist_data_helper() - Update lhbm_hist_data on panel connector
+ * @ctx: Reference to panel data
+ * @enabled: whether to enable or disable updating lhbm histogram roi data
+ * @d: Depth of ROI center point off center, in pixels
+ * @r: Radius of ROI circle, in pixels
+ *
+ * Note that this will update d and r regardless of the enable value
+ *
+ * This is meant to be called by panel drivers during the `atomic_check` operation
+ */
+void gs_panel_update_lhbm_hist_data_helper(struct gs_panel *ctx, struct drm_atomic_state *state,
+					   bool enabled, int d, int r);
+
 /* Helper Utilities */
 
 /**

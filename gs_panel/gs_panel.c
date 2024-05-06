@@ -1293,6 +1293,30 @@ static void gs_panel_normal_mode_work(struct work_struct *work)
 			      msecs_to_jiffies(ctx->normal_mode_work_delay_ms));
 }
 
+void gs_panel_update_lhbm_hist_data_helper(struct gs_panel *ctx, struct drm_atomic_state *state,
+					   bool enabled, int d, int r)
+{
+	struct gs_drm_connector *gs_connector = ctx->gs_connector;
+	struct drm_connector_state *new_conn_state;
+	struct gs_drm_connector_state *new_gs_connector_state;
+	struct gs_drm_connector_lhbm_hist_data *hist_data;
+
+	if (!gs_connector) {
+		dev_warn(ctx->dev, "No connector found for panel; cannot update lhbm hist data\n");
+		return;
+	}
+
+	new_conn_state = drm_atomic_get_new_connector_state(state, &gs_connector->base);
+	new_gs_connector_state = to_gs_connector_state(new_conn_state);
+
+	hist_data = &new_gs_connector_state->lhbm_hist_data;
+
+	hist_data->enabled = enabled;
+	hist_data->d = d;
+	hist_data->r = r;
+}
+EXPORT_SYMBOL_GPL(gs_panel_update_lhbm_hist_data_helper);
+
 /* INITIALIZATION */
 
 int gs_panel_first_enable_helper(struct gs_panel *ctx)
