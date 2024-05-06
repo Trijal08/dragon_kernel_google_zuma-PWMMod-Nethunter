@@ -364,7 +364,7 @@ static int trigger_event_add_transaction(struct lwis_client *client,
 }
 
 static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *client,
-					      struct lwis_transaction *transaction)
+					 struct lwis_transaction *transaction)
 {
 	unsigned long flags;
 	struct file *fp = NULL;
@@ -460,46 +460,40 @@ bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
 	 */
 	for (i = 0; i < info->trigger_condition.num_nodes; i++) {
 		is_node_signaled = false;
-		if (info->trigger_condition.trigger_nodes[i].type == LWIS_TRIGGER_EVENT &&
-		    info->trigger_condition.trigger_nodes[i].event.id == event_id) {
-			if (info->trigger_condition.trigger_nodes[i].event.counter ==
-				    event_counter ||
-			    (info->trigger_condition.trigger_nodes[i].event.counter ==
-				     LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE &&
-			     weak_transaction->precondition_fence_fp == NULL)) {
-				is_node_signaled = true;
-			} else if (info->trigger_condition.trigger_nodes[i].event.counter ==
-				   LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE) {
-				lwis_fence = weak_transaction->precondition_fence_fp->private_data;
-				if (lwis_fence != NULL && get_fence_status(lwis_fence) == 0) {
-					is_node_signaled = true;
-					if (lwis_fence_debug) {
-						pr_info("TransactionId %lld: event 0x%llx (%lld), precondition fence %d signaled",
-							info->id, event_id, event_counter,
-							info->trigger_condition.trigger_nodes[i]
-								.event.precondition_fence_fd);
-					}
-				} else {
-					if (lwis_fence_debug) {
-						pr_info("TransactionId %lld: event 0x%llx (%lld), precondition fence %d NOT signaled yet",
-							info->id, event_id, event_counter,
-							info->trigger_condition.trigger_nodes[i]
-								.event.precondition_fence_fd);
-					}
-				}
-			}
+		if (info->trigger_condition.trigger_nodes[i].type != LWIS_TRIGGER_EVENT ||
+		    info->trigger_condition.trigger_nodes[i].event.id != event_id) {
+			continue;
+		}
 
-			if (is_node_signaled) {
-				transaction->signaled_count++;
-				list_del(&weak_transaction->event_list_node);
-				if (weak_transaction->precondition_fence_fp) {
-					fput(weak_transaction->precondition_fence_fp);
-				}
-				kfree(weak_transaction);
-				/* The break here assumes that this event ID only appears once in
-				   the trigger expression. Might need to revisit this. */
-				break;
+		if (info->trigger_condition.trigger_nodes[i].event.counter == event_counter ||
+		    (info->trigger_condition.trigger_nodes[i].event.counter ==
+			     LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE &&
+		     weak_transaction->precondition_fence_fp == NULL)) {
+			is_node_signaled = true;
+		} else if (info->trigger_condition.trigger_nodes[i].event.counter ==
+			   LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE) {
+			lwis_fence = weak_transaction->precondition_fence_fp->private_data;
+			is_node_signaled =
+				(lwis_fence != NULL && get_fence_status(lwis_fence) == 0);
+			if (lwis_fence_debug) {
+				pr_info("TransactionId %lld: event 0x%llx (%lld), precondition fence %d %s signaled",
+					info->id, event_id, event_counter,
+					info->trigger_condition.trigger_nodes[i]
+						.event.precondition_fence_fd,
+					is_node_signaled ? "" : "NOT");
 			}
+		}
+
+		if (is_node_signaled) {
+			transaction->signaled_count++;
+			list_del(&weak_transaction->event_list_node);
+			if (weak_transaction->precondition_fence_fp) {
+				fput(weak_transaction->precondition_fence_fp);
+			}
+			kfree(weak_transaction);
+			/* The break here assumes that this event ID only appears once in the trigger
+			 * expression. Might need to revisit this. */
+			break;
 		}
 	}
 
@@ -508,12 +502,11 @@ bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
 		return false;
 	}
 
-	if (operator_type == LWIS_TRIGGER_NODE_OPERATOR_AND &&
-	    transaction->signaled_count == all_signaled) {
-		return true;
-	} else if (operator_type == LWIS_TRIGGER_NODE_OPERATOR_OR) {
-		return true;
-	} else if (operator_type == LWIS_TRIGGER_NODE_OPERATOR_NONE) {
+	switch (operator_type) {
+	case LWIS_TRIGGER_NODE_OPERATOR_AND:
+		return transaction->signaled_count == all_signaled;
+	case LWIS_TRIGGER_NODE_OPERATOR_OR:
+	case LWIS_TRIGGER_NODE_OPERATOR_NONE:
 		return true;
 	}
 
@@ -610,14 +603,16 @@ int lwis_initialize_transaction_fences(struct lwis_client *client,
 	if (lwis_triggered_by_condition(transaction)) {
 		/* Initialize all placeholder fences in the trigger_condition */
 		for (i = 0; i < info->trigger_condition.num_nodes; i++) {
-			if (info->trigger_condition.trigger_nodes[i].type ==
+			if (info->trigger_condition.trigger_nodes[i].type !=
 			    LWIS_TRIGGER_FENCE_PLACEHOLDER) {
-				fd_or_err = lwis_fence_create(lwis_dev);
-				if (fd_or_err < 0) {
-					return fd_or_err;
-				}
-				info->trigger_condition.trigger_nodes[i].fence_fd = fd_or_err;
+				continue;
 			}
+
+			fd_or_err = lwis_fence_create(lwis_dev);
+			if (fd_or_err < 0) {
+				return fd_or_err;
+			}
+			info->trigger_condition.trigger_nodes[i].fence_fd = fd_or_err;
 		}
 	}
 
