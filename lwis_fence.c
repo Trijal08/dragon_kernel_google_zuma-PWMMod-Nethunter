@@ -61,10 +61,8 @@ static int lwis_fence_release(struct inode *node, struct file *fp)
 	struct list_head *it_tran, *it_tran_tmp;
 	int i;
 
-	if (lwis_fence_debug) {
-		dev_info(lwis_fence->lwis_top_dev->dev, "Releasing lwis_fence fd-%d",
-			 lwis_fence->fd);
-	}
+	lwis_debug_dev_info(lwis_fence->lwis_top_dev->dev, "Releasing lwis_fence fd-%d",
+			    lwis_fence->fd);
 
 	if (lwis_fence->status == LWIS_FENCE_STATUS_NOT_SIGNALED) {
 		dev_err(lwis_fence->lwis_top_dev->dev,
@@ -248,9 +246,8 @@ int lwis_fence_create(struct lwis_device *lwis_dev)
 	new_fence->status = LWIS_FENCE_STATUS_NOT_SIGNALED;
 	spin_lock_init(&new_fence->lock);
 	init_waitqueue_head(&new_fence->status_wait_queue);
-	if (lwis_fence_debug) {
-		dev_info(lwis_dev->dev, "lwis_fence created new LWIS fence fd: %d", new_fence->fd);
-	}
+	lwis_debug_dev_info(lwis_dev->dev, "lwis_fence created new LWIS fence fd: %d",
+			    new_fence->fd);
 	return fd_or_err;
 }
 
@@ -398,19 +395,16 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 		transaction->trigger_fence_fps[transaction->num_trigger_fences++] = fp;
 		tx_list = transaction_list_find_or_create(lwis_fence, client);
 		list_add(&pending_transaction_id->list_node, &tx_list->list);
-		if (lwis_fence_debug) {
-			dev_info(client->lwis_dev->dev,
-				 "lwis_fence transaction id %llu added to its trigger fence fd %d ",
-				 transaction->info.id, lwis_fence->fd);
-		}
+		lwis_debug_dev_info(
+			client->lwis_dev->dev,
+			"lwis_fence transaction id %llu added to its trigger fence fd %d ",
+			transaction->info.id, lwis_fence->fd);
 	} else {
 		kfree(pending_transaction_id);
-		if (lwis_fence_debug) {
-			dev_info(
-				client->lwis_dev->dev,
-				"lwis_fence fd-%d not added to transaction id %llu, fence already signaled with error code %d \n",
-				fence_fd, transaction->info.id, lwis_fence->status);
-		}
+		lwis_debug_dev_info(
+			client->lwis_dev->dev,
+			"lwis_fence fd-%d not added to transaction id %llu, fence already signaled with error code %d \n",
+			fence_fd, transaction->info.id, lwis_fence->status);
 		if (!transaction->info.is_level_triggered) {
 			/* If level triggering is disabled, return an error. */
 			fput(fp);
@@ -475,13 +469,11 @@ bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
 			lwis_fence = weak_transaction->precondition_fence_fp->private_data;
 			is_node_signaled =
 				(lwis_fence != NULL && get_fence_status(lwis_fence) == 0);
-			if (lwis_fence_debug) {
-				pr_info("TransactionId %lld: event 0x%llx (%lld), precondition fence %d %s signaled",
-					info->id, event_id, event_counter,
-					info->trigger_condition.trigger_nodes[i]
-						.event.precondition_fence_fd,
-					is_node_signaled ? "" : "NOT");
-			}
+			lwis_debug_info(
+				"TransactionId %lld: event 0x%llx (%lld), precondition fence %d %s signaled",
+				info->id, event_id, event_counter,
+				info->trigger_condition.trigger_nodes[i].event.precondition_fence_fd,
+				is_node_signaled ? "" : "NOT");
 		}
 
 		if (is_node_signaled) {
@@ -659,11 +651,9 @@ int lwis_add_completion_fence(struct lwis_client *client, struct lwis_transactio
 		return -ENOMEM;
 	}
 	list_add(&fence_pending_signal->node, &transaction->completion_fence_list);
-	if (lwis_fence_debug) {
-		dev_info(client->lwis_dev->dev,
-			 "lwis_fence transaction id %llu add completion fence fd %d ",
-			 transaction->info.id, lwis_fence->fd);
-	}
+	lwis_debug_dev_info(client->lwis_dev->dev,
+			    "lwis_fence transaction id %llu add completion fence fd %d ",
+			    transaction->info.id, lwis_fence->fd);
 	return 0;
 }
 

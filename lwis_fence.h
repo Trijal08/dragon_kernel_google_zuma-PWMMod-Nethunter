@@ -22,6 +22,19 @@
 #define LWIS_FENCE_IDENTIFIER 0x75A2C6BC
 
 extern bool lwis_fence_debug;
+#define lwis_debug_info(fmt, ...)                                                                  \
+	({                                                                                         \
+		if (unlikely(lwis_fence_debug)) {                                                  \
+			pr_info(fmt, ##__VA_ARGS__);                                               \
+		}                                                                                  \
+	})
+
+#define lwis_debug_dev_info(dev, fmt, ...)                                                         \
+	({                                                                                         \
+		if (unlikely(lwis_fence_debug)) {                                                  \
+			dev_info(dev, fmt, ##__VA_ARGS__);                                         \
+		}                                                                                  \
+	})
 
 struct lwis_fence {
 	/* Used to identify the structure when casting from void pointer */

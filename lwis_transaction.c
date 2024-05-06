@@ -76,11 +76,9 @@ static void add_pending_transaction(struct lwis_client *client,
 {
 	hash_add(client->pending_transactions, &transaction->pending_map_node,
 		 transaction->info.id);
-	if (lwis_fence_debug) {
-		dev_info(client->lwis_dev->dev,
-			 "lwis_fence add transaction id %llu to lwis_client pending map",
-			 transaction->info.id);
-	}
+	lwis_debug_dev_info(client->lwis_dev->dev,
+			    "lwis_fence add transaction id %llu to lwis_client pending map",
+			    transaction->info.id);
 }
 
 static struct lwis_transaction *pending_transaction_peek(struct lwis_client *client,
@@ -860,12 +858,10 @@ int lwis_trigger_event_add_weak_transaction(struct lwis_client *client, int64_t 
 		return -EINVAL;
 	}
 	list_add_tail(&weak_transaction->event_list_node, &event_list->list);
-	if (lwis_fence_debug) {
-		dev_info(
-			client->lwis_dev->dev,
-			"lwis_fence add weak transaction for event id-%lld triggered transaction id %llu",
-			event_id, transaction_id);
-	}
+	lwis_debug_dev_info(
+		client->lwis_dev->dev,
+		"lwis_fence add weak transaction for event id-%lld triggered transaction id %llu",
+		event_id, transaction_id);
 	return 0;
 }
 
@@ -1201,12 +1197,10 @@ int lwis_transaction_event_trigger(struct lwis_client *client, int64_t event_id,
 
 			if (lwis_event_triggered_condition_ready(transaction, weak_transaction,
 								 event_id, event_counter)) {
-				if (lwis_fence_debug) {
-					dev_info(
-						client->lwis_dev->dev,
-						"lwis_fence event id-%lld counter-%lld triggered transaction id %llu",
-						event_id, event_counter, transaction->info.id);
-				}
+				lwis_debug_dev_info(
+					client->lwis_dev->dev,
+					"lwis_fence event id-%lld counter-%lld triggered transaction id %llu",
+					event_id, event_counter, transaction->info.id);
 				hash_del(&transaction->pending_map_node);
 				defer_transaction_locked(client, transaction, pending_events,
 							 &pending_fences,
@@ -1290,12 +1284,10 @@ void lwis_transaction_fence_trigger(struct lwis_client *client, struct lwis_fenc
 		transaction = pending_transaction_peek(client, transaction_id->id);
 		if (transaction == NULL) {
 			/* It means the transaction is already executed or is canceled. */
-			if (lwis_fence_debug) {
-				dev_info(
-					client->lwis_dev->dev,
-					"lwis_fence fd-%d did NOT triggered transaction id %llu, seems already triggered",
-					fence->fd, transaction_id->id);
-			}
+			lwis_debug_dev_info(
+				client->lwis_dev->dev,
+				"lwis_fence fd-%d did NOT triggered transaction id %llu, seems already triggered",
+				fence->fd, transaction_id->id);
 		} else {
 			if (lwis_fence_triggered_condition_ready(transaction, fence->status)) {
 				hash_del(&transaction->pending_map_node);
@@ -1306,12 +1298,10 @@ void lwis_transaction_fence_trigger(struct lwis_client *client, struct lwis_fenc
 								       flags);
 						return;
 					}
-					if (lwis_fence_debug) {
-						dev_info(
-							client->lwis_dev->dev,
-							"lwis_fence fd-%d triggered transaction id %llu",
-							fence->fd, transaction->info.id);
-					}
+					lwis_debug_dev_info(
+						client->lwis_dev->dev,
+						"lwis_fence fd-%d triggered transaction id %llu",
+						fence->fd, transaction->info.id);
 				} else {
 					cancel_transaction(client->lwis_dev, &transaction,
 							   -ECANCELED, &pending_events,
