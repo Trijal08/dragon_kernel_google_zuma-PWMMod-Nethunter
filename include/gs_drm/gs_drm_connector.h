@@ -67,6 +67,18 @@ struct gs_display_partial {
 };
 
 /**
+ * struct gs_drm_connector_lhbm_hist_data - state of lhbm histogram data
+ * @enabled: Whether this feature is enabled
+ * @d: depth of lhbm circle center below center of phone, in pixels
+ * @r: radius of lhbm circle, in pixels
+ */
+struct gs_drm_connector_lhbm_hist_data {
+	bool enabled;
+	int d;
+	int r;
+};
+
+/**
  * struct gs_drm_connector_state - mutable connector state
  */
 struct gs_drm_connector_state {
@@ -156,6 +168,14 @@ struct gs_drm_connector_state {
 	 * so that the specific settings can be updated accordingly.
 	 */
 	bool dsi_hs_clk_changed;
+	/**
+	 * @lhbm_hist_data: data about the lhbm circle location for histogram
+	 * In cases where DPU needs information about the location of a panel's
+	 * LHBM circle, this struct contains that data
+	 * Note that this is an optional feature, and that enabling this struct
+	 * will enable DPU histogram with ROI set to the provided location.
+	 */
+	struct gs_drm_connector_lhbm_hist_data lhbm_hist_data;
 };
 
 #define to_gs_connector_state(connector_state) \
@@ -277,6 +297,25 @@ static inline int gs_drm_mode_te_freq(const struct drm_display_mode *mode)
 		freq *= 4;
 
 	return freq;
+}
+
+/**
+ * gs_drm_connector_hist_data_needs_configure() - checks whether DPU should
+ * update lhbm histogram configuration
+ * @old_gs_connector_state: gs_drm_connector_state previously
+ * @new_gs_connector_state: gs_drm_connector_state to check against
+ * Return: true if DPU should configure, false otherwise
+ */
+static inline bool gs_drm_connector_hist_data_needs_configure(
+	const struct gs_drm_connector_state *old_gs_connector_state,
+	const struct gs_drm_connector_state *new_gs_connector_state)
+{
+	if (!old_gs_connector_state->lhbm_hist_data.enabled &&
+	    !new_gs_connector_state->lhbm_hist_data.enabled)
+		return false;
+	return (memcmp(&old_gs_connector_state->lhbm_hist_data,
+		       &new_gs_connector_state->lhbm_hist_data,
+		       sizeof(struct gs_drm_connector_lhbm_hist_data)) != 0);
 }
 
 int gs_connector_bind(struct device *dev, struct device *master, void *data);
