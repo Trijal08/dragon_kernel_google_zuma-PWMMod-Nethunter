@@ -367,7 +367,7 @@ static void interrupt_emit_events(struct lwis_interrupt *irq, uint64_t source_va
 						    event->event_id &&
 					    event_state->event_control.flags &
 						    LWIS_EVENT_CONTROL_FLAG_IRQ_ENABLE_ONCE) {
-						dev_err_ratelimited(
+						dev_info_ratelimited(
 							irq->lwis_dev->dev,
 							"IRQ(%s) event(0x%llx) enabled once\n",
 							irq->name, event->event_id);
