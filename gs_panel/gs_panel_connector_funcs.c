@@ -481,6 +481,13 @@ static void gs_panel_connector_atomic_commit(struct gs_drm_connector *gs_connect
 	 * TODO: Identify other kinds of errors and ensure detection is debounced
 	 *	 correctly
 	 */
+	if (gs_old_state->is_recovering &&
+	    !((ctx->current_mode->gs_mode.mode_flags & MIPI_DSI_MODE_VIDEO) != 0)) {
+		mutex_lock(&ctx->mode_lock);
+		ctx->error_counter.te++;
+		sysfs_notify(&ctx->dev->kobj, NULL, "error_count_te");
+		mutex_unlock(&ctx->mode_lock);
+	}
 
 	return;
 }
