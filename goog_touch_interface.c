@@ -1306,6 +1306,7 @@ static ssize_t self_test_show(struct device *dev,
 	struct goog_touch_interface *gti = dev_get_drvdata(dev);
 
 	gti->cmd.selftest_cmd.result = GTI_SELFTEST_RESULT_NA;
+	gti->cmd.selftest_cmd.is_ical = false;
 	memset(gti->cmd.selftest_cmd.buffer, 0, sizeof(gti->cmd.selftest_cmd.buffer));
 	ret = goog_do_selftest(gti);
 	if (ret == -EOPNOTSUPP) {
@@ -1633,6 +1634,7 @@ void ical_state_init_test(struct goog_touch_interface *gti, u32 next_state,
 		/* Begin selftest */
 
 		gti->cmd.selftest_cmd.result = GTI_SELFTEST_RESULT_NA;
+		gti->cmd.selftest_cmd.is_ical = true;
 		memset(gti->cmd.selftest_cmd.buffer, 0,
 		       sizeof(gti->cmd.selftest_cmd.buffer));
 		ret = goog_do_selftest(gti);
