@@ -578,6 +578,7 @@ struct gti_screen_protector_mode_cmd {
 struct gti_selftest_cmd {
 	enum gti_selftest_result result;
 	char buffer[PAGE_SIZE];
+	bool is_ical;
 };
 
 struct gti_sensing_cmd {
