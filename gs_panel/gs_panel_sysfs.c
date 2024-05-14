@@ -669,6 +669,33 @@ static ssize_t power_state_show(struct device *dev, struct device_attribute *att
 	return sysfs_emit(buf, "%s\n", get_disp_state_str(state));
 }
 
+static ssize_t error_count_te_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bl = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bl);
+	u32 count;
+
+	mutex_lock(&ctx->mode_lock);
+	count = sysfs_emit(buf, "%u\n", ctx->error_counter.te);
+	mutex_unlock(&ctx->mode_lock);
+
+	return count;
+}
+
+static ssize_t error_count_unknown_show(struct device *dev, struct device_attribute *attr,
+					char *buf)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	u32 count;
+
+	mutex_lock(&ctx->mode_lock);
+	count = sysfs_emit(buf, "%u\n", ctx->error_counter.unknown);
+	mutex_unlock(&ctx->mode_lock);
+
+	return count;
+}
+
 static DEVICE_ATTR_RO(serial_number);
 static DEVICE_ATTR_RO(panel_extinfo);
 static DEVICE_ATTR_RO(panel_name);
@@ -688,6 +715,8 @@ static DEVICE_ATTR_RO(te_info);
 static DEVICE_ATTR_RW(te2_rate_hz);
 static DEVICE_ATTR_RW(te2_option);
 static DEVICE_ATTR_RO(power_state);
+static DEVICE_ATTR_RO(error_count_te);
+static DEVICE_ATTR_RO(error_count_unknown);
 /* TODO(tknelms): re-implement below */
 #if 0
 static DEVICE_ATTR_WO(gamma);
@@ -713,6 +742,8 @@ static const struct attribute *panel_attrs[] = { &dev_attr_serial_number.attr,
 						 &dev_attr_te2_rate_hz.attr,
 						 &dev_attr_te2_option.attr,
 						 &dev_attr_power_state.attr,
+						 &dev_attr_error_count_te.attr,
+						 &dev_attr_error_count_unknown.attr,
 /* TODO(tknelms): re-implement below */
 #if 0
 						 &dev_attr_gamma.attr,

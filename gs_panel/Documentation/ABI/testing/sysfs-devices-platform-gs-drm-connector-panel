@@ -193,3 +193,17 @@ Contact: "Kevin Ying" <kevinying@google.com>
 Description:
   Userspace client uses this to read panel power state. This information includes only if the panel
   is on, off, in low-power mode, or in a HBM state.
+
+What: /sys/devices/platform/gs-drm-connector/panel/error_count_te
+Date: May, 2024
+KernelVersion: 6.1
+Contact: "Weizhung Ding" <weizhungding@google.com>
+Description:
+  Userspace client uses this to read the count of all TE errors detected during runtime.
+
+What: /sys/devices/platform/gs-drm-connector/panel/error_count_unknown
+Date: May, 2024
+KernelVersion: 6.1
+Contact: "Weizhung Ding" <weizhungding@google.com>
+Description:
+  Userspace client uses this to read the count of all unclassified errors detected during runtime.

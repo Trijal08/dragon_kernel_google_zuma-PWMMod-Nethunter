@@ -1053,6 +1053,11 @@ struct display_stats_time_state {
 	u64 *time;
 };
 
+struct gs_error_counter {
+	u32 te;
+	u32 unknown;
+};
+
 #define MAX_VREFRESH_RANGES	10
 #define MAX_RESOLUTION_TABLES	2
 
@@ -1189,6 +1194,9 @@ struct gs_panel {
 
 	/* use for notify op hz changed */
 	struct blocking_notifier_head op_hz_notifier_head;
+
+	/** @error_counter: use for tracking panel errors */
+	struct gs_error_counter error_counter;
 };
 
 /* FUNCTIONS */
