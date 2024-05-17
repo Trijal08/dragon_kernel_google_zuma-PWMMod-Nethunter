@@ -1395,6 +1395,18 @@ static inline int gs_dcs_set_brightness(struct gs_panel *ctx, u16 br)
 
 /* Driver-facing functions (high-level) */
 
+/**
+ * gs_panel_first_enable_helper - Panel-level initialization for gs_panel
+ * @ctx: handle for gs_panel
+ *
+ * This function should be called after the panel has received power,
+ * and it does certain one-time initializations and configurations, including
+ * reading panel module ID and serial number, getting panel revision, and
+ * calling panel_init, etc.
+ *
+ * Return: Enable results; 0 for success, negative value for error
+ */
+int gs_panel_first_enable_helper(struct gs_panel *ctx);
 void gs_panel_reset_helper(struct gs_panel *ctx);
 int gs_panel_set_power_helper(struct gs_panel *ctx, bool on);
 /**

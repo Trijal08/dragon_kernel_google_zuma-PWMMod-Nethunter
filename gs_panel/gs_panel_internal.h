@@ -166,7 +166,6 @@ ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *da
 			    u16 flags);
 
 /* gs_panel.c */
-int gs_panel_first_enable(struct gs_panel *ctx);
 void panel_update_idle_mode_locked(struct gs_panel *ctx, bool allow_delay_update);
 
 /**

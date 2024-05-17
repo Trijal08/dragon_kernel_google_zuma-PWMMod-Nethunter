@@ -191,9 +191,9 @@ static void gs_panel_bridge_enable(struct drm_bridge *bridge,
 
 	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 	if (ctx->panel_state == GPANEL_STATE_HANDOFF) {
-		is_active = !gs_panel_first_enable(ctx);
+		is_active = !gs_panel_first_enable_helper(ctx);
 	} else if (ctx->panel_state == GPANEL_STATE_HANDOFF_MODESET) {
-		if (!gs_panel_first_enable(ctx)) {
+		if (!gs_panel_first_enable_helper(ctx)) {
 			ctx->panel_state = GPANEL_STATE_MODESET;
 			mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 			drm_panel_disable(&ctx->base);

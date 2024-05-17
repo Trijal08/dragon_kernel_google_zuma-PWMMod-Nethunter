@@ -1295,7 +1295,7 @@ static void gs_panel_normal_mode_work(struct work_struct *work)
 
 /* INITIALIZATION */
 
-int gs_panel_first_enable(struct gs_panel *ctx)
+int gs_panel_first_enable_helper(struct gs_panel *ctx)
 {
 	const struct gs_panel_funcs *funcs = ctx->desc->gs_panel_func;
 	struct device *dev = ctx->dev;
@@ -1342,6 +1342,7 @@ int gs_panel_first_enable(struct gs_panel *ctx)
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(gs_panel_first_enable_helper);
 
 static void gs_panel_post_power_on(struct gs_panel *ctx)
 {
@@ -1737,7 +1738,7 @@ void gs_panel_reset_helper(struct gs_panel *ctx)
 
 	dev_dbg(dev, "%s -\n", __func__);
 
-	gs_panel_first_enable(ctx);
+	gs_panel_first_enable_helper(ctx);
 
 	gs_panel_post_power_on(ctx);
 }
