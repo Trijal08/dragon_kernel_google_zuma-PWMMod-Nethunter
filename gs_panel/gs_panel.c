@@ -96,6 +96,8 @@ static int gs_panel_parse_gpios(struct gs_panel *ctx)
 		return PTR_ERR(gpio->reset_gpio);
 	}
 
+	gpio->keep_reset_high = of_property_read_bool(dev->of_node, "keep-reset-high");
+
 	gpio->enable_gpio = devm_gpiod_get_optional(dev, "enable", GPIOD_OUT_LOW);
 	if (gpio->enable_gpio == NULL) {
 		dev_dbg(dev, "no enable gpio found\n");
@@ -1230,7 +1232,7 @@ static int _gs_panel_set_power(struct gs_panel *ctx, bool on)
 		reg_ctrl = get_enable_reg_ctrl_or_default(ctx);
 	} else {
 		gs_panel_pre_power_off(ctx);
-		if (!IS_ERR_OR_NULL(ctx->gpio.reset_gpio))
+		if (!IS_ERR_OR_NULL(ctx->gpio.reset_gpio) && !ctx->gpio.keep_reset_high)
 			gpiod_set_value(ctx->gpio.reset_gpio, 0);
 		if (!IS_ERR_OR_NULL(ctx->gpio.enable_gpio))
 			gpiod_set_value(ctx->gpio.enable_gpio, 0);

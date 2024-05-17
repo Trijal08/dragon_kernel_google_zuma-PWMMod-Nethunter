@@ -824,6 +824,7 @@ struct gs_panel_gpio {
 	struct gpio_desc *vddd_gpio;
 
 	enum gpio_level vddd_gpio_fixed_level;
+	bool keep_reset_high;
 };
 
 /**
