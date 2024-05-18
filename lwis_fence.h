@@ -18,9 +18,6 @@
 
 #define LWIS_CLIENTS_HASH_BITS 8
 
-/* Randomly generated number used to identify lwis_fence objects */
-#define LWIS_FENCE_IDENTIFIER 0x75A2C6BC
-
 extern bool lwis_fence_debug;
 #define lwis_debug_info(fmt, ...)                                                                  \
 	({                                                                                         \
@@ -37,8 +34,6 @@ extern bool lwis_fence_debug;
 	})
 
 struct lwis_fence {
-	/* Used to identify the structure when casting from void pointer */
-	int struct_id;
 	int fd;
 	int status;
 	spinlock_t lock;

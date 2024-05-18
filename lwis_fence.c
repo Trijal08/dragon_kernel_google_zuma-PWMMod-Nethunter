@@ -229,9 +229,6 @@ int lwis_fence_create(struct lwis_device *lwis_dev)
 		return -ENOMEM;
 	}
 
-	/* Set the struct identifier to avoid type-confusion when casting from void pointer */
-	new_fence->struct_id = LWIS_FENCE_IDENTIFIER;
-
 	/* Open a new fd for the new fence */
 	fd_or_err =
 		anon_inode_getfd("lwis_fence_file", &fence_file_ops, new_fence, O_RDWR | O_CLOEXEC);
@@ -262,14 +259,14 @@ struct file *lwis_fence_get(struct lwis_client *client, int fd)
 		return NULL;
 	}
 
-	fence = fence_fp->private_data;
-	if (fence->struct_id != LWIS_FENCE_IDENTIFIER) {
+	if (fence_fp->f_op != &fence_file_ops) {
 		fput(fence_fp);
 		dev_err(client->lwis_dev->dev, "Underlying structure for fd %d is not a lwis_fence",
 			fd);
 		return NULL;
 	}
 
+	fence = fence_fp->private_data;
 	if (fence->fd != fd) {
 		fput(fence_fp);
 		dev_err(client->lwis_dev->dev,
