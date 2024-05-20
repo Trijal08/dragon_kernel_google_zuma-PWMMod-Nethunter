@@ -8,12 +8,200 @@
  */
 
 #include <linux/of_device.h>
+#include <video/mipi_display.h>
 #include "gs_panel/gs_panel_test.h"
 #include "trace/panel_trace.h"
+
+#define MAX_PANEL_REG_SIZE 128
+#define MAX_VALUE_PER_LINE 10
+
+/* keep sorted by register address */
+static struct gs_panel_register common_panel_registers[] = {
+	GS_PANEL_REG("compression_mode", MIPI_DCS_GET_COMPRESSION_MODE),
+	GS_PANEL_REG("display_id", MIPI_DCS_GET_DISPLAY_ID),
+	GS_PANEL_REG("error_count_on_DSI", MIPI_DCS_GET_ERROR_COUNT_ON_DSI),
+	GS_PANEL_REG("red_channel", MIPI_DCS_GET_RED_CHANNEL),
+	GS_PANEL_REG("green_channel", MIPI_DCS_GET_GREEN_CHANNEL),
+	GS_PANEL_REG("blue_channel", MIPI_DCS_GET_BLUE_CHANNEL),
+	GS_PANEL_REG("display_status", MIPI_DCS_GET_DISPLAY_STATUS),
+	GS_PANEL_REG("power_mode", MIPI_DCS_GET_POWER_MODE),
+	GS_PANEL_REG("address_mode", MIPI_DCS_GET_ADDRESS_MODE),
+	GS_PANEL_REG("pixel_format", MIPI_DCS_GET_PIXEL_FORMAT),
+	GS_PANEL_REG("display_mode", MIPI_DCS_GET_DISPLAY_MODE),
+	GS_PANEL_REG("signal_mode", MIPI_DCS_GET_SIGNAL_MODE),
+	GS_PANEL_REG("diagnostic_result", MIPI_DCS_GET_DIAGNOSTIC_RESULT),
+
+	GS_PANEL_REG("checksum_rgb", MIPI_DCS_GET_IMAGE_CHECKSUM_RGB),
+	GS_PANEL_REG("checksum_ct", MIPI_DCS_GET_IMAGE_CHECKSUM_CT),
+
+	GS_PANEL_REG("control_3d", MIPI_DCS_GET_3D_CONTROL),
+	GS_PANEL_REG("scanline", MIPI_DCS_GET_SCANLINE),
+	GS_PANEL_REG_LONG("brightness", MIPI_DCS_GET_DISPLAY_BRIGHTNESS, 2),
+	GS_PANEL_REG("ctrld", MIPI_DCS_GET_CONTROL_DISPLAY),
+	GS_PANEL_REG("power_save", MIPI_DCS_GET_POWER_SAVE),
+	GS_PANEL_REG("cabc_min_br", MIPI_DCS_GET_CABC_MIN_BRIGHTNESS),
+	GS_PANEL_REG_LONG("pps", MIPI_DCS_READ_PPS_START, 88),
+	{ .name = "id", .address = 0xDA, .size = 3, .read_individually = true },
+};
+
+static void send_cmdset_to_panel(struct gs_panel *ctx, const struct gs_dsi_cmdset *cmds)
+{
+	if (cmds && cmds->num_cmd)
+		gs_panel_send_cmdset(ctx, cmds);
+}
+
+int gs_panel_read_register_value(struct gs_panel_test *test, const struct gs_panel_register *reg,
+				 u8 *value)
+{
+	struct gs_panel *ctx = test->ctx;
+	struct device *dev = ctx->dev;
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	int i, ret;
+
+	if (reg->size > MAX_PANEL_REG_SIZE) {
+		dev_warn(dev, "Register size is bigger than buffer size\n");
+		return -E2BIG;
+	}
+
+	/* TODO: Optional for common registers */
+	send_cmdset_to_panel(ctx, gs_panel_test_get_global_pre_read_cmds(test));
+	send_cmdset_to_panel(ctx, reg->pre_read_cmdset);
+
+	if (reg->read_individually) {
+		for (i = 0; i < reg->size; i++) {
+			ret = mipi_dsi_dcs_read(dsi, reg->address + i, value + i, 1);
+			if (ret != 1)
+				dev_warn(dev,
+					 "Failed to read %s (0x%x) register. Returned value: %d\n",
+					 reg->name, reg->address + i, ret);
+			else
+				ret = 0;
+		}
+	} else {
+		ret = mipi_dsi_dcs_read(dsi, reg->address, value, reg->size);
+
+		if (ret != (int)reg->size)
+			dev_warn(dev, "Failed to read %s (0x%x) register. Returned value: %d\n",
+				 reg->name, reg->address, ret);
+		else
+			ret = 0;
+	}
+
+	send_cmdset_to_panel(ctx, reg->post_read_cmdset);
+	send_cmdset_to_panel(ctx, gs_panel_test_get_global_post_read_cmds(test));
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(gs_panel_read_register_value);
+
+static u8 reg_value[MAX_PANEL_REG_SIZE];
+
+static void dump_register_to_debugfs(struct gs_panel_test *test,
+				     const struct gs_panel_register *reg, struct seq_file *m)
+{
+	int cnt;
+
+	gs_panel_read_register_value(test, reg, reg_value);
+	if (reg->size <= MAX_VALUE_PER_LINE) {
+		seq_printf(m, "%s (0x%02x) : %*ph\n", reg->name, reg->address, reg->size,
+			   reg_value);
+	} else {
+		seq_printf(m, "%s (0x%02x) :\n", reg->name, reg->address);
+		for (cnt = 0; cnt < reg->size; cnt += MAX_VALUE_PER_LINE) {
+			seq_printf(m, "%*ph\n", min(MAX_VALUE_PER_LINE, (int)reg->size - cnt),
+				   reg_value + cnt);
+		}
+	}
+}
+
+static int gs_panel_dump_registers_to_debugfs(struct gs_panel_test *test, struct seq_file *m)
+{
+	int i;
+	const struct gs_panel_registers_desc *registers_desc;
+
+	seq_puts(m, "MIPI\n----\n");
+
+	for (i = 0; i < ARRAY_SIZE(common_panel_registers); i++)
+		dump_register_to_debugfs(test, &common_panel_registers[i], m);
+
+	if (!gs_panel_test_has_registers_desc(test))
+		return 0;
+
+	registers_desc = test->test_desc->regs_desc;
+
+	seq_puts(m, "Panel specific\n--------------\n");
+	for (i = 0; i < registers_desc->register_count; i++)
+		dump_register_to_debugfs(test, &registers_desc->registers[i], m);
+
+	return 0;
+}
+
+static int gs_panel_regs_show(struct seq_file *m, void *data)
+{
+	return gs_panel_dump_registers_to_debugfs(m->private, m);
+}
+DEFINE_SHOW_ATTRIBUTE(gs_panel_regs);
+
+struct register_dentry_data {
+	struct gs_panel_test *test;
+	const struct gs_panel_register *reg;
+};
+
+static int gs_panel_reg_show(struct seq_file *m, void *data)
+{
+	struct register_dentry_data *reg_data = m->private;
+
+	dump_register_to_debugfs(reg_data->test, reg_data->reg, m);
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(gs_panel_reg);
+
+static int debugfs_add_panel_register_nodes(struct gs_panel_test *test, struct dentry *test_root)
+{
+	int i;
+	struct dentry *regs_root;
+	const struct gs_panel_registers_desc *regs_desc;
+
+	regs_root = debugfs_create_dir("regs", test_root);
+	if (!regs_root)
+		return -EFAULT;
+
+	debugfs_create_file("reg_values", 0600, test_root, test, &gs_panel_regs_fops);
+
+	for (i = 0; i < ARRAY_SIZE(common_panel_registers); i++) {
+		struct register_dentry_data *data =
+			kmalloc(sizeof(struct register_dentry_data), GFP_KERNEL);
+		data->test = test;
+		data->reg = &common_panel_registers[i];
+		debugfs_create_file(common_panel_registers[i].name, 0600, regs_root, data,
+				    &gs_panel_reg_fops);
+	}
+
+	if (!gs_panel_test_has_registers_desc(test))
+		return 0;
+
+	regs_desc = test->test_desc->regs_desc;
+
+	if (!regs_desc)
+		return 0;
+
+	for (i = 0; i < regs_desc->register_count; i++) {
+		struct register_dentry_data *data =
+			kmalloc(sizeof(struct register_dentry_data), GFP_KERNEL);
+		data->test = test;
+		data->reg = &regs_desc->registers[i];
+		debugfs_create_file(regs_desc->registers[i].name, 0600, regs_root, data,
+				    &gs_panel_reg_fops);
+	}
+
+	return 0;
+}
 
 static int debugfs_add_test_folder(struct gs_panel_test *test)
 {
 	struct dentry *test_root, *panel_root = test->ctx->debugfs_entries.panel;
+	int ret;
 
 	if (!panel_root)
 		return -EFAULT;
@@ -21,6 +209,10 @@ static int debugfs_add_test_folder(struct gs_panel_test *test)
 	test_root = debugfs_create_dir("test", panel_root);
 	if (!test_root)
 		return -EFAULT;
+
+	ret = debugfs_add_panel_register_nodes(test, test_root);
+	if (ret)
+		return ret;
 
 	if (gs_panel_test_has_debugfs_init(test))
 		test->test_desc->test_funcs->debugfs_init(test, test_root);
@@ -84,9 +276,7 @@ int gs_panel_test_common_remove(struct platform_device *pdev)
 		return 0;
 
 	PANEL_ATRACE_BEGIN("panel_test_remove");
-
 	debugfs_remove_test_folder(test);
-
 	PANEL_ATRACE_END("panel_test_remove");
 
 	return 0;
