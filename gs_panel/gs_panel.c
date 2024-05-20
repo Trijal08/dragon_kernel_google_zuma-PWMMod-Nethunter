@@ -1673,6 +1673,9 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	if (ret)
 		goto err_panel;
 
+	/* populate test module, ignoring return value */
+	of_platform_populate(dev->of_node, NULL, NULL, dev);
+
 	dev_info(dev, "gs common panel driver has been probed; dsi %s\n", dsi->name);
 	dev_dbg(dev, "%s -\n", __func__);
 	return 0;
