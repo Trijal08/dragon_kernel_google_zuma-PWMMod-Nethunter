@@ -15,6 +15,8 @@
 #define MAX_PANEL_REG_SIZE 128
 #define MAX_VALUE_PER_LINE 10
 
+/* Register dump nodes */
+
 /* keep sorted by register address */
 static struct gs_panel_register common_panel_registers[] = {
 	GS_PANEL_REG("compression_mode", MIPI_DCS_GET_COMPRESSION_MODE),
@@ -198,6 +200,76 @@ static int debugfs_add_panel_register_nodes(struct gs_panel_test *test, struct d
 	return 0;
 }
 
+/* Query nodes */
+
+struct query_dentry_data {
+	struct gs_panel_test *test;
+	const char *query_node_name;
+};
+
+static int gs_panel_query_node_show(struct seq_file *m, void *data)
+{
+	struct query_dentry_data *query_data = m->private;
+	struct gs_panel_test *test;
+	const struct gs_panel_query_funcs *query_func;
+	const char *name;
+
+	if (!query_data)
+		return -EFAULT;
+
+	test = query_data->test;
+	name = query_data->query_node_name;
+
+	if (!gs_panel_test_has_query_func(test))
+		return -EOPNOTSUPP;
+
+	query_func = test->test_desc->query_desc;
+
+#define MATCH_QUERY_FUNC_NAME(test, node_name)                                    \
+	{                                                                         \
+		if (!strcmp(name, #node_name) && query_func->get_##node_name) {   \
+			seq_printf(m, "%d\n", query_func->get_##node_name(test)); \
+			return 0;                                                 \
+		}                                                                 \
+	}
+
+	MATCH_QUERY_FUNC_NAME(test, refresh_rate);
+	MATCH_QUERY_FUNC_NAME(test, irc_on);
+	MATCH_QUERY_FUNC_NAME(test, aod_on);
+
+	return -EOPNOTSUPP;
+}
+DEFINE_SHOW_ATTRIBUTE(gs_panel_query_node);
+
+static int debugfs_add_query_nodes(struct gs_panel_test *test, struct dentry *test_root)
+{
+	int i;
+	struct dentry *query_root;
+	static const char *const names[] = {
+		"refresh_rate",
+		"irc_on",
+		"aod_on",
+	};
+
+	if (!gs_panel_test_has_query_func(test))
+		return 0;
+
+	query_root = debugfs_create_dir("query", test_root);
+	if (!query_root)
+		return -EFAULT;
+
+	for (i = 0; i < ARRAY_SIZE(names); i++) {
+		struct query_dentry_data *data =
+			kmalloc(sizeof(struct register_dentry_data), GFP_KERNEL);
+		data->test = test;
+		data->query_node_name = names[i];
+
+		debugfs_create_file(names[i], 0600, query_root, data, &gs_panel_query_node_fops);
+	}
+
+	return 0;
+}
+
 static int debugfs_add_test_folder(struct gs_panel_test *test)
 {
 	struct dentry *test_root, *panel_root = test->ctx->debugfs_entries.panel;
@@ -211,6 +283,10 @@ static int debugfs_add_test_folder(struct gs_panel_test *test)
 		return -EFAULT;
 
 	ret = debugfs_add_panel_register_nodes(test, test_root);
+	if (ret)
+		return ret;
+
+	ret = debugfs_add_query_nodes(test, test_root);
 	if (ret)
 		return ret;
 

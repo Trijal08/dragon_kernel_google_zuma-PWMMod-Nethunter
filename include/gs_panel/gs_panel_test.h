@@ -40,9 +40,35 @@ struct gs_panel_test_funcs {
 	void (*debugfs_init)(struct gs_panel_test *test, struct dentry *test_root);
 };
 
+struct gs_panel_test;
+
+struct gs_panel_query_funcs {
+	/**
+	 * @get_refresh_rate get current refresh rate from register logic
+	 *
+	 * Returns current refresh rate
+	 */
+	int (*get_refresh_rate)(struct gs_panel_test *gs_panel);
+
+	/**
+	 * @get_irc_on : get irc status from register read
+	 *
+	 * Returns current irc status
+	 */
+	int (*get_irc_on)(struct gs_panel_test *gs_panel);
+
+	/**
+	 * @get_aod_on: read aod status from register
+	 *
+	 * Returns aod status
+	 */
+	int (*get_aod_on)(struct gs_panel_test *gs_panel);
+};
+
 struct gs_panel_test_desc {
 	const struct gs_panel_test_funcs *test_funcs;
 	const struct gs_panel_registers_desc *regs_desc;
+	const struct gs_panel_query_funcs *query_desc;
 };
 
 struct gs_panel_test {
@@ -91,6 +117,9 @@ int gs_panel_test_common_remove(struct platform_device *pdev);
 
 #define gs_panel_test_has_registers_desc(test) \
 	((test) && (test->test_desc) && (test->test_desc->regs_desc))
+
+#define gs_panel_test_has_query_func(test) \
+	((test) && (test->test_desc) && (test->test_desc->query_desc))
 
 #define gs_panel_test_get_global_pre_read_cmds(test)                  \
 	(gs_panel_test_has_registers_desc(test) ?                     \
