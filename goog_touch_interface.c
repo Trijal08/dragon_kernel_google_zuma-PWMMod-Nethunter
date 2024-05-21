@@ -3420,19 +3420,20 @@ void goog_offload_input_report(void *handle,
 		gti->lptw_track_finger = false;
 	}
 
-	error = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_OFFLOAD_REPORT, true);
-	if (error < 0) {
-		if (gti->pm.state == GTI_PM_RESUME) {
+	if (gti->pm.state == GTI_PM_RESUME) {
+		error = goog_pm_wake_lock(gti, GTI_PM_WAKELOCK_TYPE_OFFLOAD_REPORT, true);
+		if (error < 0) {
 			GOOG_WARN(gti, "Error while obtaining OFFLOAD_REPORT wakelock: %d!\n",
 				error);
+			ATRACE_END();
+			return;
 		}
-		ATRACE_END();
-		return;
+		goog_update_motion_filter(gti, slot_bit_active);
+		error = goog_pm_wake_unlock(gti, GTI_PM_WAKELOCK_TYPE_OFFLOAD_REPORT);
+		if (error < 0)
+			GOOG_WARN(gti, "Error while releasing OFFLOAD_REPORT wakelock: %d!\n",
+					error);
 	}
-	goog_update_motion_filter(gti, slot_bit_active);
-	error = goog_pm_wake_unlock(gti, GTI_PM_WAKELOCK_TYPE_OFFLOAD_REPORT);
-	if (error < 0)
-		GOOG_WARN(gti, "Error while releasing OFFLOAD_REPORT wakelock: %d!\n", error);
 	ATRACE_END();
 }
 
