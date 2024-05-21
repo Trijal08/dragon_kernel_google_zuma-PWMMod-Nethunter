@@ -47,7 +47,7 @@ struct lwis_transaction {
 	bool is_weak_transaction;
 	int64_t id;
 	/* List of fences's fp that's referenced by the transaction */
-	int num_trigger_fences;
+	uint32_t num_trigger_fences;
 	struct file *trigger_fence_fps[LWIS_TRIGGER_NODES_MAX_NUM];
 	/* Parameters for completion fences */
 	struct list_head completion_fence_list;
