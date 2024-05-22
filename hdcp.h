@@ -7,10 +7,13 @@
 #ifndef __EXYNOS_HDCP_H__
 #define __EXYNOS_HDCP_H__
 
+#include <linux/types.h>
+
 struct hdcp_device {
 	struct device *dev;
 	struct delayed_work hdcp_work;
-	struct delayed_work hdcp_wv_work;
+
+	ktime_t connect_time;
 
 	/* HDCP Telemetry */
 	uint32_t hdcp2_success_count;
