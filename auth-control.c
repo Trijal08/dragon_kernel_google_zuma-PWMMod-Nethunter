@@ -10,6 +10,7 @@
  */
 #include <linux/delay.h>
 #include <linux/errno.h>
+#include <linux/ktime.h>
 #include <linux/module.h>
 
 #include "exynos-hdcp-interface.h"
@@ -64,12 +65,32 @@ static int run_hdcp2_auth(void) {
 }
 
 static void hdcp_worker(struct work_struct *work) {
+	int err;
+	uint32_t requested_lvl;
 	int ret;
+	ktime_t delta;
 	bool hdcp2_capable = false;
 	bool hdcp1_capable = false;
 
 	struct hdcp_device *hdcp_dev =
 		container_of(work, struct hdcp_device, hdcp_work.work);
+
+	if (state != HDCP_AUTH_IDLE) {
+		hdcp_info("HDCP auth already in progress\n");
+		return;
+	}
+
+	err = hdcp_tee_get_cp_level(&requested_lvl);
+	if (!err && !requested_lvl && max_ver <= 2) {
+		hdcp_info("CP not requested\n");
+		return;
+	}
+
+	delta = ktime_sub(ktime_get(), hdcp_dev->connect_time);
+	if (ktime_to_ms(delta) < HDCP_SCHEDULE_DELAY_MSEC) {
+		hdcp_info("HDCP auth will start soon\n");
+		msleep(HDCP_SCHEDULE_DELAY_MSEC - ktime_to_ms(delta));
+	}
 
 	if (max_ver >= 2) {
 		hdcp_info("Trying HDCP22...\n");
@@ -126,8 +147,10 @@ void hdcp_dplink_handle_irq(void) {
 		hdcp_info("HDCP irq ignored during state(%d)\n", state);
 	}
 
-	if (ret == -EFAULT) {
+	if (ret == -EAGAIN || ret == -EFAULT)
 		state = HDCP_AUTH_IDLE;
+
+	if (ret == -EFAULT) {
 		if (hdcp_auth_try_count >= max_retry_count) {
 			hdcp_err("HDCP disabled until next physical re-connect"\
 				 "tried %lu times\n", max_retry_count);
@@ -137,16 +160,15 @@ void hdcp_dplink_handle_irq(void) {
 	}
 
 	if (ret == -EAGAIN || ret == -EFAULT)
-		schedule_delayed_work(&hdcp_dev->hdcp_work, 0);
+		hdcp_auth_worker_schedule(hdcp_dev);
 }
 EXPORT_SYMBOL_GPL(hdcp_dplink_handle_irq);
 
 void hdcp_dplink_connect_state(enum dp_state dp_hdcp_state) {
-	int err;
-	uint32_t requested_lvl;
 	hdcp_info("Displayport connect info (%d)\n", dp_hdcp_state);
 
 	if (dp_hdcp_state == DP_PHYSICAL_DISCONNECT) {
+		hdcp_dev->connect_time = 0;
 		hdcp_auth_try_count = 0;
 		return;
 	}
@@ -162,6 +184,8 @@ void hdcp_dplink_connect_state(enum dp_state dp_hdcp_state) {
 		return;
 	}
 
+	hdcp_dev->connect_time = ktime_get();
+
 	if (hdcp_auth_try_count >= max_retry_count) {
 		hdcp_err("HDCP disabled until next physical re-connect"\
 			 "tried %lu times\n", max_retry_count);
@@ -169,34 +193,13 @@ void hdcp_dplink_connect_state(enum dp_state dp_hdcp_state) {
 	}
 
 	hdcp_auth_try_count++;
-
-	err = hdcp_tee_get_cp_level(&requested_lvl);
-	if (err) {
-		hdcp_info("Fail to get CP DESIRED lvl, triggering auth\n");
-	}
-
-	if (err || requested_lvl) {
-		schedule_delayed_work(&hdcp_dev->hdcp_work,
-			msecs_to_jiffies(HDCP_SCHEDULE_DELAY_MSEC));
-	}
-
+	hdcp_auth_worker_schedule(hdcp_dev);
 	return;
 }
 EXPORT_SYMBOL_GPL(hdcp_dplink_connect_state);
 
-static void hdcp_wv_worker(struct work_struct *work) {
-	int err;
-	uint32_t requested_lvl;
-
-	hdcp_info("widevine worker called\n");
-	err = hdcp_tee_get_cp_level(&requested_lvl);
-	if (err) {
-		hdcp_err("Fail to get CP DESIRED lvl\n");
-		return;
-	}
-
-	if (state == HDCP_AUTH_IDLE && requested_lvl)
-		schedule_delayed_work(&hdcp_dev->hdcp_work, 0);
+void hdcp_auth_worker_schedule(struct hdcp_device *dev) {
+	schedule_delayed_work(&dev->hdcp_work, 0);
 }
 
 int hdcp_auth_worker_init(struct hdcp_device *dev) {
@@ -205,7 +208,6 @@ int hdcp_auth_worker_init(struct hdcp_device *dev) {
 
 	hdcp_dev = dev;
 	INIT_DELAYED_WORK(&hdcp_dev->hdcp_work, hdcp_worker);
-	INIT_DELAYED_WORK(&hdcp_dev->hdcp_wv_work, hdcp_wv_worker);
 	return 0;
 }
 
@@ -214,7 +216,6 @@ int hdcp_auth_worker_deinit(struct hdcp_device *dev) {
 		return -EACCES;
 
 	cancel_delayed_work_sync(&hdcp_dev->hdcp_work);
-	cancel_delayed_work_sync(&hdcp_dev->hdcp_wv_work);
 	hdcp_dev = NULL;
 	return 0;
 }

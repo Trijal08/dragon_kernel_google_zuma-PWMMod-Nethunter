@@ -116,7 +116,7 @@ static irqreturn_t exynos_hdcp_irq_handler(int irq, void *dev_id) {
 	struct hdcp_device* hdcp_dev = dev_id;
 
 	hdcp_debug("irq handler called\n");
-	schedule_delayed_work(&hdcp_dev->hdcp_wv_work, 0);
+	hdcp_auth_worker_schedule(hdcp_dev);
 	return IRQ_HANDLED;
 }
 
