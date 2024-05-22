@@ -177,7 +177,7 @@ int goog_usi_send_event_leave(g_usi_handle_t handle, struct g_usi_event_leave *u
 
 /* save/restore the vendor-specific data */
 int goog_usi_set_drvdata(g_usi_handle_t handle, void *data);
-void *goog_usi_get_drvdata(g_usi_handle_t handle);
+int goog_usi_get_drvdata(g_usi_handle_t handle, void **data);
 
 /* save/restore stylus information to/from the driver */
 /* Set GID0-GID5 from C.GetGID() */

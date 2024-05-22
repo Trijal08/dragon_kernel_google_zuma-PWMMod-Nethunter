@@ -1089,7 +1089,7 @@ int goog_usi_set_drvdata(g_usi_handle_t handle, void *data)
 {
 	struct g_usi_context *usi_ctx = handle_to_context(handle);
 
-	if (!data || !g_usi_is_valid_context(usi_ctx)) {
+	if (!g_usi_is_valid_context(usi_ctx)) {
 		G_USI_ERR("Invalid Parameters");
 		return -EINVAL;
 	}
@@ -1105,19 +1105,20 @@ EXPORT_SYMBOL(goog_usi_set_drvdata);
  *
  * @handle: handle(&typedef g_usi_handle_t) to the registered USI controller
  *
- * Return: pointer to vendor-specific data on success, NULL on failure
+ * Return: Return 0 on success and @data contains the value, Non-zero on failure
  */
-void *goog_usi_get_drvdata(g_usi_handle_t handle)
+int goog_usi_get_drvdata(g_usi_handle_t handle, void **data)
 {
 	struct g_usi_context *usi_ctx = handle_to_context(handle);
 
 	if (!g_usi_is_valid_context(usi_ctx)) {
 		G_USI_ERR("Invalid Parameters");
-		return NULL;
+		return -EINVAL;
 	}
 
+	*data = usi_ctx->drvdata;
 
-	return usi_ctx->drvdata;
+	return 0;
 }
 EXPORT_SYMBOL(goog_usi_get_drvdata);
 
