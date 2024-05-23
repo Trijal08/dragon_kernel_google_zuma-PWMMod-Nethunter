@@ -15,6 +15,7 @@
 #include <drm/drm_vblank.h>
 
 #include "gs_panel/gs_panel.h"
+#include "trace/panel_trace.h"
 
 /* Sysfs Node */
 
@@ -248,11 +249,13 @@ static ssize_t refresh_ctrl_store(struct device *dev, struct device_attribute *a
 
 	mutex_lock(&ctx->mode_lock);
 	ctx->refresh_ctrl = ctrl;
-	if (!gs_is_panel_initialized(ctx) || !gs_is_panel_enabled(ctx))
+	if (!gs_is_panel_initialized(ctx) || !gs_is_panel_enabled(ctx)) {
 		dev_info(dev, "%s: cache ctrl=0x%08lX\n", __func__,
 			 ctrl & GS_PANEL_REFRESH_CTRL_FEATURE_MASK);
-	else
+	} else {
+		PANEL_ATRACE_INT("refresh_ctrl_value", ctrl);
 		ctx->desc->gs_panel_func->refresh_ctrl(ctx);
+	}
 	ctx->refresh_ctrl &= GS_PANEL_REFRESH_CTRL_FEATURE_MASK;
 	mutex_unlock(&ctx->mode_lock);
 

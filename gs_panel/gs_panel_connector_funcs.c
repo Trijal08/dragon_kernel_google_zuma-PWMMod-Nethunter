@@ -377,23 +377,23 @@ static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_GHBM_UPDATE) &&
 	    gs_panel_has_func(ctx, set_hbm_mode) &&
 	    (ctx->hbm_mode != conn_state->global_hbm_mode)) {
-		/*TODO(tknelms) DPU_ATRACE_BEGIN("set_hbm");*/
+		PANEL_ATRACE_BEGIN("set_hbm");
 		/*TODO(b/267170999): MODE*/
 		mutex_lock(&ctx->mode_lock);
 		gs_panel_func->set_hbm_mode(ctx, conn_state->global_hbm_mode);
 		notify_panel_mode_changed(ctx);
 		/*TODO(b/267170999): MODE*/
 		mutex_unlock(&ctx->mode_lock);
-		/*TODO(tknelms) DPU_ATRACE_END("set_hbm");*/
+		PANEL_ATRACE_END("set_hbm");
 		ghbm_updated = true;
 	}
 
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_BL_UPDATE) &&
 	    (ctx->bl->props.brightness != conn_state->brightness_level)) {
-		/*TODO(tknelms) DPU_ATRACE_BEGIN("set_bl");*/
+		PANEL_ATRACE_BEGIN("set_bl");
 		ctx->bl->props.brightness = conn_state->brightness_level;
 		backlight_update_status(ctx->bl);
-		/*TODO(tknelms) DPU_ATRACE_END("set_bl");*/
+		PANEL_ATRACE_END("set_bl");
 	}
 
 	if ((conn_state->pending_update_flags & GS_HBM_FLAG_LHBM_UPDATE) &&
