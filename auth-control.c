@@ -155,8 +155,7 @@ void hdcp_dplink_connect_state(enum dp_state dp_hdcp_state) {
 		hdcp22_dplink_abort();
 		hdcp_tee_disable_enc();
 		state = HDCP_AUTH_IDLE;
-		if (delayed_work_pending(&hdcp_dev->hdcp_work))
-			cancel_delayed_work(&hdcp_dev->hdcp_work);
+		cancel_delayed_work_sync(&hdcp_dev->hdcp_work);
 		return;
 	}
 
