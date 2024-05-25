@@ -45,6 +45,9 @@ struct lwis_fence {
 
 	spinlock_t lock;
 
+	/* Whether this fence should follow the old LWIS fence API. */
+	bool legacy_lwis_fence;
+
 	int fd;
 	int status;
 	/* Top device for printing logs */
@@ -67,6 +70,9 @@ struct lwis_fence_pending_signal {
 	int pending_status;
 	struct list_head node;
 };
+
+/* Create a fence with the legacy LWIS Fence API */
+int lwis_fence_legacy_create(struct lwis_device *lwis_dev);
 
 /*
  *  lwis_fence_create: Create a new lwis_fence.

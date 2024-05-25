@@ -1420,7 +1420,8 @@ static noinline_for_stack int construct_transaction_from_cmd(struct lwis_client 
 		return -ENOMEM;
 	}
 
-	if (cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT) {
+	if (cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT ||
+	    cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT_V5) {
 		if (copy_from_user((void *)&k_info_v5, (void __user *)u_msg, sizeof(k_info_v5))) {
 			dev_err(lwis_dev->dev, "Failed to copy transaction info from user\n");
 			ret = -EFAULT;
@@ -1488,7 +1489,7 @@ static noinline_for_stack int construct_transaction_from_cmd(struct lwis_client 
 
 		k_transaction->info.num_completion_fences = 0;
 	} else {
-		dev_err(lwis_dev->dev, "Invalid command id for transaction\n");
+		dev_err(lwis_dev->dev, "Invalid command id for transaction 0x%x\n", cmd_id);
 		ret = -EINVAL;
 		goto error_free_transaction;
 	}
@@ -1516,6 +1517,8 @@ static noinline_for_stack int construct_transaction_from_cmd(struct lwis_client 
 		goto error_free_transaction;
 	}
 
+	k_transaction->legacy_lwis_fence = (cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT_V5 ||
+					    cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT_V4);
 	k_transaction->resp = NULL;
 	k_transaction->is_weak_transaction = false;
 	k_transaction->remaining_entries_to_process = k_transaction->info.num_io_entries;
@@ -1624,7 +1627,8 @@ static int cmd_transaction_submit(struct lwis_client *client, struct lwis_cmd_pk
 
 	spin_lock_irqsave(&client->transaction_lock, flags);
 	ret = lwis_transaction_submit_locked(client, k_transaction);
-	if (header->cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT) {
+	if (header->cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT ||
+	    header->cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT_V5) {
 		resp_header = &k_cmd_transaction_info_v5.header;
 		k_cmd_transaction_info_v5.info = k_transaction->info;
 	} else if (header->cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT_V4) {
@@ -1645,7 +1649,8 @@ static int cmd_transaction_submit(struct lwis_client *client, struct lwis_cmd_pk
 	resp_header->cmd_id = header->cmd_id;
 	resp_header->next = header->next;
 	resp_header->ret_code = ret;
-	if (header->cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT) {
+	if (header->cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT ||
+	    header->cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT_V5) {
 		return copy_pkt_to_user(lwis_dev, u_msg, (void *)&k_cmd_transaction_info_v5,
 					sizeof(k_cmd_transaction_info_v5));
 	} else if (header->cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT_V4) {
@@ -2037,7 +2042,8 @@ err_exit:
 }
 
 static int cmd_fence_create(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
-			    struct lwis_cmd_fence_create __user *u_msg)
+			    struct lwis_cmd_fence_create __user *u_msg,
+			    int (*fence_create_fn)(struct lwis_device *))
 {
 	int32_t fd_or_err;
 	struct lwis_cmd_fence_create fence_create;
@@ -2047,7 +2053,7 @@ static int cmd_fence_create(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *h
 		return -EFAULT;
 	}
 
-	fd_or_err = lwis_fence_create(lwis_dev);
+	fd_or_err = fence_create_fn(lwis_dev);
 	if (fd_or_err < 0) {
 		header->ret_code = fd_or_err;
 		return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
@@ -2169,6 +2175,7 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 					(struct lwis_cmd_event_dequeue __user *)user_msg);
 		break;
 	case LWIS_CMD_ID_TRANSACTION_SUBMIT_V4:
+	case LWIS_CMD_ID_TRANSACTION_SUBMIT_V5:
 	case LWIS_CMD_ID_TRANSACTION_SUBMIT:
 		ret = cmd_transaction_submit(lwis_client, header,
 					     (struct lwis_cmd_pkt __user *)user_msg);
@@ -2219,9 +2226,15 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 					(struct lwis_cmd_dpm_clk_get __user *)user_msg);
 		mutex_unlock(&lwis_client->lock);
 		break;
+	case LWIS_CMD_ID_FENCE_CREATE_V0:
+		ret = cmd_fence_create(lwis_dev, header,
+				       (struct lwis_cmd_fence_create __user *)user_msg,
+				       lwis_fence_legacy_create);
+		break;
 	case LWIS_CMD_ID_FENCE_CREATE:
 		ret = cmd_fence_create(lwis_dev, header,
-				       (struct lwis_cmd_fence_create __user *)user_msg);
+				       (struct lwis_cmd_fence_create __user *)user_msg,
+				       lwis_fence_create);
 		break;
 	case LWIS_CMD_ID_EVENT_INJECTION:
 		mutex_lock(&lwis_client->lock);
@@ -2261,6 +2274,7 @@ static int ioctl_handle_cmd_pkt(struct lwis_client *lwis_client,
 		    (header.cmd_id == LWIS_CMD_ID_DMA_BUFFER_ALLOC ||
 		     header.cmd_id == LWIS_CMD_ID_REG_IO ||
 		     header.cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT_V4 ||
+		     header.cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT_V5 ||
 		     header.cmd_id == LWIS_CMD_ID_TRANSACTION_SUBMIT ||
 		     header.cmd_id == LWIS_CMD_ID_PERIODIC_IO_SUBMIT ||
 		     header.cmd_id == LWIS_CMD_ID_EVENT_CONTROL_SET)) {
