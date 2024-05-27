@@ -715,6 +715,45 @@ static ssize_t error_count_unknown_show(struct device *dev, struct device_attrib
 	return count;
 }
 
+static ssize_t force_power_on_store(struct device *dev, struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	int ret;
+	bool force_on;
+
+	ret = kstrtobool(buf, &force_on);
+	if (ret) {
+		dev_err(dev, "invalid force_power_on value\n");
+		return ret;
+	}
+
+	mutex_lock(&ctx->mode_lock);
+	if (force_on && ctx->panel_state == GPANEL_STATE_OFF) {
+		drm_panel_prepare(&ctx->base);
+		ctx->panel_state = GPANEL_STATE_BLANK;
+	}
+
+	ctx->force_power_on = force_on;
+	mutex_unlock(&ctx->mode_lock);
+
+	return count;
+}
+
+static ssize_t force_power_on_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	const struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	u32 count;
+
+	mutex_lock(&ctx->mode_lock);
+	count = sysfs_emit(buf, "%d\n", ctx->force_power_on);
+	mutex_unlock(&ctx->mode_lock);
+
+	return count;
+}
+
 static DEVICE_ATTR_RO(serial_number);
 static DEVICE_ATTR_RO(panel_extinfo);
 static DEVICE_ATTR_RO(panel_name);
@@ -737,10 +776,10 @@ static DEVICE_ATTR_RW(te2_option);
 static DEVICE_ATTR_RO(power_state);
 static DEVICE_ATTR_RO(error_count_te);
 static DEVICE_ATTR_RO(error_count_unknown);
+static DEVICE_ATTR_RW(force_power_on);
 /* TODO(tknelms): re-implement below */
 #if 0
 static DEVICE_ATTR_WO(gamma);
-static DEVICE_ATTR_RW(force_power_on);
 static DEVICE_ATTR_RW(osc2_clk_khz);
 static DEVICE_ATTR_RO(available_osc2_clk_khz);
 #endif
@@ -765,10 +804,10 @@ static const struct attribute *panel_attrs[] = { &dev_attr_serial_number.attr,
 						 &dev_attr_power_state.attr,
 						 &dev_attr_error_count_te.attr,
 						 &dev_attr_error_count_unknown.attr,
+						 &dev_attr_force_power_on.attr,
 /* TODO(tknelms): re-implement below */
 #if 0
 						 &dev_attr_gamma.attr,
-						 &dev_attr_force_power_on.attr,
 						 &dev_attr_osc2_clk_khz.attr,
 						 &dev_attr_available_osc2_clk_khz.attr,
 #endif
