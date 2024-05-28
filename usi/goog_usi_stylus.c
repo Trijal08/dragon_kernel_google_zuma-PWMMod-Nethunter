@@ -1032,16 +1032,8 @@ int goog_usi_send_event_leave(g_usi_handle_t handle, struct g_usi_event_leave *u
 	mutex_lock(&usi_ctx->lock);
 
 	input_set_timestamp(usi_ctx->input_dev, usi_event_leave->timestamp);
-	input_report_abs(usi_ctx->input_dev, ABS_X, 0);
-	input_report_abs(usi_ctx->input_dev, ABS_Y, 0);
 	input_report_abs(usi_ctx->input_dev, ABS_PRESSURE, 0);
 	input_report_key(usi_ctx->input_dev, BTN_TOUCH, 0);
-	if (usi_ctx->tilt_max) {
-		input_report_abs(usi_ctx->input_dev, ABS_TILT_X, 0);
-		input_report_abs(usi_ctx->input_dev, ABS_TILT_Y, 0);
-	}
-	if (usi_ctx->distance_max)
-		input_report_abs(usi_ctx->input_dev, ABS_DISTANCE, 0);
 	input_report_key(usi_ctx->input_dev, BTN_TOOL_PEN, 0);
 	input_report_key(usi_ctx->input_dev, BTN_STYLUS, 0);
 	input_report_key(usi_ctx->input_dev, BTN_STYLUS2, 0);
