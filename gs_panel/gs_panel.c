@@ -967,7 +967,7 @@ static int gs_bl_find_range(struct gs_panel *ctx, int brightness, u32 *range)
 	return 0;
 }
 
-static int gs_update_status(struct backlight_device *bl)
+static int gs_update_backlight_status(struct backlight_device *bl)
 {
 	struct gs_panel *ctx = bl_get_data(bl);
 	struct device *dev = ctx->dev;
@@ -983,6 +983,7 @@ static int gs_update_status(struct backlight_device *bl)
 		return -EPERM;
 	}
 
+	PANEL_ATRACE_BEGIN(__func__);
 	/* check if backlight is forced off */
 	if (bl->props.power != FB_BLANK_UNBLANK)
 		brightness = 0;
@@ -1011,12 +1012,13 @@ static int gs_update_status(struct backlight_device *bl)
 	}
 
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
+	PANEL_ATRACE_END(__func__);
 	return 0;
 }
 
 static const struct backlight_ops gs_backlight_ops = {
 	.get_brightness = gs_get_brightness,
-	.update_status = gs_update_status,
+	.update_status = gs_update_backlight_status,
 };
 
 int gs_panel_update_brightness_desc(struct gs_panel_brightness_desc *desc,
@@ -1055,6 +1057,7 @@ void gs_panel_set_dimming(struct gs_panel *ctx, bool dimming_on)
 	if (!gs_panel_has_func(ctx, set_dimming))
 		return;
 
+	PANEL_ATRACE_INT("panel_dimming_on", dimming_on);
 	mutex_lock(&ctx->mode_lock); /* TODO(b/267170999): MODE */
 	if (dimming_on != ctx->dimming_on) {
 		ctx->desc->gs_panel_func->set_dimming(ctx, dimming_on);
