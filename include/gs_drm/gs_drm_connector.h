@@ -257,6 +257,10 @@ struct gs_drm_connector {
 	 * BTS behavior in the DPU driver
 	 */
 	bool ignore_op_rate;
+	/**
+	 * @lhbm_gray_level: gray level for use with lhbm histogram
+	 */
+	u32 lhbm_gray_level;
 };
 
 #define to_gs_connector(connector) container_of((connector), struct gs_drm_connector, base)
@@ -338,5 +342,13 @@ void gs_connector_set_panel_name(const char *new_name, size_t len, int idx);
 
 int gs_drm_mode_bts_fps(const struct drm_display_mode *mode);
 int gs_bts_fps_to_drm_mode_clock(const struct drm_display_mode *mode, int bts_fps);
+
+/**
+ * gs_drm_connector_update_gray_level_callback() - for updating lhbm gray level
+ * Callback for use in updating lhbm_gray_level from DPU code
+ * @connector: handle for drm_connector
+ * @gray_level: lhbm_gray_level to store
+ */
+void gs_drm_connector_update_gray_level_callback(struct drm_connector *connector, int gray_level);
 
 #endif /* _GS_DRM_CONNECTOR_H_ */
