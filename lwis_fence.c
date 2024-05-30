@@ -40,32 +40,15 @@ static const struct file_operations fence_file_ops = {
 	.poll = lwis_fence_poll,
 };
 
-/*
- *  lwis_to_dma_fence_status: Gets the DMA fence status and convert it back to
- *  LWIS fence status API.
- */
-static int lwis_to_dma_fence_status(int dma_fence_status)
-{
-	/* Coming from the dma_fence_get_status doc. */
-	switch (dma_fence_status) {
-	case 0:
-		return LWIS_FENCE_STATUS_NOT_SIGNALED;
-	case 1:
-		return 0;
-	default:
-		return dma_fence_status;
-	}
-}
-
 int lwis_fence_get_status(struct lwis_fence *lwis_fence)
 {
-	return lwis_to_dma_fence_status(dma_fence_get_status(&lwis_fence->dma_fence));
+	return dma_fence_get_status(&lwis_fence->dma_fence);
 }
 
 int lwis_fence_get_status_locked(struct lwis_fence *lwis_fence)
 {
 	lockdep_assert_held(&lwis_fence->lock);
-	return lwis_to_dma_fence_status(dma_fence_get_status_locked(&lwis_fence->dma_fence));
+	return dma_fence_get_status_locked(&lwis_fence->dma_fence);
 }
 
 /*
@@ -111,6 +94,23 @@ static int lwis_fence_release(struct inode *node, struct file *fp)
 }
 
 /*
+ *  dma_to_lwis_fence_status: Gets the DMA fence status and convert it back to
+ *  LWIS fence status API.
+ */
+static int dma_to_lwis_fence_status(int dma_fence_status)
+{
+	/* Coming from the dma_fence_get_status doc. */
+	switch (dma_fence_status) {
+	case LWIS_FENCE_STATUS_NOT_SIGNALED:
+		return LWIS_FENCE_V0_STATUS_NOT_SIGNALED;
+	case LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED:
+		return 0;
+	default:
+		return dma_fence_status == -ECANCELED ? 1 : dma_fence_status;
+	}
+}
+
+/*
  *  lwis_fence_get_status: Read the LWIS fence's status
  */
 static ssize_t lwis_fence_read_status(struct file *fp, char __user *user_buffer, size_t len,
@@ -131,11 +131,29 @@ static ssize_t lwis_fence_read_status(struct file *fp, char __user *user_buffer,
 
 	status = lwis_fence_get_status(lwis_fence);
 	if (lwis_fence->legacy_lwis_fence) {
-		status = status == -ECANCELED ? 1 : status;
+		status = dma_to_lwis_fence_status(status);
 	}
 	read_len = len - copy_to_user((void __user *)user_buffer, (void *)&status + *offset, len);
 
 	return read_len;
+}
+
+/*
+ *  dma_to_lwis_fence_status: Gets the DMA fence status and convert it back to
+ *  LWIS fence status API.
+ */
+static int lwis_to_dma_fence_status(int lwis_fence_status)
+{
+	switch (lwis_fence_status) {
+	case LWIS_FENCE_V0_STATUS_NOT_SIGNALED:
+		return LWIS_FENCE_STATUS_NOT_SIGNALED;
+	case 0:
+		return LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED;
+	case 1:
+		return -ECANCELED;
+	default:
+		return lwis_fence_status;
+	}
 }
 
 /*
@@ -165,6 +183,9 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 	}
 
 	/* Set lwis_fence's status if not signaled */
+	if (lwis_fence->legacy_lwis_fence) {
+		status = lwis_to_dma_fence_status(status);
+	}
 	ret = lwis_fence_signal(lwis_fence, status);
 	if (ret) {
 		return ret;
@@ -391,7 +412,8 @@ static int trigger_event_add_transaction(struct lwis_client *client,
 		}
 		/* If the event is not triggered by a precondition fence, or the precondition fence
 		 * is already signaled, queue the transaction immediately. */
-		if (event->precondition_fence_fd < 0 || precondition_fence_status == 0) {
+		if (event->precondition_fence_fd < 0 ||
+		    precondition_fence_status == LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED) {
 			/* The event trigger has been satisfied, so we can increase the signal
 			 * count. */
 			transaction->signaled_count++;
@@ -464,7 +486,7 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 			 * transaction to be executed immediately.
 			 */
 			if (lwis_fence_triggered_condition_ready(transaction, status)) {
-				if (status != 0) {
+				if (status != LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED) {
 					transaction->resp->error_code = -ECANCELED;
 				}
 				transaction->queue_immediately = true;
@@ -516,8 +538,9 @@ bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
 		} else if (info->trigger_condition.trigger_nodes[i].event.counter ==
 			   LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE) {
 			lwis_fence = weak_transaction->precondition_fence_fp->private_data;
-			is_node_signaled =
-				(lwis_fence != NULL && lwis_fence_get_status(lwis_fence) == 0);
+			is_node_signaled = (lwis_fence != NULL &&
+					    lwis_fence_get_status(lwis_fence) ==
+						    LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED);
 			lwis_debug_info(
 				"TransactionId %lld: event 0x%llx (%lld), precondition fence %d %s signaled",
 				info->id, event_id, event_counter,
@@ -567,14 +590,16 @@ bool lwis_fence_triggered_condition_ready(struct lwis_transaction *transaction, 
 	     operator_type == LWIS_TRIGGER_NODE_OPERATOR_OR) &&
 	    transaction->signaled_count == all_signaled) {
 		return true;
-	} else if (operator_type == LWIS_TRIGGER_NODE_OPERATOR_AND && fence_status != 0) {
+	} else if (operator_type == LWIS_TRIGGER_NODE_OPERATOR_AND &&
+		   fence_status != LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED) {
 		/*
 		   This condition is ready to cancel transaction as long as there is
 		   an error condition from fence with operator type "AND".
 		   No matter whether all condition nodes are signaled.
 		*/
 		return true;
-	} else if (operator_type == LWIS_TRIGGER_NODE_OPERATOR_OR && fence_status == 0) {
+	} else if (operator_type == LWIS_TRIGGER_NODE_OPERATOR_OR &&
+		   fence_status == LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED) {
 		return true;
 	} else if (operator_type == LWIS_TRIGGER_NODE_OPERATOR_NONE) {
 		return true;

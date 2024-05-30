@@ -1272,7 +1272,7 @@ void lwis_transaction_fence_trigger(struct lwis_client *client, struct lwis_fenc
 			int fence_status = lwis_fence_get_status_locked(fence);
 			if (lwis_fence_triggered_condition_ready(transaction, fence_status)) {
 				hash_del(&transaction->pending_map_node);
-				if (fence_status == 0) {
+				if (fence_status == LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED) {
 					ret = add_transaction_to_queue_locked(client, transaction);
 					if (ret) {
 						spin_unlock_irqrestore(&client->transaction_lock,
