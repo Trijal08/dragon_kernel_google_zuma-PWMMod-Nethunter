@@ -12,6 +12,7 @@
 
 #include "lwis_transaction.h"
 
+#include <linux/err.h>
 #include <linux/delay.h>
 #include <linux/dma-buf.h>
 #include <linux/mm.h>
@@ -128,14 +129,14 @@ void lwis_transaction_free(struct lwis_device *lwis_dev, struct lwis_transaction
 			pending_fence =
 				list_entry(it_fence, struct lwis_fence_pending_signal, node);
 			list_del(&pending_fence->node);
-			fput(pending_fence->fp);
+			lwis_fence_put(pending_fence->fence);
 			kfree(pending_fence);
 		}
 	}
 
 	for (i = 0; i < transaction->num_trigger_fences; i++) {
-		fput(transaction->trigger_fence_fps[i]);
-		transaction->trigger_fence_fps[i] = NULL;
+		lwis_fence_put(transaction->trigger_fence[i]);
+		transaction->trigger_fence[i] = NULL;
 	}
 
 	for (i = 0; i < transaction->info.num_io_entries; ++i) {
@@ -830,14 +831,15 @@ int lwis_trigger_event_add_weak_transaction(struct lwis_client *client, int64_t 
 	}
 	weak_transaction->is_weak_transaction = true;
 	weak_transaction->id = transaction_id;
+	weak_transaction->precondition_fence = NULL;
 	if (precondition_fence_fd >= 0) {
-		weak_transaction->precondition_fence_fp =
-			lwis_fence_get(client, precondition_fence_fd);
-		if (weak_transaction->precondition_fence_fp == NULL) {
+		struct lwis_fence *fence = lwis_fence_get(precondition_fence_fd);
+		if (IS_ERR_OR_NULL(fence)) {
+			dev_err(client->lwis_dev->dev, "Unable to get fence with error (%ld)",
+				PTR_ERR(fence));
 			return -EBADF;
 		}
-	} else {
-		weak_transaction->precondition_fence_fp = NULL;
+		weak_transaction->precondition_fence = fence;
 	}
 
 	event_list = event_list_find_or_create(client, event_id);
