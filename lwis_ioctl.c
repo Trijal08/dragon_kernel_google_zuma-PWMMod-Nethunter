@@ -1919,25 +1919,47 @@ err_exit:
 	return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
 }
 
-static int cmd_fence_create(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
-			    struct lwis_cmd_fence_create __user *u_msg,
-			    int (*fence_create_fn)(struct lwis_device *))
+static int cmd_fence_create_v0(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
+			       struct lwis_cmd_fence_create_v0 __user *u_msg)
 {
-	int32_t fd_or_err;
-	struct lwis_cmd_fence_create fence_create;
+	struct lwis_cmd_fence_create_v0 fence_create;
+	struct lwis_fence *fence;
 
 	if (copy_from_user((void *)&fence_create, (void __user *)u_msg, sizeof(fence_create))) {
 		dev_err(lwis_dev->dev, "failed to copy from user\n");
 		return -EFAULT;
 	}
 
-	fd_or_err = fence_create_fn(lwis_dev);
-	if (fd_or_err < 0) {
-		header->ret_code = fd_or_err;
+	fence = lwis_fence_legacy_create(lwis_dev);
+	if (IS_ERR(fence)) {
+		header->ret_code = PTR_ERR(fence);
 		return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
 	}
 
-	fence_create.fd = fd_or_err;
+	fence_create.fd = fence->fd;
+	fence_create.header.ret_code = 0;
+	return copy_pkt_to_user(lwis_dev, u_msg, (void *)&fence_create, sizeof(fence_create));
+}
+
+static int cmd_fence_create(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
+			    struct lwis_cmd_fence_create __user *u_msg)
+{
+	struct lwis_cmd_fence_create fence_create;
+	struct lwis_fence *fence;
+
+	if (copy_from_user((void *)&fence_create, (void __user *)u_msg, sizeof(fence_create))) {
+		dev_err(lwis_dev->dev, "failed to copy from user\n");
+		return -EFAULT;
+	}
+
+	fence = lwis_fence_create(lwis_dev);
+	if (IS_ERR(fence)) {
+		header->ret_code = PTR_ERR(fence);
+		return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
+	}
+
+	fence_create.fd = fence->fd;
+	fence_create.signal_fd = fence->signal_fd;
 	fence_create.header.ret_code = 0;
 	return copy_pkt_to_user(lwis_dev, u_msg, (void *)&fence_create, sizeof(fence_create));
 }
@@ -2114,14 +2136,12 @@ static int handle_cmd_pkt(struct lwis_client *lwis_client, struct lwis_cmd_pkt *
 		mutex_unlock(&lwis_client->lock);
 		break;
 	case LWIS_CMD_ID_FENCE_CREATE_V0:
-		ret = cmd_fence_create(lwis_dev, header,
-				       (struct lwis_cmd_fence_create __user *)user_msg,
-				       lwis_fence_legacy_create);
+		ret = cmd_fence_create_v0(lwis_dev, header,
+					  (struct lwis_cmd_fence_create_v0 __user *)user_msg);
 		break;
 	case LWIS_CMD_ID_FENCE_CREATE:
 		ret = cmd_fence_create(lwis_dev, header,
-				       (struct lwis_cmd_fence_create __user *)user_msg,
-				       lwis_fence_create);
+				       (struct lwis_cmd_fence_create __user *)user_msg);
 		break;
 	case LWIS_CMD_ID_EVENT_INJECTION:
 		mutex_lock(&lwis_client->lock);
