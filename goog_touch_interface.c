@@ -219,7 +219,7 @@ static int goog_proc_dump_show(struct seq_file *m, void *v)
 {
 	char trace_tag[128];
 	u64 i, hc_cnt, input_cnt;
-	int ret;
+	int ret, slot;
 	ktime_t delta_time;
 	time64_t time64_utc;
 	s32 remainder;
@@ -281,6 +281,17 @@ static int goog_proc_dump_show(struct seq_file *m, void *v)
 			input_history[i].pressed.irq_index, input_history[i].released.irq_index,
 			input_history[i].released.coord.x - input_history[i].pressed.coord.x,
 			input_history[i].released.coord.y - input_history[i].pressed.coord.y);
+	}
+	seq_puts(m, "\n");
+
+	seq_puts(m, "\t### Unreleased Coordinate(s) ###\n");
+	seq_printf(m, "%8s %12s %12s %12s %12s %12s\n", "SLOT#", "X", "Y",
+		"PRESSURE", "MAJOR", "MINOR");
+	for_each_set_bit(slot, &gti->slot_bit_active, MAX_SLOTS) {
+		seq_printf(m, "%8d %12u %12u %12u %12u %12u\n", slot,
+			gti->offload.coords[slot].x, gti->offload.coords[slot].y,
+			gti->offload.coords[slot].pressure,
+			gti->offload.coords[slot].major, gti->offload.coords[slot].minor);
 	}
 	seq_puts(m, "\n");
 
@@ -2088,7 +2099,9 @@ void gti_debug_input_dump(struct goog_touch_interface *gti)
 	}
 	/* Extra check for unexpected case. */
 	for_each_set_bit(slot, &gti->slot_bit_active, MAX_SLOTS) {
-		GOOG_INFO(gti, "slot #%d is active!\n", slot);
+		GOOG_INFO(gti, "slot #%d(%u, %u, %u) is active!\n", slot,
+			gti->offload.coords[slot].x, gti->offload.coords[slot].y,
+			gti->offload.coords[slot].pressure);
 	}
 }
 #endif /* GTI_DEBUG_INPUT_KFIFO_LEN */
