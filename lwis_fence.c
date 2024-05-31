@@ -694,6 +694,20 @@ int lwis_initialize_transaction_fences(struct lwis_client *client,
 	return 0;
 }
 
+static struct lwis_fence_pending_signal *fence_pending_signal_create(struct lwis_fence *fence,
+								     struct file *fp)
+{
+	struct lwis_fence_pending_signal *pending_fence_signal =
+		kmalloc(sizeof(struct lwis_fence_pending_signal), GFP_ATOMIC);
+	if (!pending_fence_signal) {
+		return NULL;
+	}
+	pending_fence_signal->fp = fp;
+	pending_fence_signal->fence = fence;
+	pending_fence_signal->pending_status = LWIS_FENCE_STATUS_NOT_SIGNALED;
+	return pending_fence_signal;
+}
+
 /*
  *  add_completion_fence: Adds a single completion fence to the transaction
  */
@@ -710,7 +724,7 @@ static int add_completion_fence(struct lwis_client *client, struct lwis_transact
 	}
 
 	lwis_fence = fp->private_data;
-	fence_pending_signal = lwis_fence_pending_signal_create(lwis_fence, fp);
+	fence_pending_signal = fence_pending_signal_create(lwis_fence, fp);
 	if (fence_pending_signal == NULL) {
 		return -ENOMEM;
 	}
@@ -759,20 +773,6 @@ int lwis_add_completion_fences_to_transaction(struct lwis_client *client,
 	}
 
 	return 0;
-}
-
-struct lwis_fence_pending_signal *lwis_fence_pending_signal_create(struct lwis_fence *fence,
-								   struct file *fp)
-{
-	struct lwis_fence_pending_signal *pending_fence_signal =
-		kmalloc(sizeof(struct lwis_fence_pending_signal), GFP_ATOMIC);
-	if (!pending_fence_signal) {
-		return NULL;
-	}
-	pending_fence_signal->fp = fp;
-	pending_fence_signal->fence = fence;
-	pending_fence_signal->pending_status = LWIS_FENCE_STATUS_NOT_SIGNALED;
-	return pending_fence_signal;
 }
 
 void lwis_fences_pending_signal_emit(struct lwis_device *lwis_device,
