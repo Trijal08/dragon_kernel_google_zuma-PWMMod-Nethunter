@@ -384,7 +384,6 @@ void lwis_allocator_free(struct lwis_device *lwis_dev, void *ptr)
 
 	if (block == NULL) {
 		dev_err(lwis_dev->dev, "Allocator free ptr not found\n");
-		kfree(ptr);
 		return;
 	}
 
