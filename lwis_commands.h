@@ -367,6 +367,7 @@ struct lwis_transaction_trigger_condition {
 // Status code for completion fences
 #define LWIS_NO_COMPLETION_FENCE -1
 #define LWIS_CREATE_COMPLETION_FENCE -2
+#define LWIS_COMPLETION_FENCE_MAX 8
 
 // Invalid ID for Transaction id and Periodic IO id
 #define LWIS_ID_INVALID (-1LL)
@@ -437,6 +438,36 @@ struct lwis_transaction_info_v4 {
 	char transaction_name[LWIS_MAX_NAME_STRING_LEN];
 	size_t num_nested_transactions;
 	int64_t nested_transaction_ids[LWIS_NESTED_TRANSACTION_MAX];
+	// Output
+	int64_t id;
+	// Only will be set if trigger_event_id is specified.
+	// Otherwise, the value is -1.
+	int64_t current_trigger_event_counter;
+	int64_t submission_timestamp_ns;
+};
+
+struct lwis_transaction_info_v5 {
+	// Input
+	int64_t trigger_event_id;
+	int64_t trigger_event_counter;
+	struct lwis_transaction_trigger_condition trigger_condition;
+	// Used to indicate a completion fence should be created for this transaction.
+	// The created completion fence file descriptor is returned in this variable.
+	int32_t create_completion_fence_fd;
+	size_t num_io_entries;
+	struct lwis_io_entry *io_entries;
+	bool run_in_event_context;
+	// Use reserved to keep the original interface
+	bool reserved;
+	int64_t emit_success_event_id;
+	int64_t emit_error_event_id;
+	bool is_level_triggered;
+	bool is_high_priority_transaction;
+	char transaction_name[LWIS_MAX_NAME_STRING_LEN];
+	size_t num_nested_transactions;
+	int64_t nested_transaction_ids[LWIS_NESTED_TRANSACTION_MAX];
+	size_t num_completion_fences;
+	int32_t completion_fence_fds[LWIS_COMPLETION_FENCE_MAX];
 	// Output
 	int64_t id;
 	// Only will be set if trigger_event_id is specified.
@@ -616,6 +647,7 @@ enum lwis_cmd_id {
 	LWIS_CMD_ID_TRANSACTION_SUBMIT_V2 = 0x50001,
 	LWIS_CMD_ID_TRANSACTION_SUBMIT_V3,
 	LWIS_CMD_ID_TRANSACTION_SUBMIT_V4,
+	LWIS_CMD_ID_TRANSACTION_SUBMIT_V5,
 	LWIS_CMD_ID_TRANSACTION_CANCEL = 0x50100,
 
 	LWIS_CMD_ID_PERIODIC_IO_SUBMIT = 0x60000,
@@ -729,6 +761,11 @@ struct lwis_cmd_transaction_info_v3 {
 struct lwis_cmd_transaction_info_v4 {
 	struct lwis_cmd_pkt header;
 	struct lwis_transaction_info_v4 info;
+};
+
+struct lwis_cmd_transaction_info_v5 {
+	struct lwis_cmd_pkt header;
+	struct lwis_transaction_info_v5 info;
 };
 
 struct lwis_cmd_transaction_cancel {

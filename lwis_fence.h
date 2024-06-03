@@ -92,9 +92,10 @@ int lwis_parse_trigger_condition(struct lwis_client *client, struct lwis_transac
 int lwis_fence_signal(struct lwis_fence *lwis_fence, int status);
 
 /*
- *  lwis_add_completion_fence: Adds the fence with the given fd as a completion fence to this transaction.
+ *  lwis_add_completion_fences_to_transaction: Prepares the transaction completion fence list.
  */
-int lwis_add_completion_fence(struct lwis_client *client, struct lwis_transaction *transaction);
+int lwis_add_completion_fences_to_transaction(struct lwis_client *client,
+					      struct lwis_transaction *transaction);
 
 /* lwis_fence_pending_signal_create: Creates and returns a lwis_fence_pending_signal list entry */
 struct lwis_fence_pending_signal *lwis_fence_pending_signal_create(struct lwis_fence *fence,

@@ -53,5 +53,5 @@ void lwis_get_feature_flags(char *buffer, size_t buffer_size)
 		*/
 		" pdma-io"
 		"\n";
-	scnprintf(buffer, buffer_size, long_string_format, LWIS_CMD_ID_TRANSACTION_SUBMIT_V4);
+	scnprintf(buffer, buffer_size, long_string_format, LWIS_CMD_ID_TRANSACTION_SUBMIT_V5);
 }
