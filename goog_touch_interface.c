@@ -3495,7 +3495,7 @@ int gti_charger_state_change(struct notifier_block *nb, unsigned long action,
 
 int goog_offload_probe(struct goog_touch_interface *gti)
 {
-	int ret;
+	int ret = 0;
 	int err = 0;
 	u16 values[2];
 	struct device_node *np = gti->vendor_dev->of_node;
@@ -3553,14 +3553,10 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 	gti->offload.caps.touch_offload_major_version = TOUCH_OFFLOAD_INTERFACE_MAJOR_VERSION;
 	gti->offload.caps.touch_offload_minor_version = TOUCH_OFFLOAD_INTERFACE_MINOR_VERSION;
 	gti->offload.caps.device_id = gti->offload_id;
-
-	if (of_property_read_u16_array(np, "goog,display-resolution",
-					  values, 2) == 0) {
-		gti->offload.caps.display_width = values[0];
-		gti->offload.caps.display_height = values[1];
-	} else {
-		GOOG_ERR(gti, "Please set \"goog,display-resolution\" in dts!");
-	}
+	gti->offload.caps.touch_width =
+		input_abs_get_max(gti->vendor_input_dev, ABS_MT_POSITION_X) + 1;
+	gti->offload.caps.touch_height =
+		input_abs_get_max(gti->vendor_input_dev, ABS_MT_POSITION_Y) + 1;
 
 	if (of_property_read_u16_array(np, "goog,channel-num",
 					  values, 2) == 0) {
@@ -3623,8 +3619,8 @@ int goog_offload_probe(struct goog_touch_interface *gti)
 	}
 
 	gti->offload_enabled = of_property_read_bool(np, "goog,offload-enabled");
-	GOOG_INFO(gti, "offload.caps: display W/H: %d * %d (Tx/Rx: %d * %d).\n",
-		gti->offload.caps.display_width, gti->offload.caps.display_height,
+	GOOG_INFO(gti, "offload.caps: W/H: %d * %d (Tx/Rx: %d * %d).\n",
+		gti->offload.caps.touch_width, gti->offload.caps.touch_height,
 		gti->offload.caps.tx_size, gti->offload.caps.rx_size);
 
 	GOOG_INFO(gti, "offload ID: \"%c%c%c%c\" / 0x%08X, offload_enabled=%d.\n",
