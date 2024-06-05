@@ -40,9 +40,6 @@ struct lwis_fence {
 	 * used as DMA fences too. */
 	struct dma_fence dma_fence;
 
-	/* Used as a callback when the dma fence is signaled. */
-	struct dma_fence_cb dma_fence_signal_cb;
-
 	spinlock_t lock;
 
 	/* Whether this fence should follow the old LWIS fence API. */
@@ -62,14 +59,6 @@ struct lwis_fence {
 	struct lwis_device *lwis_top_dev;
 	/* Status wait queue for waking up userspace */
 	wait_queue_head_t status_wait_queue;
-	/* Hash table of transactions that's triggered by this fence */
-	DECLARE_HASHTABLE(transaction_list, LWIS_CLIENTS_HASH_BITS);
-};
-
-struct lwis_fence_trigger_transaction_list {
-	struct lwis_client *owner;
-	struct list_head list;
-	struct hlist_node node;
 };
 
 struct lwis_fence_pending_signal {
