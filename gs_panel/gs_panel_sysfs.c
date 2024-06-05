@@ -594,10 +594,12 @@ static ssize_t te2_rate_hz_show(struct device *dev, struct device_attribute *att
 	if (!gs_panel_has_func(ctx, get_te2_rate))
 		return -ENOTSUPP;
 
-	if (!gs_is_panel_active(ctx)) {
-		dev_warn(ctx->dev, "%s: panel is not enabled\n", __func__);
-		return -EPERM;
-	}
+	/**
+	 * Still allow the read if the panel is inactive at this moment since we may change
+	 * the rate during the transition to active.
+	 */
+	if (!gs_is_panel_active(ctx))
+		dev_warn(ctx->dev, "%s: panel is not enabled, may show previous rate\n", __func__);
 
 	mutex_lock(&ctx->mode_lock);
 	ret = sysfs_emit(buf, "%u\n", ctx->desc->gs_panel_func->get_te2_rate(ctx));
