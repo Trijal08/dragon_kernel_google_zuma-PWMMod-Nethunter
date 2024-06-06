@@ -48,6 +48,7 @@ static void combine_mask_value(struct lwis_interrupt *irq, int int_reg_bit, bool
 	} else {
 		irq->mask_value &= ~BIT_ULL(int_reg_bit);
 	}
+	irq->is_set_reg_bit = is_set;
 }
 
 struct lwis_interrupt_list *lwis_interrupt_list_alloc(struct lwis_device *lwis_dev, int count)
@@ -166,6 +167,7 @@ int lwis_interrupt_get(struct lwis_interrupt_list *list, int index,
 	spin_lock_irqsave(&list->irq[index].lock, flags);
 	list->irq[index].irq = irq;
 	list->irq[index].has_mask_update = false;
+	list->irq[index].is_set_reg_bit = false;
 	list->irq[index].mask_value = 0;
 	spin_unlock_irqrestore(&list->irq[index].lock, flags);
 
@@ -756,8 +758,10 @@ int lwis_interrupt_write_combined_mask_value(struct lwis_interrupt_list *list)
 				spin_unlock_irqrestore(&list->irq[index].lock, flags);
 				return ret;
 			}
-			/* OR operation with base_mask */
-			list->irq[index].mask_value |= base_mask;
+			/* Bitwise OR with base_mask if the interrupt is unmasked */
+			if (list->irq[index].is_set_reg_bit) {
+				list->irq[index].mask_value |= base_mask;
+			}
 			/* Write the mask register */
 			ret = lwis_device_single_register_write(
 				list->irq[index].lwis_dev, list->irq[index].irq_reg_bid,

@@ -84,6 +84,8 @@ struct lwis_interrupt {
 	uint64_t mask_value;
 	/* If IRQ mask value is updated */
 	bool has_mask_update;
+	/* Mask/Unmask the interrupt  */
+	bool is_set_reg_bit;
 };
 
 /*
