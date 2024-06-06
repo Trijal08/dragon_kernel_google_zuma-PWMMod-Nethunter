@@ -1207,6 +1207,30 @@ struct gs_panel {
 };
 
 /* FUNCTIONS */
+static inline const char *
+gs_get_panel_state_string(enum gs_panel_state panel_state)
+{
+	switch (panel_state) {
+	case GPANEL_STATE_UNINITIALIZED:
+		return "UNINITIALIZED";
+	case GPANEL_STATE_HANDOFF:
+		return "HANDOFF";
+	case GPANEL_STATE_HANDOFF_MODESET:
+		return "HANDOFF_MODESET";
+	case GPANEL_STATE_OFF:
+		return "OFF";
+	case GPANEL_STATE_NORMAL:
+		return "NORMAL";
+	case GPANEL_STATE_LP:
+		return "LP";
+	case GPANEL_STATE_MODESET:
+		return "MODESET";
+	case GPANEL_STATE_BLANK:
+		return "BLANK";
+	default:
+		return "UNKNOWN";
+	}
+}
 
 /* accessors */
 

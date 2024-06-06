@@ -78,7 +78,8 @@ void gs_panel_set_backlight_state(struct gs_panel *ctx, enum gs_panel_state pane
 
 	if (state_changed) {
 		notify_panel_mode_changed(ctx);
-		dev_dbg(ctx->dev, "%s: panel:%d, bl:0x%x\n", __func__, panel_state,
+		dev_info(ctx->dev, "panel: %s | bl: brightness@%u, state@%#x\n",
+			gs_get_panel_state_string(panel_state), bl->props.brightness,
 			bl->props.state);
 	}
 }
