@@ -5061,8 +5061,8 @@ static void report_cancel_event(struct fts_ts_info *info)
 	input_mt_slot(info->input_dev, 0);
 	input_report_key(info->input_dev, BTN_TOUCH, 1);
 	input_mt_report_slot_state(info->input_dev, MT_TOOL_FINGER, 1);
-	input_report_abs(info->input_dev, ABS_MT_POSITION_X, 0);
-	input_report_abs(info->input_dev, ABS_MT_POSITION_Y, 0);
+	input_report_abs(info->input_dev, ABS_MT_POSITION_X, info->board->udfps_x);
+	input_report_abs(info->input_dev, ABS_MT_POSITION_Y, info->board->udfps_y);
 	input_report_abs(info->input_dev, ABS_MT_TOUCH_MAJOR, 200);
 	input_report_abs(info->input_dev, ABS_MT_TOUCH_MINOR, 200);
 #ifndef SKIP_PRESSURE
@@ -5558,6 +5558,12 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 	}
 	bdata->x_axis_max = coords[0];
 	bdata->y_axis_max = coords[1];
+
+	if (of_property_read_u32_array(np, "st,udfps-coords", coords, 2) == 0) {
+		bdata->udfps_x = coords[0];
+		bdata->udfps_y = coords[1];
+	}
+	dev_info(dev, "st,udfps-coords: %d %d\n", bdata->udfps_x, bdata->udfps_y);
 
 	bdata->sensor_inverted_x = 0;
 	if (of_property_read_bool(np, "st,sensor_inverted_x"))

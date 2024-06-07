@@ -262,6 +262,8 @@ struct fts_hw_platform_data {
 	const char *device_name;
 	int x_axis_max;
 	int y_axis_max;
+	int udfps_x;
+	int udfps_y;
 	bool auto_fw_update;
 	bool separate_save_golden_ms_raw_cmd;
 	bool skip_fpi_for_unset_mpflag;
