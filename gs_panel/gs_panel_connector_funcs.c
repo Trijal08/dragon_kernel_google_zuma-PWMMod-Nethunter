@@ -341,7 +341,7 @@ int gs_panel_set_op_hz(struct gs_panel *ctx, unsigned int hz)
 	return ret;
 }
 
-static void gs_panel_pre_commit_properties(struct gs_panel *ctx,
+static void gs_panel_commit_properties(struct gs_panel *ctx,
 					   struct gs_drm_connector_state *conn_state)
 {
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
@@ -450,8 +450,6 @@ static void gs_panel_connector_atomic_pre_commit(struct gs_drm_connector *gs_con
 	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
 	struct gs_panel_idle_data *idle_data = &ctx->idle_data;
 
-	gs_panel_pre_commit_properties(ctx, gs_new_state);
-
 	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 	if (idle_data->panel_update_idle_mode_pending)
 		panel_update_idle_mode_locked(ctx, false);
@@ -463,6 +461,9 @@ static void gs_panel_connector_atomic_commit(struct gs_drm_connector *gs_connect
 					     struct gs_drm_connector_state *gs_new_state)
 {
 	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+
+	/* send mipi_sync commands at the time close to the expected present time */
+	gs_panel_commit_properties(ctx, gs_new_state);
 
 	/*TODO(b/267170999): MODE*/
 	mutex_lock(&ctx->mode_lock);
