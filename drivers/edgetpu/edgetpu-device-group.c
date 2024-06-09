@@ -190,6 +190,14 @@ static int do_attach_mailbox_locked(struct edgetpu_device_group *group)
  */
 static void do_detach_mailbox_locked(struct edgetpu_device_group *group)
 {
+	/*
+	 * We should invalidate @context_id of its domain before the `edgetpu_mailbox_remove_vii`
+	 * function which returns its SCID. Otherwise, if another group which has been assigned the
+	 * same SCID is going to search its domain using the `get_domain_by_context_id` function,
+	 * there is a possibility of the race condition that the group is using the domain of this
+	 * destroying group.
+	 */
+	group->etdomain->context_id = EDGETPU_CONTEXT_INVALID;
 	edgetpu_mailbox_remove_vii(&group->vii);
 	edgetpu_mmu_detach_domain(group->etdev, group->etdomain);
 	if (group->etdomain->token != EDGETPU_DOMAIN_TOKEN_END)
@@ -285,6 +293,12 @@ static void edgetpu_device_group_release(struct edgetpu_device_group *group)
 		 */
 		edgetpu_mappings_clear_group(group);
 		edgetpu_mailbox_external_disable_free_locked(group);
+		/*
+		 * With the same reason in the `do_detach_mailbox_locked` function, we should set
+		 * @context_id of its domain to INVALID before returning SCID.
+		 */
+		if (group->etdomain)
+			group->etdomain->context_id = EDGETPU_CONTEXT_INVALID;
 		edgetpu_mailbox_remove_vii(&group->vii);
 	}
 	if (group->etdomain) {
