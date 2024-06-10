@@ -1374,34 +1374,3 @@ int lwis_transaction_cancel(struct lwis_client *client, int64_t id)
 
 	return ret;
 }
-
-int lwis_transaction_replace_locked(struct lwis_client *client,
-				    struct lwis_transaction *transaction)
-{
-	int ret;
-	int64_t old_transaction_id = transaction->info.id;
-
-	ret = check_transaction_param_locked(client, transaction,
-					     /*is_level_triggered=*/false);
-	if (ret) {
-		return ret;
-	}
-
-	ret = cancel_waiting_transaction_locked(client, old_transaction_id);
-	if (ret) {
-		return ret;
-	}
-
-	ret = prepare_response_locked(client, transaction);
-	if (ret) {
-		return ret;
-	}
-
-	ret = prepare_transaction_fences_locked(client, transaction);
-	if (ret) {
-		return ret;
-	}
-
-	ret = queue_transaction_locked(client, transaction);
-	return ret;
-}
