@@ -288,11 +288,37 @@ static int gs_panel_connector_late_register(struct gs_drm_connector *gs_connecto
 	return 0;
 }
 
+static int gs_panel_register_op_hz_notifier(struct gs_drm_connector *gs_connector,
+					    struct notifier_block *nb)
+{
+	int retval;
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+
+	retval = blocking_notifier_chain_register(&ctx->op_hz_notifier_head, nb);
+	if (retval != 0)
+		dev_warn(ctx->dev, "register notifier failed(%d)\n", retval);
+	else
+		blocking_notifier_call_chain(&ctx->op_hz_notifier_head, GS_PANEL_NOTIFIER_SET_OP_HZ,
+					     &ctx->op_hz);
+
+	return retval;
+}
+
+static int gs_panel_unregister_op_hz_notifier(struct gs_drm_connector *gs_connector,
+					      struct notifier_block *nb)
+{
+	struct gs_panel *ctx = gs_connector_to_panel(gs_connector);
+
+	return blocking_notifier_chain_unregister(&ctx->op_hz_notifier_head, nb);
+}
+
 static const struct gs_drm_connector_funcs gs_drm_connector_funcs = {
 	.atomic_print_state = gs_panel_connector_print_state,
 	.atomic_get_property = gs_panel_connector_get_property,
 	.atomic_set_property = gs_panel_connector_set_property,
 	.late_register = gs_panel_connector_late_register,
+	.register_op_hz_notifier = gs_panel_register_op_hz_notifier,
+	.unregister_op_hz_notifier = gs_panel_unregister_op_hz_notifier,
 };
 
 /* gs_drm_connector_helper_funcs */

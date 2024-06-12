@@ -191,6 +191,18 @@ struct gs_drm_connector_funcs {
 				   const struct gs_drm_connector_state *gs_state,
 				   struct drm_property *property, uint64_t *val);
 	int (*late_register)(struct gs_drm_connector *gs_connector);
+	/**
+	 * @register_op_hz_notifier: Registers a notifier of op_hz changing for
+	 * touch interface
+	 */
+	int (*register_op_hz_notifier)(struct gs_drm_connector *gs_connector,
+				       struct notifier_block *nb);
+	/**
+	 * @unregister_op_hz_notifier: Unregisters a notifier of op_hz changing
+	 * for touch interface
+	 */
+	int (*unregister_op_hz_notifier)(struct gs_drm_connector *gs_connector,
+					 struct notifier_block *nb);
 };
 
 struct gs_drm_connector_helper_funcs {
@@ -350,5 +362,48 @@ int gs_bts_fps_to_drm_mode_clock(const struct drm_display_mode *mode, int bts_fp
  * @gray_level: lhbm_gray_level to store
  */
 void gs_drm_connector_update_gray_level_callback(struct drm_connector *connector, int gray_level);
+
+/* Op Hz Notifier */
+
+enum gs_panel_notifier_action {
+	GS_PANEL_NOTIFIER_SET_OP_HZ = 0,
+};
+
+/**
+ * gs_connector_register_op_hz_notifier() - passthrough to register op_hz notifier
+ * @connector: drm_connector associated with gs_drm_connector
+ * @nb: notifier_block to register
+ *
+ * Return: result of blocking_notifier_call_chain_register(), or negative result on error
+ */
+static inline int gs_connector_register_op_hz_notifier(struct drm_connector *connector,
+						       struct notifier_block *nb)
+{
+	if (is_gs_drm_connector(connector)) {
+		struct gs_drm_connector *gs_connector = to_gs_connector(connector);
+
+		return gs_connector->funcs->register_op_hz_notifier(gs_connector, nb);
+	}
+	dev_warn(connector->kdev, "register notifier failed(unexpected type of connector)\n");
+	return -EINVAL;
+}
+/**
+ * gs_connector_unregister_op_hz_notifier() - passthrough to unregister op_hz notifier
+ * @connector: drm_connector associated with gs_drm_connector
+ * @nb: notifier_block to unregister
+ *
+ * Return: result of blocking_notifier_chain_unregister(), or negative result on error
+ */
+static inline int gs_connector_unregister_op_hz_notifier(struct drm_connector *connector,
+							 struct notifier_block *nb)
+{
+	if (is_gs_drm_connector(connector)) {
+		struct gs_drm_connector *gs_connector = to_gs_connector(connector);
+
+		return gs_connector->funcs->unregister_op_hz_notifier(gs_connector, nb);
+	}
+	dev_warn(connector->kdev, "unregister notifier failed(unexpected type of connector)\n");
+	return -EINVAL;
+}
 
 #endif /* _GS_DRM_CONNECTOR_H_ */
