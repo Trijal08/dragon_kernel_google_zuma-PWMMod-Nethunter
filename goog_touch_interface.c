@@ -4738,6 +4738,9 @@ static int goog_pm_probe(struct goog_touch_interface *gti)
 	mutex_init(&pm->lock_mutex);
 	INIT_WORK(&pm->state_update_work, goog_pm_state_update_work);
 
+	device_init_wakeup(gti->dev, true);
+	pm_stay_awake(gti->dev);
+
 	/* init pm_qos. */
 	cpu_latency_qos_add_request(&gti->pm_qos_req, PM_QOS_DEFAULT_VALUE);
 	pm->enabled = true;
@@ -4752,6 +4755,9 @@ static int goog_pm_remove(struct goog_touch_interface *gti)
 	if (pm->enabled) {
 		pm->enabled = false;
 		cpu_latency_qos_remove_request(&gti->pm_qos_req);
+
+		pm_relax(gti->dev);
+		device_init_wakeup(gti->dev, false);
 	}
 
 	return 0;
