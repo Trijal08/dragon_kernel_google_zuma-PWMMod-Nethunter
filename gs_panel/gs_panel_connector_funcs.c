@@ -49,6 +49,10 @@ static void gs_panel_connector_attach_touch(struct gs_panel *ctx,
 	}
 
 	bridge = of_drm_find_bridge(ctx->touch_dev);
+	if (unlikely(!ctx->touch_dev))
+		dev_warn(ctx->dev, "%s can't get touch dev\n", __func__);
+	if (unlikely(!bridge))
+		dev_warn(ctx->dev, "%s can't find bridge\n", __func__);
 	if (!bridge || bridge->dev)
 		return;
 
