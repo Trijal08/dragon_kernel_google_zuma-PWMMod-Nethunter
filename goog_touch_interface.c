@@ -3692,8 +3692,12 @@ err_offload_probe:
 
 void goog_offload_remove(struct goog_touch_interface *gti)
 {
+	gti->offload_enabled = false;
+	gti->v4l2_enabled = false;
 	power_supply_unreg_notifier(&gti->charger_notifier);
 	touch_offload_cleanup(&gti->offload);
+	heatmap_remove(&gti->v4l2);
+	devm_kfree(gti->vendor_dev, gti->heatmap_buf);
 }
 
 static void goog_input_flush_offload_fingers(struct goog_touch_interface *gti)
@@ -5209,6 +5213,14 @@ int goog_touch_interface_remove(struct goog_touch_interface *gti)
 		gti->event_wq = NULL;
 	}
 
+	unregister_panel_bridge(&gti->panel_bridge);
+	goog_pm_remove(gti);
+
+	if (gti->tbn_enabled && gti->tbn_register_mask)
+		unregister_tbn(&gti->tbn_register_mask);
+
+	goog_offload_remove(gti);
+
 	if (gti->dev) {
 		sysfs_remove_group(&gti->dev->kobj, &goog_attr_group);
 		if (gti->vendor_dev)
@@ -5230,17 +5242,6 @@ int goog_touch_interface_remove(struct goog_touch_interface *gti)
 		}
 	}
 
-	unregister_panel_bridge(&gti->panel_bridge);
-	goog_pm_remove(gti);
-
-	if (gti->tbn_enabled && gti->tbn_register_mask)
-		unregister_tbn(&gti->tbn_register_mask);
-
-	gti->offload_enabled = false;
-	gti->v4l2_enabled = false;
-	goog_offload_remove(gti);
-	heatmap_remove(&gti->v4l2);
-	devm_kfree(gti->vendor_dev, gti->heatmap_buf);
 	devm_kfree(gti->vendor_dev, gti);
 
 	return 0;
