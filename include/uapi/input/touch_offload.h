@@ -4,7 +4,7 @@
 #define _UAPI_TOUCH_OFFLOAD_H
 
 #define TOUCH_OFFLOAD_INTERFACE_MAJOR_VERSION 2
-#define TOUCH_OFFLOAD_INTERFACE_MINOR_VERSION 0
+#define TOUCH_OFFLOAD_INTERFACE_MINOR_VERSION 1
 
 #define TOUCH_OFFLOAD_MAGIC '7'
 
@@ -42,10 +42,10 @@
  * touch_offload_major_version - Major version for breaking changes
  * touch_offload_minor_version - Minor version for small, compatible changes
  * device_id - device-specific identifier
- * display_width - width of device display in pixels
- * display_height - height of device display in pixels
- * tx_size - number of TX channels
- * rx_size - number of RX channels
+ * touch_width - width of touch resolution
+ * touch_height - height of touch resolution
+ * heatmap_width - width of touch heatmap
+ * heatmap_height - height of touch heatmap
  * bus_type - bus interface type
  * bus_speed_hz - bus frequency
  * heatmap_size - partial or full heatmap
@@ -72,15 +72,21 @@ struct TouchOffloadCaps {
 	/* Device info */
 	__u32 device_id;
 	union {
-	__u16 display_width;  /* obsolete */
+	__u16 display_width; /* obsolete */
 	__u16 touch_width;
 	};
 	union {
 	__u16 display_height; /* obsolete */
 	__u16 touch_height;
 	};
-	__u16 tx_size;
-	__u16 rx_size;
+	union {
+	__u16 tx_size; /* obsolete */
+	__u16 heatmap_width;
+	};
+	union {
+	__u16 rx_size; /* obsolete */
+	__u16 heatmap_height;
+	};
 	__u8 bus_type;
 	__u32 bus_speed_hz;
 	__u8 reserved2[16];
@@ -224,14 +230,20 @@ struct TouchOffloadDataCoord {
 /* TouchOffloadData2d
  *
  * header - header shared by all channels in a frame
- * tx_size - number of tx channels
- * rx_size - number of rx channels
+ * heatmap_width - width of touch heatmap
+ * heatmap_height - height of touch heatmap
  * data - pointer to raw touch data buffer
  */
 struct TouchOffloadData2d {
 	struct TouchOffloadChannelHeader header;
-	__u16 tx_size;
-	__u16 rx_size;
+	union {
+	__u16 tx_size; /* obsolete */
+	__u16 heatmap_width;
+	};
+	union {
+	__u16 rx_size; /* obsolete */
+	__u16 heatmap_height;
+	};
 	__u8 reserved1[16];
 	__u8 data[1];
 } __attribute__((packed));
@@ -243,14 +255,20 @@ struct TouchOffloadData2d {
 /* TouchOffloadData1d
  *
  * header - header shared by all channels in a frame
- * tx_size - number of tx channels
- * rx_size - number of rx channels
+ * heatmap_width - width of touch heatmap
+ * heatmap_height - height of touch heatmap
  * data - pointer to raw touch data buffer
  */
 struct TouchOffloadData1d {
 	struct TouchOffloadChannelHeader header;
-	__u16 tx_size;
-	__u16 rx_size;
+	union {
+	__u16 tx_size; /* obsolete */
+	__u16 heatmap_width;
+	};
+	union {
+	__u16 rx_size; /* obsolete */
+	__u16 heatmap_height;
+	};
 	__u8 reserved1[16];
 	__u8 data[1];
 } __attribute__((packed));
