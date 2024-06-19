@@ -247,10 +247,11 @@ struct TouchOffloadData2d {
 	__u8 reserved1[16];
 	__u8 data[1];
 } __attribute__((packed));
-#define TOUCH_OFFLOAD_DATA_SIZE_2D(rx, tx) (sizeof(__u16)*(rx)*(tx))
-#define TOUCH_OFFLOAD_FRAME_SIZE_2D(rx, tx) \
+#define TOUCH_OFFLOAD_DATA_SIZE_2D(heatmap_height, heatmap_width) \
+	(sizeof(__u16)*(heatmap_height)*(heatmap_width))
+#define TOUCH_OFFLOAD_FRAME_SIZE_2D(heatmap_height, heatmap_width) \
 	(sizeof(struct TouchOffloadData2d) - 1 + \
-	TOUCH_OFFLOAD_DATA_SIZE_2D((rx), (tx)))
+	TOUCH_OFFLOAD_DATA_SIZE_2D((heatmap_height), (heatmap_width)))
 
 /* TouchOffloadData1d
  *
@@ -272,10 +273,11 @@ struct TouchOffloadData1d {
 	__u8 reserved1[16];
 	__u8 data[1];
 } __attribute__((packed));
-#define TOUCH_OFFLOAD_DATA_SIZE_1D(rx, tx) (sizeof(__u16)*((rx)+(tx)))
-#define TOUCH_OFFLOAD_FRAME_SIZE_1D(rx, tx) \
+#define TOUCH_OFFLOAD_DATA_SIZE_1D(heatmap_height, heatmap_width) \
+	(sizeof(__u16)*((heatmap_height)+(heatmap_width)))
+#define TOUCH_OFFLOAD_FRAME_SIZE_1D(heatmap_height, heatmap_width) \
 	(sizeof(struct TouchOffloadData1d) - 1 + \
-	TOUCH_OFFLOAD_DATA_SIZE_1D((rx), (tx)))
+	TOUCH_OFFLOAD_DATA_SIZE_1D((heatmap_height), (heatmap_width)))
 
 /* TouchOffloadDriverStatus
  *
