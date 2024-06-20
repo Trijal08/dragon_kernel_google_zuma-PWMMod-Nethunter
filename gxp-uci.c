@@ -13,7 +13,7 @@
 
 #include <gcip/gcip-fence-array.h>
 #include <gcip/gcip-fence.h>
-#include <iif/iif.h>
+#include <iif/iif-shared.h>
 
 #include <trace/events/gxp.h>
 
@@ -97,6 +97,27 @@ static int gxp_uci_mailbox_manager_execute_cmd(
 	return ret;
 }
 
+/*
+ * Flushes pending UCI commands or unconsumed responses.
+ *
+ * This function shouldn't be called while holding @gxp->vd_semaphore. If there are commands to be
+ * flushed, it will close all out-IIFs of them and the IIF driver will notify waiter IP drivers
+ * including the DSP driver itself if it was waiting on them. That will eventually trigger the
+ * `gxp_uci_send_iif_unblock_noti` function and the function will try to hold @pm->lock.
+ *
+ * However, there are some cases which hold @pm->lock first and then hold @gxp->vd_semaphore like:
+ * `gxp_pm_put`
+ *  --> Hold @pm->lock
+ *  --> `gxp_mcu_firmware_stop`
+ *  --> `gxp_kci_cancel_work_queues`
+ *  --> `cancel_work_sync(&kci->rkci.work)`
+ *  --> `gxp_reverse_kci_handle_response`
+ *  --> `gxp_kci_handle_rkci`
+ *  --> `gxp_vd_invalidate_with_client_id`
+ *  --> Hold @gxp->vd_semaphore
+ *
+ * It will cause a deadlock if this function can be called while holding @gxp->vd_semaphore.
+ */
 static void gxp_uci_mailbox_manager_release_unconsumed_async_resps(
 	struct gxp_virtual_device *vd)
 {
@@ -240,6 +261,12 @@ gxp_uci_before_enqueue_wait_list(struct gcip_mailbox *mailbox, void *resp,
 		return 0;
 
 	async_resp = awaiter->data;
+
+	if (!async_resp->vd) {
+		async_resp->awaiter = awaiter;
+		return 0;
+	}
+
 	mailbox_resp_queue = container_of(
 		async_resp->wait_queue, struct mailbox_resp_queue, wait_queue);
 
@@ -275,6 +302,16 @@ static void gxp_uci_push_async_response(struct gcip_mailbox *mailbox,
 					enum gxp_response_status status)
 {
 	unsigned long flags;
+	int errno = 0;
+
+	/*
+	 * If @vd is NULL, the command doesn't have any specific wait_queue or dest_queue to pop or
+	 * push. We can just disregard it.
+	 */
+	if (!async_resp->vd) {
+		gcip_mailbox_release_awaiter(async_resp->awaiter);
+		return;
+	}
 
 	spin_lock_irqsave(async_resp->queue_lock, flags);
 
@@ -295,8 +332,29 @@ static void gxp_uci_push_async_response(struct gcip_mailbox *mailbox,
 	list_add_tail(&async_resp->dest_list_entry, async_resp->dest_queue);
 	spin_unlock_irqrestore(async_resp->queue_lock, flags);
 
-	gcip_fence_array_signal(async_resp->out_fences, (status != GXP_RESP_OK) ? -ETIMEDOUT : 0);
-	gcip_fence_array_waited(async_resp->in_fences, IIF_IP_DSP);
+	if (status == GXP_RESP_TIMEDOUT)
+		errno = -ETIMEDOUT;
+	else if (status == GXP_RESP_CANCELED)
+		errno = -ECANCELED;
+
+	if (errno && async_resp->out_fences) {
+		/*
+		 * If the command has been processed abnormally, we can assume that the firmware is
+		 * not working properly and the kernel driver should take care of propagating the
+		 * fence unblock.
+		 *
+		 * - -ETIMEDOUT: Theoretically, the firmware should have shorter timeout duration
+		 *               than the kernel driver. The meaning that the kernel driver faced
+		 *               the timeout error is that the firmware was not responding.
+		 *
+		 * - -ECANCELED: The command has ben canceled since the firmware has been crashed
+		 *               and the command couldn't be processed normally.
+		 */
+		gcip_fence_array_iif_set_propagate_unblock(async_resp->out_fences);
+	}
+
+	gcip_fence_array_signal_async(async_resp->out_fences, errno);
+	gcip_fence_array_waited_async(async_resp->in_fences, IIF_IP_DSP);
 	if (async_resp->eventfd)
 		gxp_eventfd_signal(async_resp->eventfd);
 
@@ -320,7 +378,7 @@ gxp_uci_handle_awaiter_timedout(struct gcip_mailbox *mailbox,
 {
 	struct gxp_uci_async_response *async_resp = awaiter->data;
 
-	gxp_uci_push_async_response(mailbox, async_resp, GXP_RESP_CANCELLED);
+	gxp_uci_push_async_response(mailbox, async_resp, GXP_RESP_TIMEDOUT);
 }
 
 static void gxp_uci_release_awaiter_data(void *data)
@@ -331,13 +389,14 @@ static void gxp_uci_release_awaiter_data(void *data)
 	 * This function might be called when the VD is already released, don't do VD operations in
 	 * this case.
 	 */
-	gcip_fence_array_put(async_resp->out_fences);
-	gcip_fence_array_put(async_resp->in_fences);
+	gcip_fence_array_put_async(async_resp->out_fences);
+	gcip_fence_array_put_async(async_resp->in_fences);
 	if (async_resp->additional_info_buf.vaddr)
 		gxp_mcu_mem_free_data(async_resp->uci->mcu, &async_resp->additional_info_buf);
 	if (async_resp->eventfd)
 		gxp_eventfd_put(async_resp->eventfd);
-	gxp_vd_put(async_resp->vd);
+	if (async_resp->vd)
+		gxp_vd_put(async_resp->vd);
 	kfree(async_resp);
 }
 
@@ -383,6 +442,18 @@ static const struct gcip_mailbox_ops gxp_uci_gcip_mbx_ops = {
 	.after_fetch_resps = gxp_mailbox_gcip_ops_after_fetch_resps,
 	.handle_awaiter_arrived = gxp_uci_handle_awaiter_arrived,
 	.handle_awaiter_timedout = gxp_uci_handle_awaiter_timedout,
+	/*
+	 * We didn't implement `handle_awaiter_flushed` callback intentionally. The callback will be
+	 * called when the UCI mailbox is going to be released and it is flushing commands remaining
+	 * in the wait list of the mailbox. That says the callback will be called when gxp device is
+	 * closed which is later than all VDs are already destroyed. Therefore, there is nothing we
+	 * can do to handle flushed commands when the callback is called.
+	 *
+	 * Instead, we introduced the `gxp_uci_mailbox_manager_release_unconsumed_async_resps`
+	 * function which flushes unconsumed commands when each VD destroys. Therefore, the
+	 * `handle_awaiter_flushed` callback shouldn't be called when the UCI mailbox destroys
+	 * theoretically.
+	 */
 	.release_awaiter_data = gxp_uci_release_awaiter_data,
 	.is_block_off = gxp_mailbox_gcip_ops_is_block_off,
 	.get_cmd_timeout = gxp_uci_get_cmd_timeout,
@@ -602,7 +673,7 @@ int gxp_uci_send_command(struct gxp_uci *uci, struct gxp_virtual_device *vd,
 	struct gcip_mailbox_resp_awaiter *awaiter;
 	int ret;
 
-	if (!gxp_vd_has_and_use_credit(vd))
+	if (vd && !gxp_vd_has_and_use_credit(vd))
 		return -EBUSY;
 	async_resp = kzalloc(sizeof(*async_resp), GFP_KERNEL);
 	if (!async_resp) {
@@ -611,7 +682,7 @@ int gxp_uci_send_command(struct gxp_uci *uci, struct gxp_virtual_device *vd,
 	}
 
 	async_resp->uci = uci;
-	async_resp->vd = gxp_vd_get(vd);
+	async_resp->vd = vd ? gxp_vd_get(vd) : NULL;
 	async_resp->wait_queue = wait_queue;
 	async_resp->dest_queue = resp_queue;
 	async_resp->queue_lock = queue_lock;
@@ -651,11 +722,13 @@ err_put_fences:
 		gxp_mcu_mem_free_data(uci->mcu, &async_resp->additional_info_buf);
 	if (async_resp->eventfd)
 		gxp_eventfd_put(async_resp->eventfd);
-	gxp_vd_put(vd);
+	if (vd)
+		gxp_vd_put(vd);
 err_free_async_resp:
 	kfree(async_resp);
 err_release_credit:
-	gxp_vd_release_credit(vd);
+	if (vd)
+		gxp_vd_release_credit(vd);
 	return ret;
 }
 
@@ -748,7 +821,7 @@ int gxp_uci_wait_async_response(struct mailbox_resp_queue *uci_resp_queue,
 	/*
 	 * The "exclusive" version of wait_event is used since each wake
 	 * corresponds to the addition of exactly one new response to be
-	 * consumed. Therefore, only one waiting responsecan ever proceed
+	 * consumed. Therefore, only one waiting response can ever proceed
 	 * per wake event.
 	 */
 	timeout = wait_event_interruptible_lock_irq_timeout_exclusive(
@@ -758,15 +831,13 @@ int gxp_uci_wait_async_response(struct mailbox_resp_queue *uci_resp_queue,
 		*resp_seq = 0;
 		if (list_empty(&uci_resp_queue->wait_queue)) {
 			/* This only happens when there is no command pushed or signaled. */
-			*error_code = -ENOENT;
-			ret = -ENOENT;
+			*error_code = GXP_RESPONSE_ERROR_NOENT;
 		} else {
 			/*
 			 * Might be a race with gcip_mailbox_async_cmd_timeout_work or the command
 			 * use a runtime specified timeout that is larger than MAILBOX_TIMEOUT.
 			 */
-			*error_code = -EAGAIN;
-			ret = -EAGAIN;
+			*error_code = GXP_RESPONSE_ERROR_AGAIN;
 		}
 		spin_unlock_irq(&uci_resp_queue->lock);
 
@@ -792,15 +863,19 @@ int gxp_uci_wait_async_response(struct mailbox_resp_queue *uci_resp_queue,
 				"Completed response with an error from the firmware side %hu\n",
 				*error_code);
 		break;
-	case GXP_RESP_CANCELLED:
-		*error_code = -ETIMEDOUT;
-		/* TODO(b/318800357): Return success for GXP_RESP_CANCELLED. */
-		ret = -ETIMEDOUT;
+	case GXP_RESP_TIMEDOUT:
+		*error_code = GXP_RESPONSE_ERROR_TIMEOUT;
 		dev_err(async_resp->uci->gxp->dev,
 			"Response not received for seq: %llu under %ums\n", *resp_seq,
 			gxp_uci_get_cmd_timeout(NULL, NULL, NULL, async_resp));
 		break;
+	case GXP_RESP_CANCELED:
+		*error_code = GXP_RESPONSE_ERROR_CANCELED;
+		dev_err(async_resp->uci->gxp->dev, "Command has been canceled for seq: %llu\n",
+			*resp_seq);
+		break;
 	default:
+		dev_err(async_resp->uci->gxp->dev, "Possible corruption in response handling\n");
 		ret = -ETIMEDOUT;
 		break;
 	}
@@ -962,8 +1037,41 @@ send_cmd:
 
 void gxp_uci_work_destroy(struct gxp_uci_cmd_work *uci_work)
 {
-	gcip_fence_array_put(uci_work->in_fences);
-	gcip_fence_array_put(uci_work->out_fences);
+	gcip_fence_array_put_async(uci_work->in_fences);
+	gcip_fence_array_put_async(uci_work->out_fences);
 	dma_fence_put(uci_work->fence);
 	kfree(uci_work);
+}
+
+void gxp_uci_send_iif_unblock_noti(struct gxp_uci *uci, int iif_id)
+{
+	struct gxp_uci_command cmd;
+	int ret;
+
+	/*
+	 * Theoretically, the meaning of this function call is that MCU is waiting on some fences
+	 * to proceed waiter commands so that the block should be already powered on. However,
+	 * according to the design of IIF, if signaler IP is crashed, there is a possibility of race
+	 * condition that the MCU has processed the commands before this notification which means
+	 * the block would be already powered down. To prevent any kernel panic can be caused by it,
+	 * acquire the wakelock if the block is powered on. Otherwise, just give up notifying MCU of
+	 * the fence unblock.
+	 */
+	ret = gcip_pm_get_if_powered(uci->gxp->power_mgr->pm, false);
+	if (ret) {
+		dev_warn(uci->gxp->dev, "Block should be powered on before notifying IIF unblock");
+		return;
+	}
+
+	cmd.type = IIF_UNBLOCK_COMMAND;
+	cmd.iif_id = iif_id;
+	cmd.seq = gcip_mailbox_inc_seq_num(uci->mbx->mbx_impl.gcip_mbx, 1);
+
+	ret = gxp_uci_send_command(uci, NULL, &cmd, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				   GCIP_MAILBOX_CMD_FLAGS_SKIP_ASSIGN_SEQ);
+	if (ret)
+		dev_warn(uci->gxp->dev, "Failed to notify the IIF unblock: id=%d, ret=%d", iif_id,
+			 ret);
+
+	gcip_pm_put(uci->gxp->power_mgr->pm);
 }

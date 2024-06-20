@@ -461,7 +461,7 @@ int gxp_kci_update_usage(struct gxp_kci *gkci)
 
 	/* Quick return if device is already powered down. */
 	if (power_mgr->curr_state == AUR_OFF ||
-	    !gxp_lpm_is_powered(gkci->gxp, CORE_TO_PSM(GXP_MCU_CORE_ID)))
+	    !gxp_lpm_is_powered(gkci->gxp, CORE_TO_PSM(GXP_REG_MCU_ID)))
 		return -EAGAIN;
 
 	/*
@@ -484,7 +484,7 @@ int gxp_kci_update_usage(struct gxp_kci *gkci)
 		goto fw_unlock;
 
 	if (power_mgr->curr_state != AUR_OFF &&
-	    gxp_lpm_is_powered(gkci->gxp, CORE_TO_PSM(GXP_MCU_CORE_ID)))
+	    gxp_lpm_is_powered(gkci->gxp, CORE_TO_PSM(GXP_REG_MCU_ID)))
 		ret = gxp_kci_update_usage_locked(gkci);
 	mutex_unlock(&power_mgr->pm_lock);
 

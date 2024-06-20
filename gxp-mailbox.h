@@ -55,9 +55,9 @@
 
 enum gxp_mailbox_command_code {
 	/* A user-space initiated dispatch message. */
-	GXP_MBOX_CODE_DISPATCH = 0,
+	GXP_MBOX_CODE_DISPATCH,
 	/* A kernel initiated core suspend request. */
-	GXP_MBOX_CODE_SUSPEND_REQUEST = 1,
+	GXP_MBOX_CODE_SUSPEND_REQUEST,
 };
 
 enum gxp_mailbox_type {
@@ -65,18 +65,29 @@ enum gxp_mailbox_type {
 	 * Mailbox will utilize `gcip-mailbox.h` internally.
 	 * Mostly will be used for handling user commands.
 	 */
-	GXP_MBOX_TYPE_GENERAL = 0,
+	GXP_MBOX_TYPE_GENERAL,
 	/*
 	 * Mailbox will utilize `gcip-kci.h` internally.
 	 * Will be used for handling kernel commands.
 	 */
-	GXP_MBOX_TYPE_KCI = 1,
+	GXP_MBOX_TYPE_KCI,
 };
 
 enum gxp_response_status {
-	GXP_RESP_OK = 0,
-	GXP_RESP_WAITING = 1,
-	GXP_RESP_CANCELLED = 2,
+	GXP_RESP_OK,
+	GXP_RESP_WAITING,
+	/*
+	 * A request hasn't been processed until the timeout of the kernel driver side expires.
+	 * Note that if the request has been processed as timeout from the firmware perspective,
+	 * the status of the response is `GXP_RESP_OK` from the kernel driver perspective since the
+	 * response has been arrived to the driver side.
+	 */
+	GXP_RESP_TIMEDOUT,
+	/*
+	 * A request has been canceled since it cannot be processed normally. The kernel driver will
+	 * generate fake responses with this status when it detects the MCU crash.
+	 */
+	GXP_RESP_CANCELED,
 };
 
 /* Mailbox Structures */

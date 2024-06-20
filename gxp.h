@@ -162,6 +162,9 @@ struct gxp_sync_ioctl {
 #define GXP_RESPONSE_ERROR_NONE (0)
 #define GXP_RESPONSE_ERROR_INTERNAL (1)
 #define GXP_RESPONSE_ERROR_TIMEOUT (2)
+#define GXP_RESPONSE_ERROR_NOENT (3)
+#define GXP_RESPONSE_ERROR_AGAIN (4)
+#define GXP_RESPONSE_ERROR_CANCELED (5)
 
 struct gxp_mailbox_response_ioctl {
 	/*

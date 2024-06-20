@@ -136,7 +136,13 @@ void gxp_client_destroy(struct gxp_client *client)
 	struct gxp_dev *gxp = client->gxp;
 	int core;
 
+	/*
+	 * It is safe to clean up commands without holding any locks since the user already closed
+	 * the gxp device and won't be able to submit commands to @client.
+	 */
 	cleanup_uci_cmd_work(client);
+	if (client->vd)
+		gxp_vd_release_unconsumed_async_resps(gxp, client->vd);
 
 	down_write(&client->semaphore);
 

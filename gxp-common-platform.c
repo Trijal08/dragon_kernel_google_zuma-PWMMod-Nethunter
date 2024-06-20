@@ -56,7 +56,6 @@
 #include <soc/google/tpu-ext.h>
 #endif
 
-
 /* We will only have one gxp device */
 #define GXP_DEV_COUNT 1
 
@@ -533,7 +532,7 @@ static int gxp_ioctl_get_specs(struct gxp_client *client, struct gxp_specs_ioctl
 			(u8)(SECURE_CORE_TELEMETRY_BUFFER_SIZE /
 			     GXP_CORE_TELEMETRY_BUFFER_UNIT_SIZE),
 		.max_vd_allocation = GXP_NUM_SHARED_SLICES,
-		.max_vd_activation = gcip_iommu_domain_pool_get_num_pasid(gxp->domain_pool),
+		.max_vd_activation = gxp_iommu_get_max_vd_activation(gxp),
 		.memory_per_core = client->gxp->memory_per_core,
 	};
 
@@ -1635,72 +1634,6 @@ static const struct file_operations gxp_fops = {
 	.unlocked_ioctl = gxp_ioctl,
 };
 
-static int debugfs_cmu_mux1_set(void *data, u64 val)
-{
-	struct gxp_dev *gxp = (struct gxp_dev *)data;
-
-	if (IS_ERR_OR_NULL(gxp->cmu.vaddr)) {
-		dev_err(gxp->dev, "CMU registers are not mapped");
-		return -ENODEV;
-	}
-	if (val > 1) {
-		dev_err(gxp->dev,
-			"Incorrect val for cmu_mux1, only 0 and 1 allowed\n");
-		return -EINVAL;
-	}
-
-	writel(val << 4, gxp->cmu.vaddr + PLL_CON0_PLL_AUR);
-	return 0;
-}
-
-static int debugfs_cmu_mux1_get(void *data, u64 *val)
-{
-	struct gxp_dev *gxp = (struct gxp_dev *)data;
-
-	if (IS_ERR_OR_NULL(gxp->cmu.vaddr)) {
-		dev_err(gxp->dev, "CMU registers are not mapped");
-		return -ENODEV;
-	}
-	*val = readl(gxp->cmu.vaddr + PLL_CON0_PLL_AUR);
-	return 0;
-}
-
-DEFINE_DEBUGFS_ATTRIBUTE(debugfs_cmu_mux1_fops, debugfs_cmu_mux1_get,
-			 debugfs_cmu_mux1_set, "%llu\n");
-
-static int debugfs_cmu_mux2_set(void *data, u64 val)
-{
-	struct gxp_dev *gxp = (struct gxp_dev *)data;
-
-	if (IS_ERR_OR_NULL(gxp->cmu.vaddr)) {
-		dev_err(gxp->dev, "CMU registers are not mapped");
-		return -ENODEV;
-	}
-	if (val > 1) {
-		dev_err(gxp->dev,
-			"Incorrect val for cmu_mux2, only 0 and 1 allowed\n");
-		return -EINVAL;
-	}
-
-	writel(val << 4, gxp->cmu.vaddr + PLL_CON0_NOC_USER);
-	return 0;
-}
-
-static int debugfs_cmu_mux2_get(void *data, u64 *val)
-{
-	struct gxp_dev *gxp = (struct gxp_dev *)data;
-
-	if (IS_ERR_OR_NULL(gxp->cmu.vaddr)) {
-		dev_err(gxp->dev, "CMU registers are not mapped");
-		return -ENODEV;
-	}
-	*val = readl(gxp->cmu.vaddr + PLL_CON0_NOC_USER);
-	return 0;
-}
-
-DEFINE_DEBUGFS_ATTRIBUTE(debugfs_cmu_mux2_fops, debugfs_cmu_mux2_get,
-			 debugfs_cmu_mux2_set, "%llu\n");
-
 static int gxp_set_reg_resources(struct platform_device *pdev, struct gxp_dev *gxp)
 {
 	struct device *dev = gxp->dev;
@@ -1723,29 +1656,6 @@ static int gxp_set_reg_resources(struct platform_device *pdev, struct gxp_dev *g
 
 	if (!IS_ERR_OR_NULL(gxp->resource_accessor))
 		gcip_register_accessible_resource(gxp->resource_accessor, r);
-
-	r = platform_get_resource_byname(pdev, IORESOURCE_MEM, "cmu");
-	if (!IS_ERR_OR_NULL(r)) {
-		gxp->cmu.paddr = r->start;
-		gxp->cmu.size = resource_size(r);
-		gxp->cmu.vaddr = devm_ioremap_resource(dev, r);
-		if (IS_ERR_OR_NULL(gxp->cmu.vaddr))
-			dev_warn(dev, "Failed to map CMU registers\n");
-	}
-	/*
-	 * TODO (b/224685748): Remove this block after CMU CSR is supported
-	 * in device tree config.
-	 */
-#ifdef GXP_CMU_OFFSET
-	if (IS_ERR_OR_NULL(r) || IS_ERR_OR_NULL(gxp->cmu.vaddr)) {
-		gxp->cmu.paddr = gxp->regs.paddr - GXP_CMU_OFFSET;
-		gxp->cmu.size = GXP_CMU_SIZE;
-		gxp->cmu.vaddr =
-			devm_ioremap(dev, gxp->cmu.paddr, gxp->cmu.size);
-		if (IS_ERR_OR_NULL(gxp->cmu.vaddr))
-			dev_warn(dev, "Failed to map CMU registers\n");
-	}
-#endif
 
 #ifdef GXP_SEPARATE_LPM_OFFSET
 	r = platform_get_resource_byname(pdev, IORESOURCE_MEM, "lpm");
@@ -1781,12 +1691,6 @@ static int gxp_set_reg_resources(struct platform_device *pdev, struct gxp_dev *g
 			return -ENODEV;
 		}
 	}
-
-	/* Will be removed by gxp_remove_debugdir. */
-	debugfs_create_file("cmumux1", 0600, gxp->d_entry, gxp,
-			    &debugfs_cmu_mux1_fops);
-	debugfs_create_file("cmumux2", 0600, gxp->d_entry, gxp,
-			    &debugfs_cmu_mux2_fops);
 
 	return 0;
 }

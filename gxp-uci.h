@@ -38,6 +38,12 @@ enum gxp_uci_type {
 	 * RUNTIME_COMMAND.
 	 */
 	NULL_COMMAND = 1,
+	/*
+	 * The command to notify the IIF unblock.
+	 * The firmware should check the fence table to see whether the fence has been unblocked
+	 * normally or with an signal error.
+	 */
+	IIF_UNBLOCK_COMMAND = 2,
 } __packed;
 
 struct gxp_uci_wakelock_command_params {
@@ -77,6 +83,8 @@ struct gxp_uci_command {
 	union {
 		struct gxp_uci_core_command_params core_command_params;
 		struct gxp_uci_wakelock_command_params wakelock_command_params;
+		/* The ID of unblocked IIF will be passed when @type is IIF_UNBLOCK_COMMAND. */
+		uint16_t iif_id;
 		uint8_t opaque[48];
 	};
 };
@@ -372,5 +380,17 @@ int gxp_uci_cmd_work_create_and_schedule(struct dma_fence *fence, struct gxp_cli
  * @uci_work: The target work to be destroyed.
  */
 void gxp_uci_work_destroy(struct gxp_uci_cmd_work *uci_work);
+
+/**
+ * gxp_uci_send_iif_unblock_noti() - Sends the fence unblock notification of @iif_id fence to the
+ *                                   MCU firmware.
+ *
+ * @uci: The UCI mailbox to send notification to the MCU firmware.
+ * @iif_id: The ID of the unblocked IIF.
+ *
+ * Note that this function will be called when the fence has been unblocked and the IIF driver calls
+ * the unblocked callback.
+ */
+void gxp_uci_send_iif_unblock_noti(struct gxp_uci *uci, int iif_id);
 
 #endif /* __GXP_UCI_H__ */

@@ -16,7 +16,6 @@
 
 #include <gcip/gcip-pm.h>
 
-#include "gxp-bpm.h"
 #include "gxp-client.h"
 #include "gxp-config.h"
 #include "gxp-dma.h"
@@ -34,13 +33,15 @@
 #include "gxp-mcu.h"
 #endif /* GXP_HAS_MCU */
 
+#if GXP_HAS_CMU
+#include "gxp-cmu.h"
+#endif /* GXP_HAS_CMU */
+
 /* Don't attempt to touch the device when @busy_count equals this value. */
 #define BUSY_COUNT_OFF (~0ull)
 
 #define DEBUGFS_BLK_POWERSTATE "blk_powerstate"
 #define DEBUGFS_WAKELOCK "wakelock"
-#define DEBUGFS_MIN_FREQ "min_freq"
-#define DEBUGFS_MAX_FREQ "max_freq"
 
 #define SHUTDOWN_DELAY_US_MIN 200
 #define SHUTDOWN_DELAY_US_MAX 400
@@ -49,8 +50,36 @@ static bool gxp_slow_clk_on_idle = true;
 module_param_named(slow_clk, gxp_slow_clk_on_idle, bool, 0660);
 
 const uint aur_power_state2rate[] = {
-	AUR_OFF_RATE,	AUR_UUD_RATE,	   AUR_SUD_RATE,      AUR_UD_RATE,	AUR_NOM_RATE,
-	AUR_READY_RATE, AUR_UUD_PLUS_RATE, AUR_SUD_PLUS_RATE, AUR_UD_PLUS_RATE,
+	AUR_OFF_RATE,
+	AUR_UUD_RATE,
+	AUR_SUD_RATE,
+	AUR_UD_RATE,
+	AUR_NOM_RATE,
+	AUR_READY_RATE,
+	AUR_UUD_PLUS_RATE,
+	AUR_SUD_PLUS_RATE,
+	AUR_UD_PLUS_RATE,
+	AUR_PERCENT_FREQUENCY_5_RATE,
+	AUR_PERCENT_FREQUENCY_10_RATE,
+	AUR_PERCENT_FREQUENCY_15_RATE,
+	AUR_PERCENT_FREQUENCY_20_RATE,
+	AUR_PERCENT_FREQUENCY_25_RATE,
+	AUR_PERCENT_FREQUENCY_30_RATE,
+	AUR_PERCENT_FREQUENCY_35_RATE,
+	AUR_PERCENT_FREQUENCY_40_RATE,
+	AUR_PERCENT_FREQUENCY_45_RATE,
+	AUR_PERCENT_FREQUENCY_50_RATE,
+	AUR_PERCENT_FREQUENCY_55_RATE,
+	AUR_PERCENT_FREQUENCY_60_RATE,
+	AUR_PERCENT_FREQUENCY_65_RATE,
+	AUR_PERCENT_FREQUENCY_70_RATE,
+	AUR_PERCENT_FREQUENCY_75_RATE,
+	AUR_PERCENT_FREQUENCY_80_RATE,
+	AUR_PERCENT_FREQUENCY_85_RATE,
+	AUR_PERCENT_FREQUENCY_90_RATE,
+	AUR_PERCENT_FREQUENCY_95_RATE,
+	AUR_MAX_FREQUENCY_RATE,
+	AUR_OVERDRIVE_FREQUENCY_RATE,
 };
 const struct gxp_power_states off_states = { AUR_OFF, AUR_MEM_UNDEFINED, false };
 const struct gxp_power_states uud_states = { AUR_UUD, AUR_MEM_UNDEFINED, false };
@@ -134,33 +163,15 @@ static int gxp_pm_blk_set_state_acpm(struct gxp_dev *gxp, unsigned long state)
 			gxp->dev,
 			"Requesting power state higher than current thermal limit (%lu)\n",
 			rate);
-	return gxp_pm_blk_set_rate_acpm(gxp, rate);
+	return gxp_pm_blk_set_rate(gxp, rate);
 }
 
-int gxp_pm_blk_set_rate_acpm(struct gxp_dev *gxp, unsigned long rate)
+int gxp_pm_blk_set_rate(struct gxp_dev *gxp, unsigned long rate)
 {
 	int ret = gxp_soc_pm_set_rate(AUR_DVFS_DOMAIN, rate);
 
 	dev_dbg(gxp->dev, "set blk rate %lu, ret %d\n", rate, ret);
 	return ret;
-}
-
-static void set_cmu_noc_user_mux_state(struct gxp_dev *gxp, u32 val)
-{
-	if (!IS_ERR_OR_NULL(gxp->cmu.vaddr))
-		writel(val << 4, gxp->cmu.vaddr + PLL_CON0_NOC_USER);
-}
-
-static void set_cmu_pll_aur_mux_state(struct gxp_dev *gxp, u32 val)
-{
-	if (!IS_ERR_OR_NULL(gxp->cmu.vaddr))
-		writel(val << 4, gxp->cmu.vaddr + PLL_CON0_PLL_AUR);
-}
-
-static void reset_cmu_mux_state(struct gxp_dev *gxp)
-{
-	set_cmu_pll_aur_mux_state(gxp, AUR_CMU_MUX_NORMAL);
-	set_cmu_noc_user_mux_state(gxp, AUR_CMU_MUX_NORMAL);
 }
 
 static void gxp_pm_can_busy(struct gxp_power_manager *mgr)
@@ -184,10 +195,10 @@ static void gxp_pm_no_busy(struct gxp_power_manager *mgr)
 void gxp_pm_force_clkmux_normal(struct gxp_dev *gxp)
 {
 	mutex_lock(&gxp->power_mgr->pm_lock);
-	if (gxp->power_mgr->curr_low_clkmux) {
-		set_cmu_pll_aur_mux_state(gxp, AUR_CMU_MUX_NORMAL);
-		set_cmu_noc_user_mux_state(gxp, AUR_CMU_MUX_NORMAL);
-	}
+#if GXP_HAS_CMU
+	if (gxp->power_mgr->curr_low_clkmux)
+		gxp_cmu_set_mux_normal(gxp);
+#endif /* GXP_HAS_CMU */
 	gxp->power_mgr->force_mux_normal_count++;
 	mutex_unlock(&gxp->power_mgr->pm_lock);
 }
@@ -196,12 +207,12 @@ void gxp_pm_resume_clkmux(struct gxp_dev *gxp)
 {
 	mutex_lock(&gxp->power_mgr->pm_lock);
 	gxp->power_mgr->force_mux_normal_count--;
+#if GXP_HAS_CMU
 	if (gxp->power_mgr->force_mux_normal_count == 0) {
-		if (gxp->power_mgr->curr_low_clkmux) {
-			set_cmu_pll_aur_mux_state(gxp, AUR_CMU_MUX_LOW);
-			set_cmu_noc_user_mux_state(gxp, AUR_CMU_MUX_LOW);
-		}
+		if (gxp->power_mgr->curr_low_clkmux)
+			gxp_cmu_set_mux_low(gxp);
 	}
+#endif /* GXP_HAS_CMU */
 	mutex_unlock(&gxp->power_mgr->pm_lock);
 }
 
@@ -211,27 +222,28 @@ static void gxp_pm_blk_set_state_acpm_async(struct work_struct *work)
 		container_of(work, struct gxp_set_acpm_state_work, work);
 	struct gxp_dev *gxp = set_acpm_state_work->gxp;
 	struct gxp_power_manager *mgr = gxp->power_mgr;
-	bool scheduled_low_clkmux, prev_low_clkmux;
-	bool is_core_booting;
+	bool scheduled_low_clkmux;
+	__maybe_unused bool prev_low_clkmux, is_core_booting;
 
 	mutex_lock(&mgr->pm_lock);
 	if (mgr->curr_state == AUR_OFF)
 		goto out;
 
 	scheduled_low_clkmux = set_acpm_state_work->low_clkmux;
+
+#if GXP_HAS_CMU
 	prev_low_clkmux = set_acpm_state_work->prev_low_clkmux;
 	is_core_booting = mgr->force_mux_normal_count != 0;
 
 	/* Don't change clkmux states when any core is booting */
 	if (scheduled_low_clkmux != prev_low_clkmux && !is_core_booting) {
-		if (prev_low_clkmux) {
-			set_cmu_pll_aur_mux_state(gxp, AUR_CMU_MUX_NORMAL);
-			set_cmu_noc_user_mux_state(gxp, AUR_CMU_MUX_NORMAL);
-		} else if (scheduled_low_clkmux) {
-			set_cmu_pll_aur_mux_state(gxp, AUR_CMU_MUX_LOW);
-			set_cmu_noc_user_mux_state(gxp, AUR_CMU_MUX_LOW);
-		}
+		if (prev_low_clkmux)
+			gxp_cmu_set_mux_normal(gxp);
+		else if (scheduled_low_clkmux)
+			gxp_cmu_set_mux_low(gxp);
 	}
+#endif /* GXP_HAS_CMU */
+
 	mgr->curr_low_clkmux = scheduled_low_clkmux;
 
 	gxp_pm_blk_set_state_acpm(set_acpm_state_work->gxp,
@@ -244,9 +256,9 @@ out:
 #define AUR_DVFS_DEBUG_REQ BIT(31)
 #define AUR_DEBUG_CORE_FREQ (AUR_DVFS_DEBUG_REQ | (3 << 27))
 
-int gxp_pm_blk_get_state_acpm(struct gxp_dev *gxp)
+int gxp_pm_blk_get_rate(struct gxp_dev *gxp)
 {
-	int ret = gxp_soc_pm_get_rate(AUR_DVFS_DOMAIN, AUR_DEBUG_CORE_FREQ);
+	int ret = gxp_soc_pm_get_rate(gxp, AUR_DVFS_DOMAIN, AUR_DEBUG_CORE_FREQ);
 
 	dev_dbg(gxp->dev, "current blk state %d\n", ret);
 	return ret;
@@ -288,8 +300,11 @@ int gxp_pm_blk_off(struct gxp_dev *gxp)
 		return ret;
 	}
 	gxp_pm_no_busy(gxp->power_mgr);
+
+#if GXP_HAS_CMU
 	/* Above has checked device is powered, it's safe to access the CMU regs. */
-	reset_cmu_mux_state(gxp);
+	gxp_cmu_set_mux_normal(gxp);
+#endif /* GXP_HAS_CMU */
 
 	gxp_soc_lpm_destroy(gxp);
 
@@ -407,7 +422,7 @@ static int gxp_pm_req_state_locked(struct gxp_dev *gxp,
 {
 	uint i;
 
-	if (state > AUR_MAX_ALLOW_STATE) {
+	if (state > AUR_STATE_BASED_MAX_ALLOW_STATE) {
 		dev_err(gxp->dev, "Invalid state %d\n", state);
 		return -EINVAL;
 	}
@@ -490,7 +505,7 @@ static void gxp_pm_revoke_power_state_vote(struct gxp_dev *gxp,
 		pwr_state_req_count =
 			gxp->power_mgr->low_clkmux_pwr_state_req_count;
 
-	for (i = 0; i < AUR_NUM_POWER_STATE; i++) {
+	for (i = 0; i < AUR_STATE_BASED_NUM_POWER_STATE; i++) {
 		if (aur_state_array[i] == revoked_state) {
 			if (pwr_state_req_count[i] == 0)
 				dev_err(gxp->dev, "Invalid state %d\n",
@@ -518,7 +533,7 @@ static void gxp_pm_vote_power_state(struct gxp_dev *gxp,
 		pwr_state_req_count =
 			gxp->power_mgr->low_clkmux_pwr_state_req_count;
 
-	for (i = 0; i < AUR_NUM_POWER_STATE; i++) {
+	for (i = 0; i < AUR_STATE_BASED_NUM_POWER_STATE; i++) {
 		if (aur_state_array[i] == state) {
 			pwr_state_req_count[i]++;
 			return;
@@ -534,7 +549,7 @@ static void gxp_pm_get_max_voted_power_state(struct gxp_dev *gxp,
 	int i;
 
 	*state = AUR_OFF;
-	for (i = AUR_NUM_POWER_STATE - 1; i >= 0; i--) {
+	for (i = AUR_STATE_BASED_NUM_POWER_STATE - 1; i >= 0; i--) {
 		if (gxp->power_mgr->pwr_state_req_count[i] > 0) {
 			*low_clkmux_vote = false;
 			*state = aur_state_array[i];
@@ -547,7 +562,7 @@ static void gxp_pm_get_max_voted_power_state(struct gxp_dev *gxp,
 		 * frequency CLKMUX vote counts.
 		 */
 		*low_clkmux_vote = true;
-		for (i = AUR_NUM_POWER_STATE - 1; i >= 0; i--) {
+		for (i = AUR_STATE_BASED_NUM_POWER_STATE - 1; i >= 0; i--) {
 			if (gxp->power_mgr->low_clkmux_pwr_state_req_count[i] > 0) {
 				*state = aur_state_array[i];
 				break;
@@ -752,8 +767,7 @@ static int gxp_pm_update_freq_limits_locked(struct gxp_dev *gxp)
 	if (ret) {
 		dev_warn(gxp->dev, "Set frequency limit request failed with error %d.", ret);
 		if (ret == GCIP_KCI_ERROR_INVALID_ARGUMENT) {
-			dev_warn(gxp->dev,
-				 "Invalid values within debugfs frequency limits: [%u, %u]\n",
+			dev_warn(gxp->dev, "Invalid values within frequency limits: [%u, %u]kHz.\n",
 				 mgr->min_freq_limit, mgr->max_freq_limit);
 			ret = -EINVAL;
 		} else {
@@ -768,13 +782,14 @@ static int gxp_pm_update_freq_limits_locked(struct gxp_dev *gxp)
 
 	return ret;
 }
+#endif /* GXP_HAS_MCU */
 
-static int gxp_pm_set_freq_limit(struct gxp_dev *gxp, u32 val, u32 *limit_to_set)
+int gxp_pm_set_min_max_freq_limit(struct gxp_dev *gxp, uint min_freq_khz, uint max_freq_khz)
 {
+#if GXP_HAS_MCU
+	struct gxp_power_manager *mgr = gxp->power_mgr;
 	int ret = 0;
 
-	if (val == *limit_to_set)
-		return ret;
 	/*
 	 * Need to hold pm lock to prevent races with power up/down when checking block state and
 	 * sending the KCI command to update limits.
@@ -782,74 +797,22 @@ static int gxp_pm_set_freq_limit(struct gxp_dev *gxp, u32 val, u32 *limit_to_set
 	 * Since power_up will also acquire freq_limits_lock to send initial limits, pm lock must be
 	 * held first to avoid lock inversion.
 	 */
-	gcip_pm_lock(gxp->power_mgr->pm);
-	mutex_lock(&gxp->power_mgr->freq_limits_lock);
+	gcip_pm_lock(mgr->pm);
+	mutex_lock(&mgr->freq_limits_lock);
 
-	*limit_to_set = val;
+	mgr->min_freq_limit = min_freq_khz;
+	mgr->max_freq_limit = max_freq_khz;
+
 	if (!gxp_pm_is_blk_down(gxp))
 		ret = gxp_pm_update_freq_limits_locked(gxp);
 
-	mutex_unlock(&gxp->power_mgr->freq_limits_lock);
-	gcip_pm_unlock(gxp->power_mgr->pm);
+	mutex_unlock(&mgr->freq_limits_lock);
+	gcip_pm_unlock(mgr->pm);
 	return ret;
-}
-
-static int debugfs_min_freq_limit_get(void *data, u64 *val)
-{
-	struct gxp_dev *gxp = (struct gxp_dev *)data;
-	struct gxp_power_manager *mgr = gxp->power_mgr;
-
-	mutex_lock(&mgr->freq_limits_lock);
-	*val = mgr->min_freq_limit;
-	mutex_unlock(&mgr->freq_limits_lock);
-	return 0;
-}
-
-static int debugfs_min_freq_limit_set(void *data, u64 val)
-{
-	struct gxp_dev *gxp = (struct gxp_dev *)data;
-	struct gxp_power_manager *mgr = gxp->power_mgr;
-
-	if (val > UINT_MAX) {
-		dev_err(gxp->dev, "Requested debugfs min freq %llu must be <= %u (UINT_MAX)\n", val,
-			UINT_MAX);
-		return -EINVAL;
-	}
-
-	return gxp_pm_set_freq_limit(gxp, (u32)val, &mgr->min_freq_limit);
-}
-
-DEFINE_DEBUGFS_ATTRIBUTE(debugfs_min_freq_limit_fops, debugfs_min_freq_limit_get,
-			 debugfs_min_freq_limit_set, "%llu\n");
-
-static int debugfs_max_freq_limit_get(void *data, u64 *val)
-{
-	struct gxp_dev *gxp = (struct gxp_dev *)data;
-	struct gxp_power_manager *mgr = gxp->power_mgr;
-
-	mutex_lock(&mgr->freq_limits_lock);
-	*val = mgr->max_freq_limit;
-	mutex_unlock(&mgr->freq_limits_lock);
-	return 0;
-}
-
-static int debugfs_max_freq_limit_set(void *data, u64 val)
-{
-	struct gxp_dev *gxp = (struct gxp_dev *)data;
-	struct gxp_power_manager *mgr = gxp->power_mgr;
-
-	if (val > UINT_MAX) {
-		dev_err(gxp->dev, "Requested debugfs max freq %llu must be <= %u (UINT_MAX)\n", val,
-			UINT_MAX);
-		return -EINVAL;
-	}
-
-	return gxp_pm_set_freq_limit(gxp, (u32)val, &mgr->max_freq_limit);
-}
-
-DEFINE_DEBUGFS_ATTRIBUTE(debugfs_max_freq_limit_fops, debugfs_max_freq_limit_get,
-			 debugfs_max_freq_limit_set, "%llu\n");
+#else
+	return -EOPNOTSUPP;
 #endif /* GXP_HAS_MCU */
+}
 
 static int debugfs_wakelock_set(void *data, u64 val)
 {
@@ -911,7 +874,7 @@ static int debugfs_blk_powerstate_set(void *data, u64 val)
 	}
 
 	if (val >= AUR_DVFS_MIN_RATE) {
-		ret = gxp_pm_blk_set_rate_acpm(gxp, val);
+		ret = gxp_pm_blk_set_rate(gxp, val);
 	} else {
 		ret = -EINVAL;
 		dev_err(gxp->dev, "Incorrect state %llu\n", val);
@@ -930,7 +893,7 @@ static int debugfs_blk_powerstate_get(void *data, u64 *val)
 		return -ENODEV;
 	}
 
-	*val = gxp_pm_blk_get_state_acpm(gxp);
+	*val = gxp_pm_blk_get_rate(gxp);
 	return 0;
 }
 
@@ -976,16 +939,17 @@ static int gxp_pm_power_down(void *data)
 
 static void gxp_pm_on_busy(struct gxp_dev *gxp)
 {
-	set_cmu_pll_aur_mux_state(gxp, AUR_CMU_MUX_NORMAL);
-	set_cmu_noc_user_mux_state(gxp, AUR_CMU_MUX_NORMAL);
+#if GXP_HAS_CMU
+	gxp_cmu_set_mux_normal(gxp);
+#endif /* GXP_HAS_CMU */
 }
 
 static void gxp_pm_on_idle(struct gxp_dev *gxp)
 {
-	if (gxp_slow_clk_on_idle) {
-		set_cmu_pll_aur_mux_state(gxp, AUR_CMU_MUX_LOW);
-		set_cmu_noc_user_mux_state(gxp, AUR_CMU_MUX_LOW);
-	}
+#if GXP_HAS_CMU
+	if (gxp_slow_clk_on_idle)
+		gxp_cmu_set_mux_low(gxp);
+#endif /* GXP_HAS_CMU */
 }
 
 /**
@@ -1086,10 +1050,6 @@ int gxp_pm_init(struct gxp_dev *gxp)
 	gxp->debugfs_wakelock_held = false;
 #if GXP_HAS_MCU
 	mutex_init(&mgr->freq_limits_lock);
-	debugfs_create_file(DEBUGFS_MIN_FREQ, 0600, gxp->d_entry, gxp,
-			    &debugfs_min_freq_limit_fops);
-	debugfs_create_file(DEBUGFS_MAX_FREQ, 0600, gxp->d_entry, gxp,
-			    &debugfs_max_freq_limit_fops);
 #endif /* GXP_HAS_MCU */
 	debugfs_create_file(DEBUGFS_WAKELOCK, 0200, gxp->d_entry, gxp, &debugfs_wakelock_fops);
 	debugfs_create_file(DEBUGFS_BLK_POWERSTATE, 0600, gxp->d_entry, gxp,
@@ -1111,10 +1071,6 @@ int gxp_pm_destroy(struct gxp_dev *gxp)
 	if (IS_GXP_TEST && !mgr)
 		return 0;
 
-#if GXP_HAS_MCU
-	debugfs_remove(debugfs_lookup(DEBUGFS_MIN_FREQ, gxp->d_entry));
-	debugfs_remove(debugfs_lookup(DEBUGFS_MAX_FREQ, gxp->d_entry));
-#endif /* GXP_HAS_MCU */
 	debugfs_remove(debugfs_lookup(DEBUGFS_BLK_POWERSTATE, gxp->d_entry));
 	debugfs_remove(debugfs_lookup(DEBUGFS_WAKELOCK, gxp->d_entry));
 

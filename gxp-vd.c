@@ -55,8 +55,7 @@
 
 static inline void hold_core_in_reset(struct gxp_dev *gxp, uint core)
 {
-	gxp_write_32(gxp, GXP_CORE_REG_ETM_PWRCTL(core),
-		     BIT(GXP_REG_ETM_PWRCTL_CORE_RESET_SHIFT));
+	gxp_write_32(gxp, GXP_REG_CORE_ETM_PWRCTL(core), BIT(GXP_REG_ETM_PWRCTL_CORE_RESET_SHIFT));
 }
 
 void gxp_vd_init(struct gxp_dev *gxp)
@@ -203,16 +202,30 @@ static int map_sys_cfg_resource(struct gxp_virtual_device *vd,
 	return 0;
 }
 
-/*
- * Assigns @res's IOVA, size from image config.
- */
-static void assign_resource(struct gxp_mapped_resource *res,
-			    struct gcip_image_config *img_cfg,
-			    enum gxp_imgcfg_idx idx)
+/* Properly assigns the resources according to @img_cfg's config version. */
+static int get_resources_from_imgcfg(struct gxp_dev *gxp, struct gcip_image_config *img_cfg,
+				     struct gxp_mapped_resource *core_cfg,
+				     struct gxp_mapped_resource *vd_cfg,
+				     struct gxp_mapped_resource *sys_cfg)
 {
-	res->daddr = img_cfg->iommu_mappings[idx].virt_address;
-	res->size = gcip_config_to_size(
-		img_cfg->iommu_mappings[idx].image_config_value);
+	int ret;
+
+	ret = gxp_firmware_get_cfg_resource(gxp, img_cfg, IMAGE_CONFIG_CORE_CFG_REGION, core_cfg);
+	if (ret)
+		return ret;
+	ret = gxp_firmware_get_cfg_resource(gxp, img_cfg, IMAGE_CONFIG_VD_CFG_REGION, vd_cfg);
+	if (ret)
+		return ret;
+	ret = gxp_firmware_get_cfg_resource(gxp, img_cfg, IMAGE_CONFIG_SYS_CFG_REGION, sys_cfg);
+	if (ret)
+		return ret;
+
+	if (core_cfg->size + vd_cfg->size > GXP_SHARED_SLICE_SIZE) {
+		dev_err(gxp->dev, "Core CFG (%#llx) + VD CFG (%#llx) exceeds %#x", core_cfg->size,
+			vd_cfg->size, GXP_SHARED_SLICE_SIZE);
+		return -ENOSPC;
+	}
+	return 0;
 }
 
 /*
@@ -243,57 +256,50 @@ static int map_cfg_regions(struct gxp_virtual_device *vd, struct gcip_image_conf
 {
 	struct gxp_dev *gxp = vd->gxp;
 	struct gxp_mapped_resource pool;
-	struct gxp_mapped_resource res;
+	struct gxp_mapped_resource core_cfg, vd_cfg, sys_cfg;
 	size_t offset;
 	int ret;
 
-	if (img_cfg->num_iommu_mappings < 3)
+	if (!img_cfg->num_iommu_mappings)
 		return map_core_shared_buffer(vd);
+
+	ret = get_resources_from_imgcfg(gxp, img_cfg, &core_cfg, &vd_cfg, &sys_cfg);
+	if (ret)
+		return ret;
 	pool = gxp_fw_data_resource(gxp);
 
-	assign_resource(&res, img_cfg, CORE_CFG_REGION_IDX);
 	offset = vd->slice_index * GXP_SHARED_SLICE_SIZE;
-	res.vaddr = pool.vaddr + offset;
-	res.paddr = pool.paddr + offset;
-	ret = map_resource(vd, &res);
+	core_cfg.vaddr = pool.vaddr + offset;
+	core_cfg.paddr = pool.paddr + offset;
+	ret = map_resource(vd, &core_cfg);
 	if (ret) {
-		dev_err(gxp->dev, "map core config %pad -> offset %#zx failed",
-			&res.daddr, offset);
+		dev_err(gxp->dev, "map core config %pad -> offset %#zx failed", &core_cfg.daddr,
+			offset);
 		return ret;
 	}
-	vd->core_cfg = res;
+	vd->core_cfg = core_cfg;
 
-	assign_resource(&res, img_cfg, VD_CFG_REGION_IDX);
 	offset += vd->core_cfg.size;
-	res.vaddr = pool.vaddr + offset;
-	res.paddr = pool.paddr + offset;
-	ret = map_resource(vd, &res);
+	vd_cfg.vaddr = pool.vaddr + offset;
+	vd_cfg.paddr = pool.paddr + offset;
+	ret = map_resource(vd, &vd_cfg);
 	if (ret) {
-		dev_err(gxp->dev, "map VD config %pad -> offset %#zx failed",
-			&res.daddr, offset);
+		dev_err(gxp->dev, "map VD config %pad -> offset %#zx failed", &vd_cfg.daddr,
+			offset);
 		goto err_unmap_core;
 	}
-	vd->vd_cfg = res;
-	/* image config correctness check */
-	if (vd->core_cfg.size + vd->vd_cfg.size > GXP_SHARED_SLICE_SIZE) {
-		dev_err(gxp->dev,
-			"Core CFG (%#llx) + VD CFG (%#llx) exceeds %#x",
-			vd->core_cfg.size, vd->vd_cfg.size,
-			GXP_SHARED_SLICE_SIZE);
-		ret = -ENOSPC;
-		goto err_unmap_vd;
-	}
-	assign_resource(&res, img_cfg, SYS_CFG_REGION_IDX);
-	res.vaddr = gxp_fw_data_system_cfg(gxp);
-	offset = res.vaddr - pool.vaddr;
-	res.paddr = pool.paddr + offset;
-	ret = map_sys_cfg_resource(vd, &res);
+	vd->vd_cfg = vd_cfg;
+
+	sys_cfg.vaddr = gxp_fw_data_system_cfg(gxp);
+	offset = sys_cfg.vaddr - pool.vaddr;
+	sys_cfg.paddr = pool.paddr + offset;
+	ret = map_sys_cfg_resource(vd, &sys_cfg);
 	if (ret) {
-		dev_err(gxp->dev, "map sys config %pad -> offset %#zx failed",
-			&res.daddr, offset);
+		dev_err(gxp->dev, "map sys config %pad -> offset %#zx failed", &sys_cfg.daddr,
+			offset);
 		goto err_unmap_vd;
 	}
-	vd->sys_cfg = res;
+	vd->sys_cfg = sys_cfg;
 
 	return 0;
 
@@ -573,7 +579,7 @@ static inline void debug_dump_unlock(struct gxp_virtual_device *vd)
 #if GXP_MMU_REQUIRE_ATTACH
 static int gxp_attach_mmu_domain(struct gxp_dev *gxp, struct gxp_virtual_device *vd)
 {
-	int ret;
+	int ret, err;
 
 	/*
 	 * Domain attach requires block to be in on state.
@@ -588,9 +594,11 @@ static int gxp_attach_mmu_domain(struct gxp_dev *gxp, struct gxp_virtual_device 
 	ret = gxp_dma_domain_attach_device(gxp, vd->domain, vd->core_list);
 	if (ret)
 		dev_err(gxp->dev, "Failed to attach domain: %d", ret);
-	ret = pm_runtime_put_sync(gxp->dev);
-	if (ret)
-		dev_err(gxp->dev, "Failed to power off during domain attach: %d", ret);
+
+	/* Ignore the return value of this put function, just print messages on error. */
+	err = pm_runtime_put_sync(gxp->dev);
+	if (err)
+		dev_err(gxp->dev, "Failed to power off during domain attach: %d", err);
 
 	return ret;
 }
@@ -804,8 +812,6 @@ void gxp_vd_release(struct gxp_virtual_device *vd)
 	gxp_detach_mmu_domain(gxp, vd);
 #endif
 	unassign_cores(vd);
-
-	vd->gxp->mailbox_mgr->release_unconsumed_async_resps(vd);
 
 	/*
 	 * Release any un-mapped mappings

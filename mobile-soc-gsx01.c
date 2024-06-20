@@ -11,6 +11,7 @@
 
 #include <gcip/gcip-slc.h>
 
+#include "gxp-cmu.h"
 #include "gxp-config.h"
 #include "gxp-core-telemetry.h"
 #include "gxp-firmware.h"
@@ -69,7 +70,7 @@ int gxp_soc_pm_set_rate(unsigned int id, unsigned long rate)
 	return exynos_acpm_set_rate(id, rate);
 }
 
-unsigned long gxp_soc_pm_get_rate(unsigned int id, unsigned long dbg_val)
+unsigned long gxp_soc_pm_get_rate(struct gxp_dev *gxp, unsigned int id, unsigned long dbg_val)
 {
 	return exynos_acpm_get_rate(id, dbg_val);
 }
@@ -133,7 +134,12 @@ int gxp_soc_init(struct gxp_dev *gxp)
 		return ret;
 	}
 
+	ret = gxp_cmu_set_reg_resources(gxp);
+	if (ret)
+		dev_warn(gxp->dev, "Failed to set CMU resources");
+
 	gcip_slc_debugfs_init(&gxp->soc_data->slc, gxp->dev, gxp->d_entry);
+	gxp_cmu_debugfs_init(gxp);
 
 	return 0;
 }

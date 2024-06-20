@@ -67,7 +67,7 @@ void gxp_soc_pm_reset(struct gxp_dev *gxp);
 int gxp_soc_pm_set_rate(unsigned int id, unsigned long rate);
 
 /* The get function of pm rate. */
-unsigned long gxp_soc_pm_get_rate(unsigned int id, unsigned long dbg_val);
+unsigned long gxp_soc_pm_get_rate(struct gxp_dev *gxp, unsigned int id, unsigned long dbg_val);
 
 /**
  * gxp_soc_set_pm_arg_from_state() - Set gxp_req_pm_qos_work according to the given state.

@@ -247,7 +247,7 @@ err_unload_core:
 int gxp_firmware_loader_load_if_needed(struct gxp_dev *gxp)
 {
 	struct gxp_firmware_loader_manager *mgr = gxp->fw_loader_mgr;
-	resource_size_t addr_size;
+	struct gxp_mapped_resource res = {};
 	int ret = 0;
 
 	mutex_lock(&mgr->lock);
@@ -260,10 +260,10 @@ int gxp_firmware_loader_load_if_needed(struct gxp_dev *gxp)
 	 * This should be done only after the firmware is successfully loaded because the size of
 	 * system config region is required.
 	 */
-	addr_size = mgr->core_img_cfg.iommu_mappings[SYS_CFG_REGION_IDX].image_config_value;
+	gxp_firmware_get_cfg_resource(gxp, &mgr->core_img_cfg, IMAGE_CONFIG_SYS_CFG_REGION, &res);
 	mutex_unlock(&mgr->lock);
 
-	gxp_fw_data_populate_system_config(gxp, gcip_config_to_size(addr_size));
+	gxp_fw_data_populate_system_config(gxp, res.size);
 
 	return 0;
 

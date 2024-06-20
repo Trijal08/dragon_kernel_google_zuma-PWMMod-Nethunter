@@ -11,7 +11,6 @@ CURRENT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 obj-$(CONFIG_$(GXP_CHIP)) += gxp.o
 
 gxp-objs += \
-		gxp-bpm.o \
 		gxp-client.o \
 		gxp-core-telemetry.o \
 		gxp-dci.o \
@@ -30,12 +29,14 @@ gxp-objs += \
 		gxp-mailbox.o \
 		gxp-mapping.o \
 		gxp-mb-notification.o \
+		gxp-monitor.o \
 		gxp-pm.o \
 		gxp-thermal.o \
 		gxp-trace.o \
 		gxp-vd.o
 
 gxp-mcu-objs := \
+		gxp-devfreq.o \
 		gxp-kci.o \
 		gxp-mcu-firmware.o \
 		gxp-mcu-fs.o \
@@ -46,6 +47,8 @@ gxp-mcu-objs := \
 		gxp-usage-stats.o
 
 gsx01-objs := \
+		gxp-bpm.o \
+		gxp-cmu.o \
 		gxp-gsx01-mailbox.o \
 		gxp-gsx01-ssmt.o \
 		mobile-soc-gsx01.o
@@ -59,7 +62,6 @@ gxp-objs += \
 		callisto-platform.o \
 		callisto-pm.o
 
-GMODULE_PATH := $(OUT_DIR)/../private/google-modules
 EDGETPU_CHIP := rio
 
 endif
@@ -94,11 +96,9 @@ endif
 GXP_PLATFORM ?= SILICON
 
 gxp-flags := -DCONFIG_GXP_$(GXP_PLATFORM) -DCONFIG_$(GXP_CHIP)=1 \
-	     -I$(CURRENT_DIR)/include -I$(CURRENT_DIR)/gcip-kernel-driver/include \
-	     -I$(KERNEL_SRC)/../private/google-modules/power/mitigation
+	     -I$(CURRENT_DIR)/include -I$(CURRENT_DIR)/gcip-kernel-driver/include
 # TODO(b/336717718): Remove path of embedded IIF
-gxp-flags += -I$(CURRENT_DIR)/gcip-kernel-driver/drivers/gcip/iif/include \
-	     -I$(KERNEL_SRC)/../private/google-modules/iif/include
+gxp-flags += -I$(CURRENT_DIR)/gcip-kernel-driver/drivers/gcip/iif/include
 
 ccflags-y += $(EXTRA_CFLAGS) $(gxp-flags)
 # Flags needed for external modules.
@@ -107,14 +107,24 @@ ccflags-y += -DCONFIG_GOOGLE_BCL
 KBUILD_OPTIONS += GXP_CHIP=$(GXP_CHIP) GXP_PLATFORM=$(GXP_PLATFORM)
 
 ifneq ($(OUT_DIR),)
+GMODULE_PATH := $(OUT_DIR)/../private/google-modules
+
 # Access TPU driver's exported symbols.
+ifneq ($(wildcard $(GMODULE_PATH)/edgetpu/$(EDGETPU_CHIP)/drivers/edgetpu/Module.symvers),)
 EXTRA_SYMBOLS += $(GMODULE_PATH)/edgetpu/$(EDGETPU_CHIP)/drivers/edgetpu/Module.symvers
+endif
+
 ifneq ($(wildcard $(GMODULE_PATH)/soc/gs/drivers/soc/google/gsa/Module.symvers),)
 EXTRA_SYMBOLS += $(GMODULE_PATH)/soc/gs/drivers/soc/google/gsa/Module.symvers
 endif
 
 ifneq ($(GXP_POWER_MITIGATION), false)
+ccflags-y     += -I$(KERNEL_SRC)/../private/google-modules/power/mitigation
 EXTRA_SYMBOLS += $(GMODULE_PATH)/power/mitigation/Module.symvers
+endif
+
+ifneq ($(wildcard $(KERNEL_SRC)/../private/google-modules/iif/include),)
+ccflags-y     += -I$(KERNEL_SRC)/../private/google-modules/iif/include
 endif
 
 ifneq ($(wildcard $(GMODULE_PATH)/iif/Module.symvers),)

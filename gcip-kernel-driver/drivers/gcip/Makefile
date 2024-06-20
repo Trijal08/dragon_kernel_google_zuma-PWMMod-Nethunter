@@ -7,6 +7,7 @@ CONFIG_GCIP		?= m
 obj-$(CONFIG_GCIP)	+= gcip.o
 
 gcip-objs		:= gcip-alloc-helper.o \
+			   gcip-devfreq.o \
 			   gcip-dma-fence.o \
 			   gcip-domain-pool.o \
 			   gcip-fault-injection.o \
@@ -37,7 +38,10 @@ CURRENT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 # TODO(b/336717718): Remove path of embedded IIF
 ccflags-y	+= -I$(CURRENT_DIR)/../../include \
 		   -I$(CURRENT_DIR)/iif/include \
-		   -I$(KERNEL_SRC)/../private/google-modules/iif/include
+
+ifneq ($(wildcard $(KERNEL_SRC)/../private/google-modules/iif/include/),)
+ccflags-y	+= -I$(KERNEL_SRC)/../private/google-modules/iif/include
+endif
 
 
 

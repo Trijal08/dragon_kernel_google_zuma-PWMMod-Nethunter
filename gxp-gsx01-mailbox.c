@@ -55,9 +55,9 @@ void gxp_mailbox_chip_irq_handler(struct gxp_mailbox *mailbox)
 		if (handlers[next_int])
 			schedule_work(handlers[next_int]);
 		else
-			dev_err_ratelimited(mailbox->gxp->dev,
-				"mailbox%d: received unknown interrupt bit 0x%X\n",
-				mailbox->core_id, next_int);
+			dev_warn_ratelimited(mailbox->gxp->dev,
+					     "mailbox%d: received unknown interrupt bit 0x%X\n",
+					     mailbox->core_id, next_int);
 	}
 }
 

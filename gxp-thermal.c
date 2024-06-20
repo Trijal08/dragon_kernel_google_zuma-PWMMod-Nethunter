@@ -23,8 +23,9 @@
 
 static int gxp_thermal_get_rate(void *data, unsigned long *rate)
 {
-	*rate = gxp_soc_pm_get_rate(AUR_DVFS_DOMAIN, 0);
+	struct gxp_dev *gxp = data;
 
+	*rate = gxp_soc_pm_get_rate(gxp, AUR_DVFS_DOMAIN, 0);
 	return 0;
 }
 
@@ -43,7 +44,7 @@ static int gxp_thermal_set_rate(void *data, unsigned long rate)
 	} else {
 		rate = max_t(unsigned long, rate,
 			     aur_power_state2rate[AUR_UUD]);
-		ret = gxp_pm_blk_set_rate_acpm(gxp, rate);
+		ret = gxp_pm_blk_set_rate(gxp, rate);
 	}
 
 	if (ret) {

@@ -122,12 +122,12 @@ struct gxp_common_registers {
 	u32 common_int_pol_1;
 	u32 dedicated_int_pol;
 	u32 raw_ext_int;
-	u32 core_pd[CORE_PD_COUNT];
+	u32 core_pd[GXP_NUM_CORES];
 	u32 global_counter_low;
 	u32 global_counter_high;
 	u32 wdog_control;
 	u32 wdog_value;
-	struct gxp_timer_registers timer[TIMER_COUNT];
+	struct gxp_timer_registers timer[GXP_REG_TIMER_COUNT];
 	u32 doorbell[DOORBELL_COUNT];
 	u32 sync_barrier[SYNC_BARRIER_COUNT];
 };

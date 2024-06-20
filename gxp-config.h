@@ -73,4 +73,7 @@
 		    !IS_ENABLED(CONFIG_GXP_IP_ZEBU) &&				\
 		    !IS_ENABLED(CONFIG_GXP_ZEBU))
 
+#define GXP_USE_GEM GXP_HAS_GEM
+#define GXP_USE_BPM (!GXP_USE_GEM && GXP_HAS_BPM && GXP_HAS_MCU)
+
 #endif /* __GXP_CONFIG_H__ */
