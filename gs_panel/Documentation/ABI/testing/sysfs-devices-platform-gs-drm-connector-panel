@@ -226,3 +226,11 @@ Description:
   in cases where that information may affect a particular panel's behavior. Not all panels
   need (or support) this feature. Setting this value directly will not affect the
   refresh_rate of the panel. The unit is frames per second.
+
+What: /sys/devices/platform/gs-drm-connector/panel/power_mode
+Date: June 2024
+KernelVersion: 6.1
+Contact: "Attis Chen" <attis@google.com>
+Description:
+  Userspace client uses this to read the display_on, normal and sleep bits at
+  bit 2, 3, 4 respectively of power mode register.

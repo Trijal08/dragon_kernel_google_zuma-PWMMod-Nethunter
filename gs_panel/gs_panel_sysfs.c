@@ -13,6 +13,7 @@
 #include <linux/sysfs.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_vblank.h>
+#include <video/mipi_display.h>
 
 #include "gs_panel/gs_panel.h"
 #include "trace/panel_trace.h"
@@ -756,6 +757,35 @@ static ssize_t force_power_on_show(struct device *dev, struct device_attribute *
 	return count;
 }
 
+static ssize_t power_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	struct gs_panel *ctx = mipi_dsi_get_drvdata(dsi);
+	int err;
+	u8 power_mode;
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_warn(dev, "%s: panel is not enabled\n", __func__);
+		return -EPERM;
+	}
+
+	mutex_lock(&ctx->mode_lock);
+	err = mipi_dsi_dcs_read(dsi, MIPI_DCS_GET_POWER_MODE, &power_mode, sizeof(power_mode));
+	mutex_unlock(&ctx->mode_lock);
+	if (err <= 0) {
+		if (err == 0)
+			err = -ENODATA;
+		dev_warn(dev, "Unable to read power mode register (%#02x: %d)\n",
+			MIPI_DCS_GET_POWER_MODE, err);
+		return err;
+	}
+
+	power_mode &= (MIPI_DSI_DCS_POWER_MODE_DISPLAY |
+	    MIPI_DSI_DCS_POWER_MODE_NORMAL | MIPI_DSI_DCS_POWER_MODE_SLEEP);
+
+	return sysfs_emit(buf, "%#02x\n", power_mode);
+}
+
 static ssize_t frame_rate_store(struct device *dev, struct device_attribute *attr,
 				const char *buf, size_t count)
 {
@@ -805,6 +835,7 @@ static DEVICE_ATTR_RO(power_state);
 static DEVICE_ATTR_RO(error_count_te);
 static DEVICE_ATTR_RO(error_count_unknown);
 static DEVICE_ATTR_RW(force_power_on);
+static DEVICE_ATTR_RO(power_mode);
 static DEVICE_ATTR_WO(frame_rate);
 /* TODO(tknelms): re-implement below */
 #if 0
@@ -834,6 +865,7 @@ static const struct attribute *panel_attrs[] = { &dev_attr_serial_number.attr,
 						 &dev_attr_error_count_te.attr,
 						 &dev_attr_error_count_unknown.attr,
 						 &dev_attr_force_power_on.attr,
+						 &dev_attr_power_mode.attr,
 /* TODO(tknelms): re-implement below */
 #if 0
 						 &dev_attr_gamma.attr,
