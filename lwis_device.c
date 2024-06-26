@@ -1526,6 +1526,7 @@ int lwis_base_probe(struct lwis_device *lwis_dev)
 
 	/* Initialize the spinlock */
 	spin_lock_init(&lwis_dev->lock);
+	spin_lock_init(&lwis_dev->allocator_lock);
 
 	if (lwis_dev->type == DEVICE_TYPE_TOP) {
 		lwis_dev->top_dev = lwis_dev;
