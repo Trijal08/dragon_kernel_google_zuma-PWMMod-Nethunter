@@ -867,8 +867,10 @@ static int gs_panel_bridge_atomic_check(struct drm_bridge *bridge,
 		struct gs_drm_connector_state *gs_conn_state = to_gs_connector_state(conn_state);
 		int current_vrefresh = drm_mode_vrefresh(current_mode);
 		int target_vrefresh = drm_mode_vrefresh(target_mode);
-		int current_bts_fps = gs_drm_mode_bts_fps(current_mode);
-		int target_bts_fps = gs_drm_mode_bts_fps(target_mode);
+		int current_bts_fps = gs_drm_mode_bts_fps(current_mode,
+			ctx->current_mode->gs_mode.min_bts_fps);
+		int target_bts_fps = gs_drm_mode_bts_fps(target_mode,
+			gs_conn_state->gs_mode.min_bts_fps);
 
 		int clock;
 

@@ -144,6 +144,9 @@ struct gs_display_mode {
 	/** @mode_flags: DSI mode flags from drm_mipi_dsi.h */
 	unsigned long mode_flags;
 
+	/** @min_bts_fps: minimal bts fps requirement */
+	unsigned int min_bts_fps;
+
 	/** @vblank_usec: parameter to calculate bts */
 	unsigned int vblank_usec;
 

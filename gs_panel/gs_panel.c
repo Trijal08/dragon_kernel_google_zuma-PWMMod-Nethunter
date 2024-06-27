@@ -1588,7 +1588,8 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 		for (i = 0; i < ctx->desc->modes->num_modes; i++) {
 			const struct gs_panel_mode *pmode = &ctx->desc->modes->modes[i];
 			const int vrefresh = drm_mode_vrefresh(&pmode->mode);
-			const int bts_fps = gs_drm_mode_bts_fps(&pmode->mode);
+			const int bts_fps = gs_drm_mode_bts_fps(&pmode->mode,
+				pmode->gs_mode.min_bts_fps);
 
 			if (ctx->max_vrefresh < vrefresh)
 				ctx->max_vrefresh = vrefresh;
