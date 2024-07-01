@@ -9,6 +9,53 @@
  * published by the Free Software Foundation.
  */
 /* END-INTERNAL */
+
+/*
+ * Since we require backward compatibility, we need to be able to handle
+ * several versions of the same command. In this file, we keep all the versions
+ * we want to handle. When we need changes to a command, we need to create a
+ * new version of the command.
+ *
+ * As convention, we will only give a version number to the old versions of a
+ * structure. For instance, if we have a structure `a`, we could have:
+ *
+ * 	struct a_v1 {
+ * 		int x;
+ * 	};
+ * 	struct a {
+ * 		int x;
+ * 		int y;
+ * 	};
+ *
+ * Here, structure `a` is the latest version and `a_v1` is the old version
+ * without the changes required in `a`. If we want a new version of `a`, we'll do:
+ *
+ * 	struct a_v1 {
+ * 		int x;
+ * 	};
+ * 	struct a_v2 {
+ * 		int x;
+ * 		int y;
+ * 	};
+ * 	struct a {
+ * 		int x;
+ * 		int y;
+ * 		int z;
+ * 	};
+ *
+ * Having version numbers only for the old versions have two main advantages:
+ * (1) We don't need to change the code everywhere when creating a new version
+ * of a strucure because the symbol name will stay the same and (2) reviews
+ * will clearly show what changed in the new version.
+ *
+ * Another advantage is that since versioned structures are the old structures,
+ * they will show only whenever we need to handle old versions/command/APIs.
+ *
+ * While we transition to this new convention, the latest version of a
+ * structure may be a version number. We should move to this new convention as
+ * we make new changes to the structures.
+ */
+
 #ifndef LWIS_COMMANDS_H_
 #define LWIS_COMMANDS_H_
 
@@ -446,7 +493,7 @@ struct lwis_transaction_info_v4 {
 	int64_t submission_timestamp_ns;
 };
 
-struct lwis_transaction_info_v5 {
+struct lwis_transaction_info {
 	// Input
 	int64_t trigger_event_id;
 	int64_t trigger_event_counter;
@@ -647,7 +694,8 @@ enum lwis_cmd_id {
 	LWIS_CMD_ID_TRANSACTION_SUBMIT_V2 = 0x50001,
 	LWIS_CMD_ID_TRANSACTION_SUBMIT_V3,
 	LWIS_CMD_ID_TRANSACTION_SUBMIT_V4,
-	LWIS_CMD_ID_TRANSACTION_SUBMIT_V5,
+	LWIS_CMD_ID_TRANSACTION_SUBMIT,
+
 	LWIS_CMD_ID_TRANSACTION_CANCEL = 0x50100,
 
 	LWIS_CMD_ID_PERIODIC_IO_SUBMIT = 0x60000,
@@ -763,9 +811,9 @@ struct lwis_cmd_transaction_info_v4 {
 	struct lwis_transaction_info_v4 info;
 };
 
-struct lwis_cmd_transaction_info_v5 {
+struct lwis_cmd_transaction_info {
 	struct lwis_cmd_pkt header;
-	struct lwis_transaction_info_v5 info;
+	struct lwis_transaction_info info;
 };
 
 struct lwis_cmd_transaction_cancel {

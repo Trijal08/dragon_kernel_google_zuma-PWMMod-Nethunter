@@ -322,7 +322,7 @@ static int trigger_event_add_transaction(struct lwis_client *client,
 	struct lwis_device *lwis_dev = client->lwis_dev;
 	struct lwis_device_event_state *event_state;
 	struct lwis_fence *precondition_fence;
-	struct lwis_transaction_info_v5 *info = &transaction->info;
+	struct lwis_transaction_info *info = &transaction->info;
 	int32_t operator_type = info->trigger_condition.operator_type;
 	size_t all_signaled = info->trigger_condition.num_nodes;
 	int precondition_fence_status = LWIS_FENCE_STATUS_NOT_SIGNALED;
@@ -438,7 +438,7 @@ bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
 {
 	int32_t operator_type;
 	size_t all_signaled;
-	struct lwis_transaction_info_v5 *info = &transaction->info;
+	struct lwis_transaction_info *info = &transaction->info;
 	int i;
 	struct lwis_fence *lwis_fence;
 	bool is_node_signaled = false;
@@ -536,7 +536,7 @@ bool lwis_fence_triggered_condition_ready(struct lwis_transaction *transaction, 
 
 int lwis_parse_trigger_condition(struct lwis_client *client, struct lwis_transaction *transaction)
 {
-	struct lwis_transaction_info_v5 *info;
+	struct lwis_transaction_info *info;
 	struct lwis_device *lwis_dev;
 	int i, ret;
 
@@ -575,7 +575,7 @@ int lwis_parse_trigger_condition(struct lwis_client *client, struct lwis_transac
 int lwis_initialize_transaction_fences(struct lwis_client *client,
 				       struct lwis_transaction *transaction)
 {
-	struct lwis_transaction_info_v5 *info = &transaction->info;
+	struct lwis_transaction_info *info = &transaction->info;
 	struct lwis_device *lwis_dev = client->lwis_dev;
 	int i;
 	int fd_or_err;
@@ -655,7 +655,7 @@ int lwis_add_completion_fences_to_transaction(struct lwis_client *client,
 	int i;
 	int fence_fd;
 	struct lwis_device *lwis_dev = client->lwis_dev;
-	struct lwis_transaction_info_v5 *info = &transaction->info;
+	struct lwis_transaction_info *info = &transaction->info;
 
 	/* If a completion fence is requested but not initialized, we cannot continue. */
 	if (info->create_completion_fence_fd == LWIS_CREATE_COMPLETION_FENCE) {
