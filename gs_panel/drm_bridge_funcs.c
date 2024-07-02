@@ -472,6 +472,7 @@ static void gs_panel_bridge_disable(struct drm_bridge *bridge,
 			ctx->panel_state = GPANEL_STATE_BLANK;
 		} else {
 			ctx->panel_state = GPANEL_STATE_OFF;
+			ctx->mode_in_progress = MODE_DONE;
 
 			if (gs_panel_has_func(ctx, run_normal_mode_work)) {
 				dev_dbg(dev, "%s: cancel normal_mode_work\n", __func__);
