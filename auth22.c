@@ -33,6 +33,7 @@
 #define DP_RXCAPS_HDCP_VERSION_2       (0x2)
 
 static struct hdcp_link_data lkd;
+static bool is_shutdown = false;
 
 static int auth22_determine_rx_hdcp_cap(struct hdcp_link_data *lk)
 {
@@ -66,6 +67,11 @@ int hdcp22_dplink_authenticate(void)
 {
 	struct hdcp_link_data *lk_data = &lkd;
 	bool rp_ready = lk_data->rp_ready;
+
+	if (is_shutdown) {
+		hdcp_info("abandoning auth22, shutdown signal\n");
+		return -ECANCELED;
+	}
 
 	memset(&lkd, 0, sizeof(lkd));
 	if (rp_ready)
@@ -151,8 +157,10 @@ int hdcp22_dplink_authenticate(void)
 	} while (1);
 }
 
-int hdcp22_dplink_abort(void) {
+int hdcp22_dplink_abort(bool shutdown) {
 	lkd.is_aborted = 1;
+	if (shutdown)
+		is_shutdown = true;
 	return 0;
 }
 
@@ -170,12 +178,12 @@ int hdcp22_dplink_handle_irq(void) {
 
 	if (HDCP_2_2_DP_RXSTATUS_LINK_FAILED(rxstatus)) {
 		hdcp_info("integrity check fail.\n");
-		hdcp22_dplink_abort();
+		hdcp22_dplink_abort(false);
 		hdcp_tee_disable_enc();
 		return -EFAULT;
 	} else if (HDCP_2_2_DP_RXSTATUS_REAUTH_REQ(rxstatus)) {
 		hdcp_info("reauth requested.\n");
-		hdcp22_dplink_abort();
+		hdcp22_dplink_abort(false);
 		hdcp_tee_disable_enc();
 		return -EFAULT;
 	} else if (HDCP_2_2_DP_RXSTATUS_PAIRING(rxstatus)) {

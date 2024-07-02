@@ -165,6 +165,10 @@ void hdcp_dplink_handle_irq(void) {
 EXPORT_SYMBOL_GPL(hdcp_dplink_handle_irq);
 
 void hdcp_dplink_connect_state(enum dp_state dp_hdcp_state) {
+	int tee_connect_info = dp_hdcp_state == DP_SHUTDOWN ?
+			       DP_DISCONNECT : dp_hdcp_state;
+	bool shutdown = dp_hdcp_state == DP_SHUTDOWN;
+
 	hdcp_info("Displayport connect info (%d)\n", dp_hdcp_state);
 
 	if (dp_hdcp_state == DP_PHYSICAL_DISCONNECT) {
@@ -173,10 +177,10 @@ void hdcp_dplink_connect_state(enum dp_state dp_hdcp_state) {
 		return;
 	}
 
-	hdcp_tee_connect_info(dp_hdcp_state);
-	if (dp_hdcp_state == DP_DISCONNECT) {
-		hdcp13_dplink_abort();
-		hdcp22_dplink_abort();
+	hdcp_tee_connect_info(tee_connect_info);
+	if (dp_hdcp_state == DP_DISCONNECT || dp_hdcp_state == DP_SHUTDOWN) {
+		hdcp13_dplink_abort(shutdown);
+		hdcp22_dplink_abort(shutdown);
 		hdcp_tee_disable_enc();
 		state = HDCP_AUTH_IDLE;
 		cancel_delayed_work_sync(&hdcp_dev->hdcp_work);

@@ -12,7 +12,7 @@
 #define __EXYNOS_HDCP1_AUTH_H__
 
 int hdcp13_dplink_authenticate(void);
-int hdcp13_dplink_abort(void);
+int hdcp13_dplink_abort(bool shutdown);
 int hdcp13_dplink_handle_irq(void);
 
 #endif

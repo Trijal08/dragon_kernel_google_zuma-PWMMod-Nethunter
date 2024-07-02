@@ -38,6 +38,12 @@
 #define BKSV_LIST_FIFO_SIZE (15)
 
 static bool is_aborted = false;
+static bool is_shutdown = false;
+
+static bool abort_auth(void)
+{
+	return is_aborted || is_shutdown;
+}
 
 static int compare_rprime(void)
 {
@@ -72,7 +78,7 @@ static int compare_rprime(void)
 		ri_retry_cnt++;
 		usleep_range(RI_DELAY * 1000, RI_DELAY * 1000 + 1);
 	}
-	while (ri_retry_cnt < RI_READ_RETRY_CNT && !is_aborted);
+	while (ri_retry_cnt < RI_READ_RETRY_CNT && !abort_auth());
 
 	return -EFAULT;
 }
@@ -107,7 +113,7 @@ static int proceed_repeater(void)
 		usleep_range(RI_AVAILABLE_WAITING * 1000, RI_AVAILABLE_WAITING * 1000 + 1);
 		waiting_time_ms = (s64)((ktime_get() - start_time_ns) / 1000000);
 		if ((waiting_time_ms >= REPEATER_READY_MAX_WAIT_DELAY) ||
-		     is_aborted) {
+		     abort_auth()) {
 			hdcp_err("Not repeater ready in RX part %lld\n",
 				waiting_time_ms);
 			return -EINVAL;
@@ -122,7 +128,7 @@ static int proceed_repeater(void)
 	} while (!(bstatus & DP_BSTATUS_READY));
 	hdcp_info("Ready HDCP RX Repeater!!!\n");
 
-	if (is_aborted)
+	if (abort_auth())
 		return -EINVAL;
 
 	ret = hdcp_dplink_recv(DP_AUX_HDCP_BINFO, (uint8_t*)&binfo, HDCP_BINFO_SIZE);
@@ -168,7 +174,7 @@ static int proceed_repeater(void)
 			hdcp_err("Vprime read failed (%d)\n", ret);
 
 		v_read_retry_cnt++;
-	} while(v_read_retry_cnt < V_READ_RETRY_CNT && !is_aborted);
+	} while(v_read_retry_cnt < V_READ_RETRY_CNT && !abort_auth());
 
 	hdcp_err("2nd Auth fail!!!\n");
 	return -EIO;
@@ -238,8 +244,10 @@ int hdcp13_dplink_authenticate(void)
 	return 0;
 }
 
-int hdcp13_dplink_abort(void) {
+int hdcp13_dplink_abort(bool shutdown) {
 	is_aborted = true;
+	if (shutdown)
+		is_shutdown = true;
 	return 0;
 }
 
