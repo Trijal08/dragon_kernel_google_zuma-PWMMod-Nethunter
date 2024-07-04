@@ -1075,6 +1075,8 @@ int gs_panel_update_brightness_desc(struct gs_panel_brightness_desc *desc,
 	}
 
 	desc->max_brightness = matched_config->brt_capability.hbm.level.max;
+	if (desc->max_brightness == 0)
+		desc->max_brightness = matched_config->brt_capability.normal.level.max;
 	desc->min_brightness = matched_config->brt_capability.normal.level.min;
 	desc->default_brightness = matched_config->default_brightness,
 	desc->brt_capability = &(matched_config->brt_capability);
