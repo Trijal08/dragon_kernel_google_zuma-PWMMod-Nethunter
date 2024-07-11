@@ -207,3 +207,10 @@ KernelVersion: 6.1
 Contact: "Weizhung Ding" <weizhungding@google.com>
 Description:
   Userspace client uses this to read the count of all unclassified errors detected during runtime.
+
+What: /sys/devices/platform/gs-drm-connector/panel/frame_rate
+Date: June 2024
+KernelVersion: 6.1
+Contact: "Jeremy DeHaan" <jdehaan@google.com>
+Description:
+  Userspace client uses this to write the current frame rate. The unit is frames per second.
