@@ -428,7 +428,11 @@ struct gs_panel_funcs {
 	/**
 	 * @set_frame_rate
 	 *
-	 * Set the current frame rate.
+	 * Set the current frame rate. This is called by a userspace client to
+	 * mark when the display software is changing the frame update rate,
+	 * for panels where that may require additional updates from the driver.
+	 * This is an optional function, and unrelated to control of the panel
+	 * refresh rate.
 	 */
 	void (*set_frame_rate)(struct gs_panel *gs_panel, u16 frame_rate);
 
