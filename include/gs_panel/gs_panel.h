@@ -959,6 +959,7 @@ struct gs_panel_timestamps {
 	ktime_t last_rr_switch_ts;
 	ktime_t last_lp_exit_ts;
 	ktime_t idle_exit_dimming_delay_ts;
+	ktime_t timeline_expected_present_ts;
 };
 
 /**
@@ -1226,6 +1227,9 @@ struct gs_panel {
 
 	/** @error_counter: use for tracking panel errors */
 	struct gs_error_counter error_counter;
+
+	/** @frame_interval_us: frame interval of new timeline in us */
+	u32 frame_interval_us;
 };
 
 /* FUNCTIONS */
