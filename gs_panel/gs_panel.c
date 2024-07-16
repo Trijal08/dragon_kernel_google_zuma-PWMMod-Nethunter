@@ -1027,12 +1027,12 @@ static int gs_update_backlight_status(struct backlight_device *bl)
 
 	mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 	if (ctx->base.backlight && !ctx->bl_ctrl_dcs) {
-		dev_info(dev, "Setting brightness via backlight function\n");
+		dev_dbg(dev, "Setting brightness via backlight function\n");
 		backlight_device_set_brightness(ctx->base.backlight, brightness);
 	} else if (gs_panel_has_func(ctx, set_brightness)) {
 		ctx->desc->gs_panel_func->set_brightness(ctx, brightness);
 	} else {
-		dev_info(dev, "Setting brightness via dcs\n");
+		dev_dbg(dev, "Setting brightness via dcs\n");
 		gs_dcs_set_brightness(ctx, brightness);
 	}
 
