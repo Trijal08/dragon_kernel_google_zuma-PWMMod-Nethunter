@@ -66,6 +66,16 @@
 	.vtotal = VDISPLAY + VFP + VSA + VBP
 
 /**
+ * CHECK_DRM_CLOCK_DIVISIBLE_1000() - Checks drm clock value
+ * @CLOCK: drm clock rate
+ *
+ * This macro enables checking drm clock is divisible by 1000
+ * in compile time while always returns 0.
+ */
+#define CHECK_DRM_CLOCK_DIVISIBLE_1000(CLOCK) (0 * sizeof( \
+	struct {static_assert((CLOCK) % 1000 == 0, "drm clock not divisible by 1000."); }))
+
+/**
  * DRM_MODE_TIMING() - fills in timing parameters in struct drm_display_mode
  * @REFRESH_FREQ: Image refresh frequency, in Hz
  * @HDISPLAY: Horizontal active region
@@ -78,18 +88,19 @@
  * @VBP: Vertical back porch
  *
  * This macro calculates the pixel clock for use in the struct drm_display_mode
- * structure, as well as the horizontal and vertical timing parameters (by way
- * of the DRM_H_TIMING() and DRM_V_TIMING() macros).
+ * structure as well as the horizontal and vertical timing parameters (by way
+ * of the DRM_H_TIMING() and DRM_V_TIMING() macros). Further checks the clock value
+ * being divisible by 1000 through macro CHECK_DRM_CLOCK_DIVISIBLE_1000().
  *
- * Context: This macro may not handle fractional refresh rates correctly, and is
- *          vulnerable to rounding errors. Please double-check the resulting
- *          .clock member against a known target value, especially for lower
- *          framerates!
+ * Context: This macro asserts for no fractional refresh rates. Please double-check the
+ *          resulting .clock member against a known target value, especially for lower
+ *          framerates otherwise may cause compilation error!
  */
-#define DRM_MODE_TIMING(REFRESH_FREQ, HDISPLAY, HFP, HSA, HBP, VDISPLAY, VFP, VSA, VBP)       \
-	.clock = ((HDISPLAY + HFP + HSA + HBP) * (VDISPLAY + VFP + VSA + VBP) * REFRESH_FREQ) \
-		 / 1000,                                                                      \
-	DRM_H_TIMING(HDISPLAY, HFP, HSA, HBP),                                                \
+#define DRM_MODE_TIMING(REFRESH_FREQ, HDISPLAY, HFP, HSA, HBP, VDISPLAY, VFP, VSA, VBP) \
+	.clock = (HDISPLAY + HFP + HSA + HBP) * (VDISPLAY + VFP + VSA + VBP) * REFRESH_FREQ / 1000 \
+	+ CHECK_DRM_CLOCK_DIVISIBLE_1000( \
+		(HDISPLAY + HFP + HSA + HBP) * (VDISPLAY + VFP + VSA + VBP) * REFRESH_FREQ), \
+	DRM_H_TIMING(HDISPLAY, HFP, HSA, HBP), \
 	DRM_V_TIMING(VDISPLAY, VFP, VSA, VBP)
 
 /**
