@@ -19,12 +19,17 @@
 
 #include "gs_panel_internal.h"
 
+/**
+ * GS_DSI_MSG_FLAG_MASK - contains all supported dsi cmd msg flags
+ * Used to explicitly control which dsi flags may be attached when sending cmdset
+ */
+#define GS_DSI_MSG_FLAG_MASK (GS_DSI_MSG_QUEUE | GS_DSI_MSG_IGNORE_VBLANK)
+
 void gs_dsi_send_cmdset(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmdset,
 			u32 panel_rev)
 {
 	const struct gs_dsi_cmd *c;
 	const struct gs_dsi_cmd *last_cmd = NULL;
-	u16 dsi_flags = 0;
 
 	if (!cmdset || !cmdset->num_cmd)
 		return;
@@ -46,10 +51,15 @@ void gs_dsi_send_cmdset(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset 
 		return;
 
 	for (c = cmdset->cmds; c <= last_cmd; c++) {
+		u16 dsi_flags = 0;
 		u32 delay_ms = c->delay_ms;
 
+		/* skip if not correct panel rev */
 		if (panel_rev && !(c->panel_rev & panel_rev))
 			continue;
+
+		/* explicitly transfer flags */
+		dsi_flags = c->flags & GS_DSI_MSG_FLAG_MASK;
 
 		gs_dsi_dcs_write_buffer(dsi, c->cmd, c->cmd_len, dsi_flags);
 		if (delay_ms)
@@ -116,7 +126,7 @@ ssize_t gs_dsi_dcs_transfer(struct mipi_dsi_device *dsi, u8 type, const void *da
 	msg.flags = flags;
 	if (dsi->mode_flags & MIPI_DSI_MODE_LPM)
 		msg.flags |= MIPI_DSI_MSG_USE_LPM;
-	is_last = (((flags)&GS_DSI_MSG_QUEUE) == 0) || ((flags & GS_DSI_MSG_FORCE_FLUSH) != 0);
+	is_last = ((flags & GS_DSI_MSG_QUEUE) == 0) || ((flags & GS_DSI_MSG_FORCE_FLUSH) != 0);
 	trace_dsi_tx(msg.type, msg.tx_buf, msg.tx_len, is_last, 0);
 	if (trace_panel_write_generic_enabled()) {
 		if (len)
