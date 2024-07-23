@@ -227,7 +227,7 @@ int lwis_fence_create(struct lwis_device *lwis_dev)
 	struct lwis_fence *new_fence;
 
 	/* Allocate a new instance of lwis_fence struct */
-	new_fence = kmalloc(sizeof(struct lwis_fence), GFP_ATOMIC);
+	new_fence = kmalloc(sizeof(struct lwis_fence), GFP_KERNEL);
 	if (!new_fence) {
 		return -ENOMEM;
 	}
