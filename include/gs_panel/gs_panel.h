@@ -426,6 +426,15 @@ struct gs_panel_funcs {
 	void (*refresh_ctrl)(struct gs_panel *gs_panel);
 
 	/**
+	 * @set_cabc_mode
+	 *
+	 * This callback is used to implement panel specific logic for cabc mode
+	 * enablement. If this is not defined, it means that panel does not
+	 * support cabc.
+	 */
+	void (*set_cabc_mode)(struct gs_panel *gs_panel, enum gs_cabc_mode mode);
+
+	/**
 	 * @set_frame_rate
 	 *
 	 * Set the current frame rate. This is called by a userspace client to

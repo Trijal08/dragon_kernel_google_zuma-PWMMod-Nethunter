@@ -1661,18 +1661,9 @@ int gs_dsi_panel_common_init(struct mipi_dsi_device *dsi, struct gs_panel *ctx)
 	ret = gs_panel_sysfs_create_files(dev, ctx);
 	if (ret)
 		dev_warn(dev, "unable to add panel sysfs files (%d)\n", ret);
-	ret = gs_panel_sysfs_create_bl_files(&ctx->bl->dev);
+	ret = gs_panel_sysfs_create_bl_files(&ctx->bl->dev, ctx);
 	if (ret)
 		dev_warn(dev, "unable to add panel backlight sysfs files (%d)\n", ret);
-
-	/* TODO(tknelms): cabc_mode
-	if (ctx->desc->gs_panel_func && ctx->desc->gs_panel_func->base &&
-	    ctx->desc->gs_panel_func->base->set_cabc_mode) {
-		ret = sysfs_create_file(&ctx->bl->dev.kobj, *dev_attr_cabc_mode.attr);
-		if (ret)
-			dev_err(dev, "unable to create cabc_mode\n");
-	}
-	*/
 
 	/* dsi attach */
 	ret = mipi_dsi_attach(dsi);

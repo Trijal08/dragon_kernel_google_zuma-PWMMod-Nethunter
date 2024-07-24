@@ -1259,6 +1259,65 @@ static ssize_t als_table_show(struct device *dev, struct device_attribute *attr,
 	return len;
 }
 
+static ssize_t cabc_mode_store(struct device *dev, struct device_attribute *attr, const char *buf,
+			       size_t count)
+{
+	struct backlight_device *bl = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bl);
+	ssize_t ret;
+	u32 cabc_mode;
+
+	if (!gs_panel_has_func(ctx, set_cabc_mode)) {
+		dev_err(ctx->dev, "CABC is not supported\n");
+		return -EOPNOTSUPP;
+	}
+
+	if (!gs_is_panel_active(ctx)) {
+		dev_err(ctx->dev, "panel is not enabled\n");
+		return -EAGAIN;
+	}
+
+	ret = kstrtouint(buf, 0, &cabc_mode);
+	if (ret || (cabc_mode > GCABC_MOVIE_MODE)) {
+		dev_err(ctx->dev, "invalid CABC mode value");
+		return ret;
+	}
+
+	mutex_lock(&ctx->mode_lock);
+	ctx->cabc_mode = cabc_mode;
+	ctx->desc->gs_panel_func->set_cabc_mode(ctx, cabc_mode);
+	mutex_unlock(&ctx->mode_lock);
+
+	return count;
+}
+
+static ssize_t cabc_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bl = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bl);
+	const char *mode;
+
+	switch (ctx->cabc_mode) {
+	case GCABC_OFF:
+		mode = "OFF";
+		break;
+	case GCABC_UI_MODE:
+		mode = "UI";
+		break;
+	case GCABC_STILL_MODE:
+		mode = "STILL";
+		break;
+	case GCABC_MOVIE_MODE:
+		mode = "MOVIE";
+		break;
+	default:
+		dev_err(ctx->dev, "unknown CABC mode : %d\n", ctx->cabc_mode);
+		return -EINVAL;
+	}
+
+	return sysfs_emit(buf, "%s\n", mode);
+}
+
 static DEVICE_ATTR_RW(hbm_mode);
 static DEVICE_ATTR_RW(dimming_on);
 static DEVICE_ATTR_RW(local_hbm_mode);
@@ -1267,6 +1326,7 @@ static DEVICE_ATTR_RO(state);
 static DEVICE_ATTR_RW(acl_mode);
 static DEVICE_ATTR_RW(ssc_en);
 static DEVICE_ATTR_RW(als_table);
+static DEVICE_ATTR_RW(cabc_mode);
 
 static struct attribute *bl_device_attrs[] = { &dev_attr_hbm_mode.attr,
 					       &dev_attr_dimming_on.attr,
@@ -1279,7 +1339,11 @@ static struct attribute *bl_device_attrs[] = { &dev_attr_hbm_mode.attr,
 					       NULL };
 ATTRIBUTE_GROUPS(bl_device);
 
-int gs_panel_sysfs_create_bl_files(struct device *bl_dev)
+int gs_panel_sysfs_create_bl_files(struct device *bl_dev, struct gs_panel *ctx)
 {
+	if (gs_panel_has_func(ctx, set_cabc_mode)) {
+		if (sysfs_create_file(&bl_dev->kobj, &dev_attr_cabc_mode.attr))
+			dev_err(bl_dev, "unable to add set_cabc_mode sysfs file\n");
+	}
 	return sysfs_create_groups(&bl_dev->kobj, bl_device_groups);
 }
