@@ -1423,15 +1423,10 @@ u16 gs_panel_get_brightness(struct gs_panel *panel);
 
 /** Command Functions with specific purposes **/
 
-static inline void gs_panel_send_cmdset_flags(struct gs_panel *ctx,
-					      const struct gs_dsi_cmdset *cmdset, u32 flags)
-{
-	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
-	gs_dsi_send_cmdset_flags(dsi, cmdset, ctx->panel_rev, flags);
-}
 static inline void gs_panel_send_cmdset(struct gs_panel *ctx, const struct gs_dsi_cmdset *cmdset)
 {
-	gs_panel_send_cmdset_flags(ctx, cmdset, 0);
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
+	gs_dsi_send_cmdset(dsi, cmdset, ctx->panel_rev);
 }
 static inline int gs_dcs_set_brightness(struct gs_panel *ctx, u16 br)
 {

@@ -32,19 +32,6 @@
 /** Mark the end of mipi commands transaction */
 #define GS_DSI_MSG_FORCE_FLUSH BIT(12)
 
-/** Panel Command Flags **/
-
-/* indicates that all commands in this cmd set should be batched together */
-#define GS_PANEL_CMD_SET_BATCH BIT(0)
-/*
- * indicates that all commands in this cmd set should be queued, a follow up
- * command should take care of triggering transfer of batch
- */
-#define GS_PANEL_CMD_SET_QUEUE BIT(1)
-
-/* packetgo feature to batch msgs can wait for vblank, use this flag to ignore explicitly */
-#define GS_PANEL_CMD_SET_IGNORE_VBLANK BIT(2)
-
 /* Panel Rev bits */
 #define PANEL_REV_PROTO1        BIT(0)
 #define PANEL_REV_PROTO1_1      BIT(1)
@@ -212,16 +199,6 @@ struct gs_binned_lp {
 /** Write Functions **/
 
 /* Command Sets */
-
-/**
- * gs_dsi_send_cmdset_flags() - Sends a series of dsi commands to the panel
- * @dsi: pointer to mipi_dsi_device by which to write to panel
- * @cmdset: Set of commands to send
- * @panel_rev: revision identifier for panel to be matched against commands
- * @flags: Any of the Private DSI msg flags to affect command behavior
- */
-void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmdset,
-			      u32 panel_rev, u32 flags);
 
 /**
  * gs_dsi_send_cmdset() - Sends a series of dsi commands to the panel

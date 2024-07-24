@@ -19,26 +19,15 @@
 
 #include "gs_panel_internal.h"
 
-void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmdset,
-			      u32 panel_rev, u32 flags)
+void gs_dsi_send_cmdset(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmdset,
+			u32 panel_rev)
 {
 	const struct gs_dsi_cmd *c;
 	const struct gs_dsi_cmd *last_cmd = NULL;
-	const u32 async_mask = GS_PANEL_CMD_SET_BATCH | GS_PANEL_CMD_SET_QUEUE;
 	u16 dsi_flags = 0;
 
 	if (!cmdset || !cmdset->num_cmd)
 		return;
-
-	/* shouldn't have both queue and batch set together */
-	WARN_ON((flags & async_mask) == async_mask);
-
-	if (flags & GS_PANEL_CMD_SET_IGNORE_VBLANK)
-		dsi_flags |= GS_DSI_MSG_IGNORE_VBLANK;
-
-	/* if not batched or queued, all commands should be sent out immediately */
-	if (flags & async_mask)
-		dsi_flags |= GS_DSI_MSG_QUEUE;
 
 	c = &cmdset->cmds[cmdset->num_cmd - 1];
 	if (!c->panel_rev) {
@@ -62,20 +51,10 @@ void gs_dsi_send_cmdset_flags(struct mipi_dsi_device *dsi, const struct gs_dsi_c
 		if (panel_rev && !(c->panel_rev & panel_rev))
 			continue;
 
-		if ((c == last_cmd) && !(flags & GS_PANEL_CMD_SET_QUEUE))
-			dsi_flags &= ~GS_DSI_MSG_QUEUE;
-
 		gs_dsi_dcs_write_buffer(dsi, c->cmd, c->cmd_len, dsi_flags);
 		if (delay_ms)
 			usleep_range(delay_ms * 1000, delay_ms * 1000 + 10);
 	}
-}
-EXPORT_SYMBOL_GPL(gs_dsi_send_cmdset_flags);
-
-void gs_dsi_send_cmdset(struct mipi_dsi_device *dsi, const struct gs_dsi_cmdset *cmdset,
-			u32 panel_rev)
-{
-	gs_dsi_send_cmdset_flags(dsi, cmdset, panel_rev, 0);
 }
 EXPORT_SYMBOL_GPL(gs_dsi_send_cmdset);
 
