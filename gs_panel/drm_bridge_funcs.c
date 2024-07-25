@@ -245,6 +245,8 @@ static void gs_panel_bridge_enable(struct drm_bridge *bridge,
 
 /**
  * gs_panel_vsync_start_time_us() - Get vsync start time within TE period
+ * @te_us: TE pulse time.
+ * @te_period_us: TE period.
  */
 static u64 gs_panel_vsync_start_time_us(u32 te_us, u32 te_period_us)
 {
