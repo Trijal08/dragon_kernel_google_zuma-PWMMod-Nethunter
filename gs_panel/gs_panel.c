@@ -1144,8 +1144,6 @@ static int gs_update_backlight_status(struct backlight_device *bl)
 	if (brightness && brightness < min_brightness)
 		brightness = min_brightness;
 
-	dev_info(dev, "req: %d, br: %d\n", bl->props.brightness, brightness);
-
 	if (ctx->base.backlight && !ctx->bl_ctrl_dcs) {
 		mutex_lock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 		dev_dbg(dev, "Setting brightness via backlight function\n");
@@ -1166,6 +1164,8 @@ static int gs_update_backlight_status(struct backlight_device *bl)
 		notify_brightness_changed(ctx);
 		dev_dbg(dev, "bl range is changed to %d\n", bl_range);
 	}
+
+	dev_info(dev, "req: %d, br: %d\n", bl->props.brightness, brightness);
 
 	mutex_unlock(&ctx->mode_lock); /*TODO(b/267170999): MODE*/
 	PANEL_ATRACE_END(__func__);
