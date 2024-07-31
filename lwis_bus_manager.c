@@ -37,8 +37,8 @@ static bool is_valid_connected_device(struct lwis_device *lwis_dev,
 		return false;
 	}
 
-	list_for_each_safe (connected_device_node, connected_device_tmp_node,
-			    &bus_manager->connected_devices) {
+	list_for_each_safe(connected_device_node, connected_device_tmp_node,
+			   &bus_manager->connected_devices) {
 		connected_lwis_device = list_entry(
 			connected_device_node, struct lwis_connected_device, connected_device_node);
 		if (connected_lwis_device->connected_device == lwis_dev) {
@@ -78,7 +78,7 @@ static void process_high_priority_transaction_queue(struct lwis_bus_manager *bus
 		spin_unlock_irqrestore(&bus_manager->transaction_queue_lock, flags);
 		return;
 	}
-	list_for_each_safe (request, request_tmp, &high_priority_process_queue->head) {
+	list_for_each_safe(request, request_tmp, &high_priority_process_queue->head) {
 		processing_node = list_entry(request, struct lwis_process_request, request_node);
 		processing_client = processing_node->requesting_client;
 		processing_dev = processing_client->lwis_dev;
@@ -152,8 +152,8 @@ static void delete_bus_manager_id_in_list(int bus_handle, int32_t bus_type)
 	}
 
 	mutex_lock(&bus_manager_list_lock);
-	list_for_each_safe (bus_manager_list_node, bus_manager_list_tmp_node,
-			    &bus_manager_list.bus_manager_list_head) {
+	list_for_each_safe(bus_manager_list_node, bus_manager_list_tmp_node,
+			   &bus_manager_list.bus_manager_list_head) {
 		bus_manager_identifier_node =
 			list_entry(bus_manager_list_node, struct lwis_bus_manager_identifier,
 				   bus_manager_list_node);
@@ -192,8 +192,8 @@ static struct lwis_bus_manager *find_bus_manager(int bus_handle, int32_t type)
 	struct lwis_bus_manager_identifier *bus_manager_identifier;
 
 	mutex_lock(&bus_manager_list_lock);
-	list_for_each_safe (bus_manager_list_node, bus_manager_list_tmp_node,
-			    &bus_manager_list.bus_manager_list_head) {
+	list_for_each_safe(bus_manager_list_node, bus_manager_list_tmp_node,
+			   &bus_manager_list.bus_manager_list_head) {
 		bus_manager_identifier =
 			list_entry(bus_manager_list_node, struct lwis_bus_manager_identifier,
 				   bus_manager_list_node);
@@ -395,7 +395,7 @@ void lwis_bus_manager_process_worker_queue(struct lwis_client *client)
 	mutex_lock(&bus_manager->process_queue_lock);
 	for (i = 0; i < MAX_DEVICE_PRIORITY_LEVELS; i++) {
 		process_queue = &bus_manager->bus_process_queue[i];
-		list_for_each_safe (client_node, client_tmp_node, &process_queue->head) {
+		list_for_each_safe(client_node, client_tmp_node, &process_queue->head) {
 			process_high_priority_transaction_queue(bus_manager);
 
 			process_request =
@@ -574,8 +574,8 @@ void lwis_bus_manager_disconnect_device(struct lwis_device *lwis_dev)
 		return;
 	}
 
-	list_for_each_safe (connected_device_node, connected_device_tmp_node,
-			    &bus_manager->connected_devices) {
+	list_for_each_safe(connected_device_node, connected_device_tmp_node,
+			   &bus_manager->connected_devices) {
 		connected_lwis_device = list_entry(
 			connected_device_node, struct lwis_connected_device, connected_device_node);
 
@@ -691,8 +691,8 @@ void lwis_bus_manager_list_deinitialize(void)
 	struct lwis_bus_manager_identifier *bus_manager_identifier;
 
 	mutex_lock(&bus_manager_list_lock);
-	list_for_each_safe (bus_manager_list_node, bus_manager_list_tmp_node,
-			    &bus_manager_list.bus_manager_list_head) {
+	list_for_each_safe(bus_manager_list_node, bus_manager_list_tmp_node,
+			   &bus_manager_list.bus_manager_list_head) {
 		bus_manager_identifier =
 			list_entry(bus_manager_list_node, struct lwis_bus_manager_identifier,
 				   bus_manager_list_node);
@@ -770,7 +770,7 @@ static int find_client(int device_priority, struct lwis_bus_manager *bus_manager
 
 	process_queue = &bus_manager->bus_process_queue[device_priority];
 	if (!lwis_process_request_queue_is_empty(process_queue)) {
-		list_for_each_safe (request, request_tmp, &process_queue->head) {
+		list_for_each_safe(request, request_tmp, &process_queue->head) {
 			client_node =
 				list_entry(request, struct lwis_process_request, request_node);
 			if (client_node->requesting_client != client) {
@@ -939,7 +939,7 @@ int lwis_bus_manager_add_high_priority_client(struct lwis_client *client)
 
 	high_priority_process_queue = &bus_manager->high_priority_transaction_queue;
 	if (!lwis_process_request_queue_is_empty(high_priority_process_queue)) {
-		list_for_each_safe (request, request_tmp, &high_priority_process_queue->head) {
+		list_for_each_safe(request, request_tmp, &high_priority_process_queue->head) {
 			search_node =
 				list_entry(request, struct lwis_process_request, request_node);
 			if (search_node->requesting_client == client) {

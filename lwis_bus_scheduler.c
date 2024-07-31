@@ -44,7 +44,7 @@ void lwis_process_request_queue_destroy(struct lwis_process_queue *process_queue
 	if (lwis_process_request_queue_is_empty(process_queue))
 		return;
 
-	list_for_each_safe (request, request_tmp, &process_queue->head) {
+	list_for_each_safe(request, request_tmp, &process_queue->head) {
 		process_request = list_entry(request, struct lwis_process_request, request_node);
 		list_del(&process_request->request_node);
 		process_request->requesting_client = NULL;

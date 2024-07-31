@@ -26,7 +26,7 @@ static struct lwis_buffer_enrollment_list *enrollment_list_find(struct lwis_clie
 								dma_addr_t dma_vaddr)
 {
 	struct lwis_buffer_enrollment_list *list;
-	hash_for_each_possible (client->enrolled_buffers, list, node, dma_vaddr) {
+	hash_for_each_possible(client->enrolled_buffers, list, node, dma_vaddr) {
 		if (list->vaddr == dma_vaddr) {
 			return list;
 		}
@@ -66,11 +66,11 @@ static void dump_total_enrolled_buffer_size(struct lwis_device *lwis_dev)
 	int num_enrolled_buffers = 0;
 
 	spin_lock_irqsave(&lwis_dev->lock, flags);
-	list_for_each_entry (client, &lwis_dev->clients, node) {
+	list_for_each_entry(client, &lwis_dev->clients, node) {
 		if (hash_empty(client->enrolled_buffers)) {
 			continue;
 		}
-		hash_for_each (client->enrolled_buffers, i, enrollment_list, node) {
+		hash_for_each(client->enrolled_buffers, i, enrollment_list, node) {
 			buffer = list_first_entry(&enrollment_list->list,
 						  struct lwis_enrolled_buffer, list_node);
 			total_enrolled_size += buffer->dma_buf->size;
@@ -256,7 +256,7 @@ int lwis_buffer_enroll(struct lwis_client *lwis_client, struct lwis_enrolled_buf
 	}
 
 	// Check if there was duplicated identical enrollment.
-	list_for_each (it_enrollment, &enrollment_list->list) {
+	list_for_each(it_enrollment, &enrollment_list->list) {
 		old_buffer = list_entry(it_enrollment, struct lwis_enrolled_buffer, list_node);
 		if (old_buffer->info.fd == buffer->info.fd &&
 		    old_buffer->info.dma_vaddr == buffer->info.dma_vaddr) {
@@ -331,7 +331,7 @@ struct lwis_enrolled_buffer *lwis_client_enrolled_buffer_find(struct lwis_client
 		return NULL;
 	}
 
-	list_for_each (it_enrollment, &enrollment_list->list) {
+	list_for_each(it_enrollment, &enrollment_list->list) {
 		buffer = list_entry(it_enrollment, struct lwis_enrolled_buffer, list_node);
 		if (buffer->info.fd == fd && buffer->info.dma_vaddr == dma_vaddr) {
 			return buffer;
@@ -398,8 +398,8 @@ int lwis_client_enrolled_buffers_clear(struct lwis_client *lwis_client)
 	}
 
 	/* Iterate over the entire hash table */
-	hash_for_each_safe (lwis_client->enrolled_buffers, i, n, enrollment_list, node) {
-		list_for_each_safe (it_enrollment, it_enrollment_tmp, &enrollment_list->list) {
+	hash_for_each_safe(lwis_client->enrolled_buffers, i, n, enrollment_list, node) {
+		list_for_each_safe(it_enrollment, it_enrollment_tmp, &enrollment_list->list) {
 			buffer = list_entry(it_enrollment, struct lwis_enrolled_buffer, list_node);
 			/* Disenroll the buffer */
 			lwis_buffer_disenroll(lwis_client, buffer);
@@ -421,7 +421,7 @@ struct lwis_allocated_buffer *lwis_client_allocated_buffer_find(struct lwis_clie
 		return NULL;
 	}
 
-	hash_for_each_possible (lwis_client->allocated_buffers, p, node, fd) {
+	hash_for_each_possible(lwis_client->allocated_buffers, p, node, fd) {
 		if (p->fd == fd) {
 			return p;
 		}
@@ -440,7 +440,7 @@ int lwis_client_allocated_buffers_clear(struct lwis_client *lwis_client)
 		return -ENODEV;
 	}
 
-	hash_for_each_safe (lwis_client->allocated_buffers, i, n, buffer, node) {
+	hash_for_each_safe(lwis_client->allocated_buffers, i, n, buffer, node) {
 		if (lwis_client->lwis_dev->type != DEVICE_TYPE_SLC) {
 			lwis_buffer_free(lwis_client, buffer);
 		} else {

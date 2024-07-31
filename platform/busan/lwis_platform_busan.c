@@ -66,7 +66,7 @@ static int lwis_iommu_fault_handler(struct iommu_fault *fault, void *param)
 
 	pr_err("############ LWIS IOMMU PAGE FAULT ############\n");
 	pr_err("\n");
-	of_for_each_phandle (&it, ret, lwis_dev->k_dev->of_node, "iommus", 0, 0) {
+	of_for_each_phandle(&it, ret, lwis_dev->k_dev->of_node, "iommus", 0, 0) {
 		u64 iommus_reg;
 		const char *port_name = NULL;
 		struct device_node *iommus_info = of_node_get(it.node);
@@ -264,7 +264,7 @@ int lwis_platform_update_qos(struct lwis_device *lwis_dev, int value, int32_t cl
 }
 
 static int find_bts_block(struct lwis_device *lwis_dev, struct lwis_device *target_dev,
-		   struct lwis_qos_setting_v3 *qos_setting)
+			  struct lwis_qos_setting_v3 *qos_setting)
 {
 	int i;
 

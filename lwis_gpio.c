@@ -164,7 +164,7 @@ void lwis_gpios_list_free(struct list_head *list)
 		return;
 	}
 
-	list_for_each_safe (it_node, it_tmp, list) {
+	list_for_each_safe(it_node, it_tmp, list) {
 		gpio_node = list_entry(it_node, struct lwis_gpios_info, node);
 		list_del(&gpio_node->node);
 		if (gpio_node->irq_list) {
@@ -183,7 +183,7 @@ struct lwis_gpios_info *lwis_gpios_get_info_by_name(struct list_head *list, cons
 		return ERR_PTR(-EINVAL);
 	}
 
-	list_for_each_safe (it_node, it_tmp, list) {
+	list_for_each_safe(it_node, it_tmp, list) {
 		gpio_node = list_entry(it_node, struct lwis_gpios_info, node);
 		if (!strcmp(gpio_node->name, name)) {
 			return gpio_node;

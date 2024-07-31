@@ -54,7 +54,7 @@ client_event_state_find_locked(struct lwis_client *lwis_client, int64_t event_id
 			       (event_id ^ LWIS_OVERFLOW_IRQ_EVENT_FLAG) :
 			       event_id;
 	/* Iterate through the hash bucket for this event_id */
-	hash_for_each_possible (lwis_client->event_states, p, node, new_event_id) {
+	hash_for_each_possible(lwis_client->event_states, p, node, new_event_id) {
 		/* If it's indeed the right one, return it */
 		if (p->event_control.event_id == new_event_id) {
 			return p;
@@ -171,7 +171,7 @@ static struct lwis_device_event_state *device_event_state_find_locked(struct lwi
 			       (event_id ^ LWIS_OVERFLOW_IRQ_EVENT_FLAG) :
 			       event_id;
 	/* Iterate through the hash bucket for this event_id */
-	hash_for_each_possible (lwis_dev->event_states, p, node, new_event_id) {
+	hash_for_each_possible(lwis_dev->event_states, p, node, new_event_id) {
 		/* If it's indeed the right one, return it */
 		if (p->event_id == new_event_id) {
 			return p;
@@ -498,7 +498,7 @@ static void event_queue_clear(struct lwis_client *lwis_client, struct list_head 
 	unsigned long flags;
 
 	spin_lock_irqsave(&lwis_client->event_lock, flags);
-	list_for_each_safe (it_event, it_tmp, event_queue) {
+	list_for_each_safe(it_event, it_tmp, event_queue) {
 		event = list_entry(it_event, struct lwis_event_entry, node);
 		list_del(&event->node);
 		kfree(event);
@@ -653,7 +653,7 @@ int lwis_client_event_states_clear(struct lwis_client *lwis_client)
 	/* Disable IRQs and lock the event lock */
 	spin_lock_irqsave(&lwis_client->event_lock, flags);
 	/* Iterate over the entire hash table */
-	hash_for_each_safe (lwis_client->event_states, i, n, state, node) {
+	hash_for_each_safe(lwis_client->event_states, i, n, state, node) {
 		/* Delete the node from the client's hash table */
 		hash_del(&state->node);
 		/* Add the node to to-clear events hash table */
@@ -663,7 +663,7 @@ int lwis_client_event_states_clear(struct lwis_client *lwis_client)
 	spin_unlock_irqrestore(&lwis_client->event_lock, flags);
 
 	/* Clear the individual events */
-	list_for_each_safe (it_event, it_tmp, &events_to_clear) {
+	list_for_each_safe(it_event, it_tmp, &events_to_clear) {
 		state = list_entry(it_event, struct lwis_client_event_state, clearance_node);
 		list_del(&state->clearance_node);
 		/* Update the device state with zero flags */
@@ -692,7 +692,7 @@ int lwis_device_event_states_clear_locked(struct lwis_device *lwis_dev)
 	struct hlist_node *n;
 	int i;
 
-	hash_for_each_safe (lwis_dev->event_states, i, n, state, node) {
+	hash_for_each_safe(lwis_dev->event_states, i, n, state, node) {
 		hash_del(&state->node);
 		kfree(state);
 	}
@@ -889,7 +889,7 @@ static int device_event_emit_impl(struct lwis_device *lwis_dev, int64_t event_id
 	}
 
 	/* Notify clients */
-	list_for_each_safe (p, n, &lwis_dev->clients) {
+	list_for_each_safe(p, n, &lwis_dev->clients) {
 		bool emit = false;
 		lwis_client = list_entry(p, struct lwis_client, node);
 
@@ -1073,7 +1073,7 @@ void lwis_device_external_event_emit(struct lwis_device *lwis_dev, int64_t event
 	spin_unlock_irqrestore(&lwis_dev->lock, flags);
 
 	/* Notify clients */
-	list_for_each_safe (p, n, &lwis_dev->clients) {
+	list_for_each_safe(p, n, &lwis_dev->clients) {
 		emit = false;
 		lwis_client = list_entry(p, struct lwis_client, node);
 
@@ -1140,7 +1140,7 @@ void lwis_device_error_event_emit(struct lwis_device *lwis_dev, int64_t event_id
 	timestamp = ktime_to_ns(lwis_get_time());
 
 	/* Notify clients */
-	list_for_each_safe (p, n, &lwis_dev->clients) {
+	list_for_each_safe(p, n, &lwis_dev->clients) {
 		lwis_client = list_entry(p, struct lwis_client, node);
 
 		event = kmalloc(sizeof(struct lwis_event_entry) + payload_size, GFP_ATOMIC);

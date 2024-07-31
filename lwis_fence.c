@@ -789,7 +789,7 @@ void lwis_fences_pending_signal_emit(struct lwis_device *lwis_device,
 	struct lwis_fence_pending_signal *pending_fence;
 	struct list_head *it_fence, *it_fence_tmp;
 
-	list_for_each_safe (it_fence, it_fence_tmp, pending_fences) {
+	list_for_each_safe(it_fence, it_fence_tmp, pending_fences) {
 		pending_fence = list_entry(it_fence, struct lwis_fence_pending_signal, node);
 		ret = lwis_dma_fence_signal_with_status(pending_fence->fence,
 							pending_fence->pending_status);
@@ -810,7 +810,7 @@ void lwis_pending_fences_move_all(struct lwis_device *lwis_device,
 	struct lwis_fence_pending_signal *pending_fence, *temp;
 
 	/* For each fence in transaction's signal list, move to pending_fences for signaling */
-	list_for_each_entry_safe (pending_fence, temp, &transaction->completion_fence_list, node) {
+	list_for_each_entry_safe(pending_fence, temp, &transaction->completion_fence_list, node) {
 		pending_fence->pending_status = error_code;
 		list_move_tail(&pending_fence->node, pending_fences);
 	}

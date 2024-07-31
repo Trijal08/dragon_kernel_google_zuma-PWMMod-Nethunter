@@ -106,7 +106,7 @@ static struct lwis_event_subscriber_list *event_subscriber_list_find(struct lwis
 		container_of(lwis_dev, struct lwis_top_device, base_dev);
 
 	struct lwis_event_subscriber_list *list;
-	hash_for_each_possible (lwis_top_dev->event_subscribers, list, node, trigger_event_id) {
+	hash_for_each_possible(lwis_top_dev->event_subscribers, list, node, trigger_event_id) {
 		if (list->trigger_event_id == trigger_event_id) {
 			return list;
 		}
@@ -150,7 +150,7 @@ static void subscribe_work_func(struct kthread_work *work)
 	unsigned long flags;
 
 	spin_lock_irqsave(&lwis_top_dev->base_dev.lock, flags);
-	list_for_each_safe (it_sub, it_sub_tmp, &lwis_top_dev->emitted_event_list_work) {
+	list_for_each_safe(it_sub, it_sub_tmp, &lwis_top_dev->emitted_event_list_work) {
 		trigger_event = list_entry(it_sub, struct lwis_trigger_event_info, node);
 		list_del(&trigger_event->node);
 		event_subscriber_list = event_subscriber_list_find(&lwis_top_dev->base_dev,
@@ -162,8 +162,8 @@ static void subscribe_work_func(struct kthread_work *work)
 			kfree(trigger_event);
 			continue;
 		}
-		list_for_each_safe (it_event_subscriber, it_event_subscriber_tmp,
-				    &event_subscriber_list->list) {
+		list_for_each_safe(it_event_subscriber, it_event_subscriber_tmp,
+				   &event_subscriber_list->list) {
 			subscribe_info = list_entry(it_event_subscriber,
 						    struct lwis_event_subscribe_info, list_node);
 			/* Notify subscriber an event is happening */
@@ -229,7 +229,7 @@ static int lwis_top_event_subscribe(struct lwis_device *lwis_dev, int64_t trigge
 		return -EINVAL;
 	}
 
-	list_for_each (it_event_subscriber, &event_subscriber_list->list) {
+	list_for_each(it_event_subscriber, &event_subscriber_list->list) {
 		old_subscription = list_entry(it_event_subscriber, struct lwis_event_subscribe_info,
 					      list_node);
 		/* Event already registered for this device */
@@ -292,8 +292,8 @@ static int lwis_top_event_unsubscribe(struct lwis_device *lwis_dev, int64_t trig
 		return -EINVAL;
 	}
 
-	list_for_each_safe (it_event_subscriber, it_event_subscriber_tmp,
-			    &event_subscriber_list->list) {
+	list_for_each_safe(it_event_subscriber, it_event_subscriber_tmp,
+			   &event_subscriber_list->list) {
 		subscribe_info = list_entry(it_event_subscriber, struct lwis_event_subscribe_info,
 					    list_node);
 		if (subscribe_info->subscriber_dev->id == subscriber_device_id) {
@@ -306,9 +306,9 @@ static int lwis_top_event_unsubscribe(struct lwis_device *lwis_dev, int64_t trig
 			list_del(&subscribe_info->list_node);
 			if (list_empty(&subscribe_info->event_subscriber_list->list)) {
 				/* Clear pending events */
-				list_for_each_entry_safe (pending_event, n,
-							  &lwis_top_dev->emitted_event_list_work,
-							  node) {
+				list_for_each_entry_safe(pending_event, n,
+							 &lwis_top_dev->emitted_event_list_work,
+							 node) {
 					if (pending_event->trigger_event_id == trigger_event_id) {
 						list_del(&pending_event->node);
 						kfree(pending_event);
@@ -348,9 +348,9 @@ static void top_event_subscribe_clear(struct lwis_top_device *lwis_top_dev)
 
 	spin_lock_irqsave(&lwis_top_dev->base_dev.lock, flags);
 	/* Clean up subscription table */
-	hash_for_each_safe (lwis_top_dev->event_subscribers, i, tmp, event_subscriber_list, node) {
-		list_for_each_safe (it_event_subscriber, it_event_subscriber_tmp,
-				    &event_subscriber_list->list) {
+	hash_for_each_safe(lwis_top_dev->event_subscribers, i, tmp, event_subscriber_list, node) {
+		list_for_each_safe(it_event_subscriber, it_event_subscriber_tmp,
+				   &event_subscriber_list->list) {
 			subscribe_info = list_entry(it_event_subscriber,
 						    struct lwis_event_subscribe_info, list_node);
 			/* Delete the node from the hash table */
@@ -364,7 +364,7 @@ static void top_event_subscribe_clear(struct lwis_top_device *lwis_top_dev)
 	}
 
 	/* Clean up emitted event list */
-	list_for_each_entry_safe (pending_event, n, &lwis_top_dev->emitted_event_list_work, node) {
+	list_for_each_entry_safe(pending_event, n, &lwis_top_dev->emitted_event_list_work, node) {
 		list_del(&pending_event->node);
 		kfree(pending_event);
 	}

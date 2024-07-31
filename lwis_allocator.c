@@ -38,7 +38,7 @@ static void allocator_block_pool_free_locked(struct lwis_device *lwis_dev,
 		int i;
 
 		curr = block_pool->free;
-		hash_for_each_safe (block_mgr->allocated_blocks, i, n, block, node) {
+		hash_for_each_safe(block_mgr->allocated_blocks, i, n, block, node) {
 			if (block->ptr == curr->ptr) {
 				hash_del(&block->node);
 			}
@@ -377,7 +377,7 @@ void lwis_allocator_free(struct lwis_device *lwis_dev, void *ptr)
 		spin_unlock_irqrestore(&lwis_dev->allocator_lock, flags);
 		return;
 	}
-	hash_for_each_possible (block_mgr->allocated_blocks, blk, node, (unsigned long long)ptr) {
+	hash_for_each_possible(block_mgr->allocated_blocks, blk, node, (unsigned long long)ptr) {
 		if (blk->ptr == ptr) {
 			block = blk;
 			break;
@@ -394,8 +394,8 @@ void lwis_allocator_free(struct lwis_device *lwis_dev, void *ptr)
 		struct lwis_allocator_block *b;
 		struct hlist_node *n;
 
-		hash_for_each_possible_safe (block_mgr->allocated_blocks, b, n, node,
-					     (unsigned long long)ptr) {
+		hash_for_each_possible_safe(block_mgr->allocated_blocks, b, n, node,
+					    (unsigned long long)ptr) {
 			if (b->ptr == block->ptr) {
 				hash_del(&b->node);
 				break;

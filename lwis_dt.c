@@ -564,7 +564,7 @@ static int parse_interrupt_leaf_nodes(struct lwis_interrupt_list *list, int inde
 	}
 
 	i = 0;
-	of_for_each_phandle (&it, ret, leaf_info, "irq-leaf-nodes", 0, 0) {
+	of_for_each_phandle(&it, ret, leaf_info, "irq-leaf-nodes", 0, 0) {
 		struct device_node *irq_group_node = of_node_get(it.node);
 		int leaf_interrupts_count;
 		const char *leaf_interrupt_name;
@@ -679,7 +679,7 @@ static int parse_interrupts(struct lwis_device *lwis_dev)
 	}
 	/* Get event infos */
 	i = 0;
-	of_for_each_phandle (&it, ret, dev_node, "interrupt-event-infos", 0, 0) {
+	of_for_each_phandle(&it, ret, dev_node, "interrupt-event-infos", 0, 0) {
 		const char *irq_reg_space = NULL, *irq_type_str = NULL;
 		bool irq_mask_reg_toggle;
 		u64 irq_src_reg;

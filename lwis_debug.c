@@ -59,14 +59,14 @@ static int list_transactions(struct lwis_client *client, char *buffer, size_t bu
 		goto exit;
 	}
 	count = scnprintf(buffer, buffer_size, "Pending Transactions:\n");
-	hash_for_each (client->transaction_list, i, transaction_list, node) {
+	hash_for_each(client->transaction_list, i, transaction_list, node) {
 		if (list_empty(&transaction_list->list)) {
 			count += scnprintf(buffer + count, buffer_size - count,
 					   "No pending transaction for event %#llx\n",
 					   transaction_list->event_id);
 			continue;
 		}
-		list_for_each (it_tran, &transaction_list->list) {
+		list_for_each(it_tran, &transaction_list->list) {
 			transaction = list_entry(it_tran, struct lwis_transaction, event_list_node);
 			count += scnprintf(
 				buffer + count, buffer_size - count,
@@ -130,7 +130,7 @@ static int list_allocated_buffers(struct lwis_client *client, char *buffer, size
 	}
 
 	count = scnprintf(buffer, buffer_size, "Allocated buffers:\n");
-	hash_for_each (client->allocated_buffers, i, alloc_buffer, node) {
+	hash_for_each(client->allocated_buffers, i, alloc_buffer, node) {
 		count += scnprintf(buffer + count, buffer_size - count, "[%2d] FD: %d Size: %zu\n",
 				   ++idx, alloc_buffer->fd, alloc_buffer->size);
 	}
@@ -152,8 +152,8 @@ static int list_enrolled_buffers(struct lwis_client *client, char *buffer, size_
 	}
 
 	count = scnprintf(buffer, buffer_size, "Enrolled buffers:\n");
-	hash_for_each (client->enrolled_buffers, i, enrollment_list, node) {
-		list_for_each (it_enrollment, &enrollment_list->list) {
+	hash_for_each(client->enrolled_buffers, i, enrollment_list, node) {
+		list_for_each(it_enrollment, &enrollment_list->list) {
 			enrolled_buffer =
 				list_entry(it_enrollment, struct lwis_enrolled_buffer, list_node);
 			if (IS_ERR_VALUE(enrolled_buffer->info.dma_vaddr)) {
@@ -219,7 +219,7 @@ static int generate_event_states_info(struct lwis_device *lwis_dev, char *buffer
 		goto exit;
 	}
 	count += scnprintf(buffer + count, buffer_size - count, "Event Counts:\n");
-	hash_for_each (lwis_dev->event_states, i, state, node) {
+	hash_for_each(lwis_dev->event_states, i, state, node) {
 		if (state->event_counter > 0) {
 			count += scnprintf(buffer + count, buffer_size - count,
 					   "[%2d] ID: %#llx Counter: %#llx\n", ++idx,
@@ -271,7 +271,7 @@ static int generate_transaction_info(struct lwis_device *lwis_dev, char *buffer,
 
 	count = scnprintf(buffer, buffer_size, "=== LWIS TRANSACTION INFO: %s ===\n",
 			  lwis_dev->name);
-	list_for_each_entry (client, &lwis_dev->clients, node) {
+	list_for_each_entry(client, &lwis_dev->clients, node) {
 		count += scnprintf(buffer + count, buffer_size - count, "Client %d:\n", idx);
 		count += list_transactions(client, buffer + count, buffer_size - count);
 		++idx;
@@ -297,7 +297,7 @@ static int generate_buffer_info(struct lwis_device *lwis_dev, char *buffer, size
 	}
 
 	count = scnprintf(buffer, buffer_size, "=== LWIS BUFFER INFO: %s ===\n", lwis_dev->name);
-	list_for_each_entry (client, &lwis_dev->clients, node) {
+	list_for_each_entry(client, &lwis_dev->clients, node) {
 		count += scnprintf(buffer + count, buffer_size - count, "Client %d:\n", idx);
 		count += list_allocated_buffers(client, buffer + count, buffer_size - count);
 		count += list_enrolled_buffers(client, buffer + count, buffer_size - count);
