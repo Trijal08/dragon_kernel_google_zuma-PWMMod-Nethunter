@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* BEGIN-INTERNAL */
 /*
  * Google LWIS IOCTL Commands and Data Structures
@@ -19,29 +20,29 @@
  * As convention, we will only give a version number to the old versions of a
  * structure. For instance, if we have a structure `a`, we could have:
  *
- * 	struct a_v1 {
- * 		int x;
- * 	};
- * 	struct a {
- * 		int x;
- * 		int y;
- * 	};
+ *	struct a_v1 {
+ *		int x;
+ *	};
+ *	struct a {
+ *		int x;
+ *		int y;
+ *	};
  *
  * Here, structure `a` is the latest version and `a_v1` is the old version
  * without the changes required in `a`. If we want a new version of `a`, we'll do:
  *
- * 	struct a_v1 {
- * 		int x;
- * 	};
- * 	struct a_v2 {
- * 		int x;
- * 		int y;
- * 	};
- * 	struct a {
- * 		int x;
- * 		int y;
- * 		int z;
- * 	};
+ *	struct a_v1 {
+ *		int x;
+ *	};
+ *	struct a_v2 {
+ *		int x;
+ *		int y;
+ *	};
+ *	struct a {
+ *		int x;
+ *		int y;
+ *		int z;
+ *	};
  *
  * Having version numbers only for the old versions have two main advantages:
  * (1) We don't need to change the code everywhere when creating a new version
