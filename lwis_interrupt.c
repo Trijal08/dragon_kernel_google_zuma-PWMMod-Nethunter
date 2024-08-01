@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Google LWIS Interrupt Handler
  *
@@ -43,11 +44,10 @@ static irqreturn_t lwis_interrupt_gpios_event_isr(int irq_number, void *data);
 static void combine_mask_value(struct lwis_interrupt *irq, int int_reg_bit, bool is_set)
 {
 	/* Unmask the interrupt */
-	if (is_set) {
+	if (is_set)
 		irq->mask_value |= BIT_ULL(int_reg_bit);
-	} else {
+	else
 		irq->mask_value &= ~BIT_ULL(int_reg_bit);
-	}
 	irq->is_set_reg_bit = is_set;
 }
 
@@ -56,16 +56,14 @@ struct lwis_interrupt_list *lwis_interrupt_list_alloc(struct lwis_device *lwis_d
 	struct lwis_interrupt_list *list;
 
 	/* No need to allocate if count is invalid */
-	if (count <= 0) {
+	if (count <= 0)
 		return ERR_PTR(-EINVAL);
-	}
 
 	list = kmalloc(sizeof(struct lwis_interrupt_list), GFP_KERNEL);
-	if (!list) {
+	if (!list)
 		return ERR_PTR(-ENOMEM);
-	}
 
-	list->irq = kmalloc(count * sizeof(struct lwis_interrupt), GFP_KERNEL);
+	list->irq = kmalloc_array(count, sizeof(struct lwis_interrupt), GFP_KERNEL);
 	if (!list->irq) {
 		kfree(list);
 		return ERR_PTR(-ENOMEM);
@@ -100,9 +98,8 @@ void lwis_interrupt_list_free(struct lwis_interrupt_list *list)
 	int i;
 	unsigned long flags;
 
-	if (!list) {
+	if (!list)
 		return;
-	}
 
 	if (!list->irq) {
 		kfree(list);
@@ -120,9 +117,8 @@ void lwis_interrupt_list_free(struct lwis_interrupt_list *list)
 
 int lwis_interrupt_init(struct lwis_interrupt_list *list, int index, char *name)
 {
-	if (!list || index < 0 || index >= list->count) {
+	if (!list || index < 0 || index >= list->count)
 		return -EINVAL;
-	}
 
 	/* Initialize the spinlock */
 	spin_lock_init(&list->irq[index].lock);
@@ -179,9 +175,8 @@ int lwis_interrupt_get_gpio_irq(struct lwis_interrupt_list *list, int index, cha
 {
 	int ret = 0;
 
-	if (!list || index < 0 || index >= list->count || gpio_irq <= 0) {
+	if (!list || index < 0 || index >= list->count || gpio_irq <= 0)
 		return -EINVAL;
-	}
 
 	/* Initialize the spinlock */
 	spin_lock_init(&list->irq[index].lock);
@@ -224,9 +219,8 @@ interrupt_get_single_event_info_locked(struct lwis_interrupt *irq, int64_t event
 	/* Iterate through the hash bucket for this event_id */
 	hash_for_each_possible(irq->event_infos, p, node, event_id) {
 		/* If it's indeed the right one, return it */
-		if (p->event_id == event_id) {
+		if (p->event_id == event_id)
 			return p;
-		}
 	}
 	return NULL;
 }
@@ -250,11 +244,10 @@ static int interrupt_set_mask(struct lwis_interrupt *irq, int int_reg_bit, bool 
 	}
 
 	/* Unmask the interrupt */
-	if (is_set) {
+	if (is_set)
 		mask_value |= (1ULL << int_reg_bit);
-	} else {
+	else
 		mask_value &= ~(1ULL << int_reg_bit);
-	}
 
 	/* Write the mask register */
 	ret = lwis_device_single_register_write(irq->lwis_dev, irq->irq_reg_bid, irq->irq_mask_reg,
@@ -380,23 +373,24 @@ static void interrupt_emit_events(struct lwis_interrupt *irq, uint64_t source_va
 		}
 
 		/* All enabled and triggered interrupts are handled */
-		if (source_value == reset_value) {
+		if (source_value == reset_value)
 			break;
-		}
 	}
 	spin_unlock_irqrestore(&irq->lock, flags);
 
 #ifdef LWIS_INTERRUPT_DEBUG
 	/* Make sure the number of interrupts triggered matches the number of
-	 * events processed */
+	 * events processed
+	 */
 	if (source_value != reset_value) {
 		lwis_device_single_register_read(irq->lwis_dev, irq->irq_reg_bid, irq->irq_mask_reg,
 						 &mask_value, irq->irq_reg_access_size);
 
 		/* This is to detect if there are extra bits set in the source
-		 * than what we have enabled for (i.e. mask register) */
-		/* Currently these are set to debug logs as some hardware blocks might behave differently
-		 * and trigger these, which would result in unintentional log spew in ISRs. */
+		 * than what we have enabled for (i.e. mask register)
+		 * Currently these are set to debug logs as some hardware blocks might behave differently
+		 * and trigger these, which would result in unintentional log spew in ISRs.
+		 */
 		if ((mask_value | source_value) != mask_value) {
 			dev_dbg(irq->lwis_dev->dev,
 				"%s: Spurious interrupt? mask 0x%llx src 0x%llx reset 0x%llx\n",
@@ -417,14 +411,12 @@ static irqreturn_t lwis_interrupt_regular_isr(int irq_number, void *data)
 	uint64_t source_value = 0, overflow_value = 0;
 
 	ret = interrupt_read_and_clear_src_reg(irq, &source_value, &overflow_value);
-	if (ret) {
+	if (ret)
 		goto error;
-	}
 
 	/* Nothing is triggered, just return */
-	if (source_value == 0) {
+	if (source_value == 0)
 		return IRQ_HANDLED;
-	}
 
 	interrupt_emit_events(irq, source_value, overflow_value);
 error:
@@ -473,18 +465,16 @@ static int lwis_interrupt_handle_aggregation(struct lwis_interrupt *irq, uint64_
 				}
 
 				/* Call the leaf-level handler if there's any event enabled */
-				if (!list_empty(&leaf_irq->enabled_event_infos)) {
+				if (!list_empty(&leaf_irq->enabled_event_infos))
 					lwis_interrupt_regular_isr(leaf_irq->irq, leaf_irq);
-				}
 			}
 			/* Clear this leaf */
 			reset_value |= (1ULL << leaf->int_reg_bit);
 		}
 
 		/* All leaves are handled */
-		if (source_value == reset_value) {
+		if (source_value == reset_value)
 			break;
-		}
 	}
 	return 0;
 }
@@ -496,14 +486,12 @@ static irqreturn_t lwis_interrupt_aggregate_isr(int irq_number, void *data)
 	uint64_t source_value = 0, overflow_value = 0;
 
 	ret = interrupt_read_and_clear_src_reg(irq, &source_value, &overflow_value);
-	if (ret) {
+	if (ret)
 		goto error;
-	}
 
 	/* Nothing is triggered, just return */
-	if (source_value == 0) {
+	if (source_value == 0)
 		return IRQ_HANDLED;
-	}
 
 	/* Handle leaf interrupt */
 	ret = lwis_interrupt_handle_aggregation(irq, source_value);
@@ -582,9 +570,8 @@ int lwis_interrupt_set_event_info(struct lwis_interrupt_list *list, int index, i
 	for (i = 0; i < irq_events_num; i++) {
 		struct lwis_single_event_info *new_event =
 			kzalloc(sizeof(struct lwis_single_event_info), GFP_KERNEL);
-		if (!new_event) {
+		if (!new_event)
 			return -ENOMEM;
-		}
 
 		/* Check to see if this event is considered critical */
 		is_critical = false;
@@ -621,7 +608,8 @@ int lwis_interrupt_set_event_info(struct lwis_interrupt_list *list, int index, i
 	}
 	/* It might make more sense to make has_events atomic_t instead of
 	 * locking a spinlock to write a boolean, but then we might have to deal
-	 * with barriers, etc. */
+	 * with barriers, etc.
+	 */
 	spin_lock_irqsave(&list->irq[index].lock, flags);
 	/* Set flag that we have events */
 	list->irq[index].has_events = true;
@@ -637,9 +625,8 @@ int lwis_interrupt_add_leaf(struct lwis_interrupt_list *list, int index, uint32_
 	unsigned long flags;
 
 	new_leaf_node = kmalloc(sizeof(struct lwis_interrupt_leaf_node), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(new_leaf_node)) {
+	if (IS_ERR_OR_NULL(new_leaf_node))
 		return -ENOMEM;
-	}
 
 	new_leaf_node->int_reg_bit = int_reg_bit;
 	new_leaf_node->count = count;
@@ -667,9 +654,8 @@ int lwis_interrupt_set_gpios_event_info(struct lwis_interrupt_list *list, int in
 	/* Build the hash table of events we can emit */
 
 	new_event = kzalloc(sizeof(struct lwis_single_event_info), GFP_KERNEL);
-	if (!new_event) {
+	if (!new_event)
 		return -ENOMEM;
-	}
 
 	/* Fill the device id info in event id bit[47..32] */
 	irq_event |= (int64_t)(list->lwis_dev->id & 0xFFFF) << 32;
@@ -693,7 +679,8 @@ int lwis_interrupt_set_gpios_event_info(struct lwis_interrupt_list *list, int in
 
 	/* It might make more sense to make has_events atomic_t instead of
 	 * locking a spinlock to write a boolean, but then we might have to deal
-	 * with barriers, etc. */
+	 * with barriers, etc.
+	 */
 	spin_lock_irqsave(&list->irq[index].lock, flags);
 	/* Set flag that we have events */
 	list->irq[index].has_events = true;
@@ -718,18 +705,16 @@ static int interrupt_single_event_enable_locked(struct lwis_interrupt *irq,
 		return -EINVAL;
 	}
 
-	if (enabled) {
+	if (enabled)
 		list_add_tail(&event->node_enabled, &irq->enabled_event_infos);
-	} else {
+	else
 		list_del(&event->node_enabled);
-	}
 
 	/* If mask_toggled is set, reverse the enable/disable logic. */
 	is_set = (!irq->mask_toggled) ? enabled : !enabled;
 	/* GPIO HW interrupt doesn't support to set interrupt mask */
-	if (irq->irq_type != GPIO_HW_INTERRUPT) {
+	if (irq->irq_type != GPIO_HW_INTERRUPT)
 		combine_mask_value(irq, event->int_reg_bit, is_set);
-	}
 
 	return ret;
 }
@@ -759,9 +744,9 @@ int lwis_interrupt_write_combined_mask_value(struct lwis_interrupt_list *list)
 				return ret;
 			}
 			/* Bitwise OR with base_mask if the interrupt is unmasked */
-			if (list->irq[index].is_set_reg_bit) {
+			if (list->irq[index].is_set_reg_bit)
 				list->irq[index].mask_value |= base_mask;
-			}
+
 			/* Write the mask register */
 			ret = lwis_device_single_register_write(
 				list->irq[index].lwis_dev, list->irq[index].irq_reg_bid,
@@ -809,8 +794,6 @@ int lwis_interrupt_event_enable(struct lwis_interrupt_list *list, int64_t event_
 
 void lwis_interrupt_print(struct lwis_interrupt_list *list)
 {
-	int i;
-	for (i = 0; i < list->count; ++i) {
+	for (int i = 0; i < list->count; ++i)
 		pr_info("%s: irq: %s\n", __func__, list->irq[i].name);
-	}
 }

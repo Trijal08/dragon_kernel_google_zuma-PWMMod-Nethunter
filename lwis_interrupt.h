@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Google LWIS Interrupt Handler
  *
@@ -52,7 +53,8 @@ struct lwis_interrupt {
 	/* Flag if the event info has been set */
 	bool has_events;
 	/* BID of the register space where the status/reset/mask for this ISR
-	 * can be accessed */
+	 * can be accessed
+	 */
 	int irq_reg_bid;
 	/* Offset of the source register */
 	int64_t irq_src_reg;
@@ -63,7 +65,8 @@ struct lwis_interrupt {
 	/* Offset of the overflow register */
 	int64_t irq_overflow_reg;
 	/* IRQ register access size, in case it is different from the bus
-	 * bitwidth */
+	 * bitwidth
+	 */
 	int irq_reg_access_size;
 	/* If mask_reg actually disable the interrupts. */
 	bool mask_toggled;
