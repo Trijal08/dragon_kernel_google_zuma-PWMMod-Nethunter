@@ -2430,11 +2430,7 @@ bool goog_check_spi_dma_enabled(struct spi_device *spi_dev)
 	if (spi_dev && spi_dev->controller) {
 		struct device_node *np = spi_dev->controller->dev.of_node;
 
-		/*
-		 * Check the SPI controller(s3c64xx-spi) whether support DMA
-		 * or not.
-		 */
-		ret = of_property_read_bool(np, "dma-mode");
+		ret = of_property_present(np, "dmas");
 	}
 
 	return ret;
