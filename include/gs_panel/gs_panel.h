@@ -621,6 +621,7 @@ struct gs_panel_funcs {
 /**
  * struct gs_panel_brightness_desc
  * TODO: document
+ * @lower_min_brightness: dim brightness for tablets in dock mode
  */
 struct gs_panel_brightness_desc {
 	u32 max_luminance;
@@ -628,6 +629,7 @@ struct gs_panel_brightness_desc {
 	u32 min_luminance;
 	u32 max_brightness;
 	u32 min_brightness;
+	u32 lower_min_brightness;
 	u32 default_brightness;
 	const struct brightness_capability *brt_capability;
 };

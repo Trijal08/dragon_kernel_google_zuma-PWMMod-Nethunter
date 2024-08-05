@@ -1318,6 +1318,14 @@ static ssize_t cabc_mode_show(struct device *dev, struct device_attribute *attr,
 	return sysfs_emit(buf, "%s\n", mode);
 }
 
+static ssize_t dim_brightness_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct backlight_device *bl = to_backlight_device(dev);
+	struct gs_panel *ctx = bl_get_data(bl);
+
+	return sysfs_emit(buf, "%d\n", ctx->desc->brightness_desc->lower_min_brightness);
+}
+
 static DEVICE_ATTR_RW(hbm_mode);
 static DEVICE_ATTR_RW(dimming_on);
 static DEVICE_ATTR_RW(local_hbm_mode);
@@ -1327,6 +1335,7 @@ static DEVICE_ATTR_RW(acl_mode);
 static DEVICE_ATTR_RW(ssc_en);
 static DEVICE_ATTR_RW(als_table);
 static DEVICE_ATTR_RW(cabc_mode);
+static DEVICE_ATTR_RO(dim_brightness);
 
 static struct attribute *bl_device_attrs[] = { &dev_attr_hbm_mode.attr,
 					       &dev_attr_dimming_on.attr,
@@ -1336,6 +1345,7 @@ static struct attribute *bl_device_attrs[] = { &dev_attr_hbm_mode.attr,
 					       &dev_attr_state.attr,
 					       &dev_attr_ssc_en.attr,
 					       &dev_attr_als_table.attr,
+					       &dev_attr_dim_brightness.attr,
 					       NULL };
 ATTRIBUTE_GROUPS(bl_device);
 

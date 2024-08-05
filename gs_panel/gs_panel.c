@@ -1020,6 +1020,8 @@ static int gs_update_backlight_status(struct backlight_device *bl)
 	if (bl->props.power != FB_BLANK_UNBLANK)
 		brightness = 0;
 
+	min_brightness = ctx->desc->brightness_desc->lower_min_brightness ?
+		ctx->desc->brightness_desc->lower_min_brightness : min_brightness;
 	if (brightness && brightness < min_brightness)
 		brightness = min_brightness;
 
