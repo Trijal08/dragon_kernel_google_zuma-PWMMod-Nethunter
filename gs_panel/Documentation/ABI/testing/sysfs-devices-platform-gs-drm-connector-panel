@@ -241,3 +241,10 @@ KernelVersion: 6.1
 Contact: "Ken Lin" <lyenting@google.com>
 Description:
   Userspace client uses this to read lower minimum brightness.
+
+What: /sys/devices/platform/gs-drm-connector/panel/backlight/panel0-backlight/cabc_mode
+Date: August 2024
+KernelVersion: 6.1
+Contact: "Ken Lin" <lyenting@google.com>
+Description:
+  Userspace client can activate Content Adaptive Brightness Control to save backlight power.
