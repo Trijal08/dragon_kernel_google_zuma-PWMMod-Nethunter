@@ -55,6 +55,12 @@ struct lwis_fence {
 	/* Whether this fence should follow the old LWIS fence API. */
 	bool legacy_lwis_fence;
 
+	/* Two file descriptors: (1) `fd` can be used as a `dma_fence` and (2)
+	 *`signal_fd` can be used to signal the fence from user space with a `write`
+	 * syscall. */
+	int fd;
+	int signal_fd;
+
 	/* Top device for printing logs */
 	struct lwis_device *lwis_top_dev;
 
@@ -75,12 +81,7 @@ struct lwis_fence_pending_signal {
 struct lwis_fence_fds {
 	/* Return error. Zero on success, negative errno otherwise. */
 	int error;
-	/*
-	 * New fence file descriptors:
-	 * (1) `fd` can be used as a `dma_fence` and
-	 * (2) `signal_fd` can be used to signal the fence from user space with a
-	 *     `write` syscall.
-	 */
+	/* New fence file descriptors. */
 	int fd;
 	int signal_fd;
 };
