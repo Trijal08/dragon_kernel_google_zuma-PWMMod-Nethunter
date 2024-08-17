@@ -13,7 +13,6 @@
 
 #include <linux/hashtable.h>
 #include <linux/list.h>
-#include <linux/dma-fence.h>
 
 #include "lwis_device.h"
 
@@ -35,18 +34,9 @@ extern bool lwis_fence_debug;
 	})
 
 struct lwis_fence {
-	/* Most of the LWIS fence functionality is covered by the dma_fence structure.
-	 * This effectively "inherits" from dma_fence and means that LWIS fences can be
-	 * used as DMA fences too. */
-	struct dma_fence dma_fence;
-
-	/* Used as a callback when the dma fence is signaled. */
-	struct dma_fence_cb dma_fence_signal_cb;
-
-	spinlock_t lock;
-
 	int fd;
 	int status;
+	spinlock_t lock;
 	/* Top device for printing logs */
 	struct lwis_device *lwis_top_dev;
 	/* Status wait queue for waking up userspace */
