@@ -16,6 +16,7 @@
 #include <linux/dma-fence.h>
 #include <linux/types.h>
 
+#include "lwis_device_top.h"
 #include "lwis_commands.h"
 #include "lwis_fence.h"
 #include "lwis_transaction.h"
@@ -112,9 +113,6 @@ static ssize_t lwis_fence_get_status(struct file *fp, char __user *user_buffer, 
 	}
 
 	status = get_fence_status(lwis_fence);
-	if (lwis_fence->legacy_lwis_fence) {
-		status = status == -ECANCELED ? 1 : status;
-	}
 	read_len = len - copy_to_user((void __user *)user_buffer, (void *)&status + *offset, len);
 
 	return read_len;
@@ -140,13 +138,8 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 		return -EINVAL;
 	}
 
-	if (copy_from_user(&status, (void __user *)user_buffer, len)) {
-		dev_err(lwis_fence->lwis_top_dev->dev,
-			"Failed to copy all the status from user space\n");
-		return -EFAULT;
-	}
-
 	/* Set lwis_fence's status if not signaled */
+	len = len - copy_from_user(&status, (void __user *)user_buffer, len);
 	ret = lwis_fence_signal(lwis_fence, status);
 	if (ret) {
 		return ret;
@@ -247,7 +240,7 @@ static void lwis_fence_signal_cb(struct dma_fence *dma_fence, struct dma_fence_c
 	}
 }
 
-static int fence_create(struct lwis_device *lwis_dev, bool legacy_fence)
+int lwis_fence_create(struct lwis_device *lwis_dev)
 {
 	int fd_or_err;
 	int ret;
@@ -281,23 +274,12 @@ static int fence_create(struct lwis_device *lwis_dev, bool legacy_fence)
 
 	new_fence->fd = fd_or_err;
 	new_fence->lwis_top_dev = lwis_dev->top_dev;
-	new_fence->legacy_lwis_fence = legacy_fence;
 	new_fence->status = LWIS_FENCE_STATUS_NOT_SIGNALED;
 	spin_lock_init(&new_fence->lock);
 	init_waitqueue_head(&new_fence->status_wait_queue);
 	lwis_debug_dev_info(lwis_dev->dev, "lwis_fence created new LWIS fence fd: %d",
 			    new_fence->fd);
 	return fd_or_err;
-}
-
-int lwis_fence_create(struct lwis_device *lwis_dev)
-{
-	return fence_create(lwis_dev, /*legacy_fence=*/false);
-}
-
-int lwis_fence_legacy_create(struct lwis_device *lwis_dev)
-{
-	return fence_create(lwis_dev, /*legacy_fence=*/true);
 }
 
 struct file *lwis_fence_get(struct lwis_client *client, int fd)
@@ -649,7 +631,7 @@ int lwis_initialize_transaction_fences(struct lwis_client *client,
 				continue;
 			}
 
-			fd_or_err = fence_create(lwis_dev, transaction->legacy_lwis_fence);
+			fd_or_err = lwis_fence_create(lwis_dev);
 			if (fd_or_err < 0) {
 				return fd_or_err;
 			}
@@ -659,7 +641,7 @@ int lwis_initialize_transaction_fences(struct lwis_client *client,
 
 	/* Initialize completion fence if one is requested */
 	if (info->create_completion_fence_fd == LWIS_CREATE_COMPLETION_FENCE) {
-		fd_or_err = fence_create(client->lwis_dev, transaction->legacy_lwis_fence);
+		fd_or_err = lwis_fence_create(client->lwis_dev);
 		if (fd_or_err < 0) {
 			return fd_or_err;
 		}
