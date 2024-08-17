@@ -1525,7 +1525,6 @@ static noinline_for_stack int construct_transaction_from_cmd(struct lwis_client 
 	k_transaction->starting_read_buf = NULL;
 	INIT_LIST_HEAD(&k_transaction->event_list_node);
 	INIT_LIST_HEAD(&k_transaction->process_queue_node);
-	INIT_LIST_HEAD(&k_transaction->trigger_fences);
 	INIT_LIST_HEAD(&k_transaction->completion_fence_list);
 
 	*transaction = k_transaction;

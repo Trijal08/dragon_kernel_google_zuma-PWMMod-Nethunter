@@ -8,11 +8,10 @@
  * published by the Free Software Foundation.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME "-transact: " fmt
+
 #include "lwis_transaction.h"
 
-#include <linux/dma-fence.h>
-#include <linux/err.h>
-#include <linux/list.h>
 #include <linux/err.h>
 #include <linux/delay.h>
 #include <linux/dma-buf.h>
@@ -117,7 +116,6 @@ void lwis_transaction_free(struct lwis_device *lwis_dev, struct lwis_transaction
 	int i;
 	struct lwis_fence_pending_signal *pending_fence;
 	struct list_head *it_fence, *it_fence_tmp;
-	struct lwis_pending_transaction_id *pend_id, *pend_id_tmp;
 	struct lwis_transaction *transaction = *lwis_tx;
 
 	if (transaction->is_weak_transaction) {
@@ -136,12 +134,9 @@ void lwis_transaction_free(struct lwis_device *lwis_dev, struct lwis_transaction
 		}
 	}
 
-	list_for_each_entry_safe (pend_id, pend_id_tmp, &transaction->trigger_fences, node) {
-		list_del(&pend_id->node);
-		if (!pend_id->triggered)
-			dma_fence_remove_callback(&pend_id->fence->dma_fence, &pend_id->fence_cb);
-		lwis_fence_put(pend_id->fence);
-		kfree(pend_id);
+	for (i = 0; i < transaction->num_trigger_fences; i++) {
+		lwis_fence_put(transaction->trigger_fence[i]);
+		transaction->trigger_fence[i] = NULL;
 	}
 
 	for (i = 0; i < transaction->info.num_io_entries; ++i) {
@@ -1109,7 +1104,6 @@ new_repeating_transaction_iteration(struct lwis_client *client,
 
 	INIT_LIST_HEAD(&new_instance->event_list_node);
 	INIT_LIST_HEAD(&new_instance->process_queue_node);
-	INIT_LIST_HEAD(&new_instance->trigger_fences);
 	INIT_LIST_HEAD(&new_instance->completion_fence_list);
 
 	return new_instance;
@@ -1248,41 +1242,56 @@ int lwis_transaction_event_trigger(struct lwis_client *client, int64_t event_id,
 }
 
 void lwis_transaction_fence_trigger(struct lwis_client *client, struct lwis_fence *fence,
-				    int64_t transaction_id)
+				    struct list_head *transaction_list)
 {
 	unsigned long flags = 0;
+	struct lwis_pending_transaction_id *transaction_id;
 	struct lwis_transaction *transaction;
+	struct list_head *it_tran, *it_tran_tmp;
+	struct list_head pending_events;
+	struct list_head pending_fences;
 	int ret;
-	LIST_HEAD(pending_events);
-	LIST_HEAD(pending_fences);
+
+	if (list_empty(transaction_list)) {
+		return;
+	}
+
+	INIT_LIST_HEAD(&pending_events);
+	INIT_LIST_HEAD(&pending_fences);
 
 	spin_lock_irqsave(&client->transaction_lock, flags);
-	transaction = pending_transaction_peek(client, transaction_id);
-	if (transaction == NULL) {
-		/* It means the transaction is already executed or is canceled. */
-		lwis_debug_dev_info(
-			client->lwis_dev->dev,
-			"lwis_fence fd-%d did NOT triggered transaction id %llu, seems already triggered",
-			fence->fd, transaction_id);
-	} else {
-		int fence_status = lwis_fence_get_status_locked(fence);
-		if (lwis_fence_triggered_condition_ready(transaction, fence_status)) {
-			hash_del(&transaction->pending_map_node);
-			if (fence_status == LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED) {
-				ret = add_transaction_to_queue_locked(client, transaction);
-				if (ret) {
-					spin_unlock_irqrestore(&client->transaction_lock, flags);
-					return;
+	list_for_each_safe (it_tran, it_tran_tmp, transaction_list) {
+		transaction_id = list_entry(it_tran, struct lwis_pending_transaction_id, list_node);
+		list_del(&transaction_id->list_node);
+		transaction = pending_transaction_peek(client, transaction_id->id);
+		if (transaction == NULL) {
+			/* It means the transaction is already executed or is canceled. */
+			lwis_debug_dev_info(
+				client->lwis_dev->dev,
+				"lwis_fence fd-%d did NOT triggered transaction id %llu, seems already triggered",
+				fence->fd, transaction_id->id);
+		} else {
+			int fence_status = lwis_fence_get_status_locked(fence);
+			if (lwis_fence_triggered_condition_ready(transaction, fence_status)) {
+				hash_del(&transaction->pending_map_node);
+				if (fence_status == LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED) {
+					ret = add_transaction_to_queue_locked(client, transaction);
+					if (ret) {
+						spin_unlock_irqrestore(&client->transaction_lock,
+								       flags);
+						return;
+					}
+					lwis_debug_dev_info(
+						client->lwis_dev->dev,
+						"lwis_fence fd-%d triggered transaction id %llu",
+						fence->fd, transaction->info.id);
+				} else {
+					cancel_transaction(client, &transaction, -ECANCELED,
+							   &pending_events, &pending_fences, false);
 				}
-				lwis_debug_dev_info(
-					client->lwis_dev->dev,
-					"lwis_fence fd-%d triggered transaction id %llu", fence->fd,
-					transaction->info.id);
-			} else {
-				cancel_transaction(client, &transaction, -ECANCELED,
-						   &pending_events, &pending_fences, false);
 			}
 		}
+		kfree(transaction_id);
 	}
 	spin_unlock_irqrestore(&client->transaction_lock, flags);
 
