@@ -19,8 +19,6 @@
 #include <linux/mm.h>
 #include <linux/preempt.h>
 #include <linux/slab.h>
-#include <linux/dma-fence.h>
-#include <linux/err.h>
 
 #include "lwis_allocator.h"
 #include "lwis_commands.h"
