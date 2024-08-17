@@ -1250,7 +1250,7 @@ int lwis_transaction_event_trigger(struct lwis_client *client, int64_t event_id,
 	return 0;
 }
 
-void lwis_transaction_fence_trigger(struct lwis_client *client, struct dma_fence *fence,
+void lwis_transaction_fence_trigger(struct lwis_client *client, struct lwis_fence *fence,
 				    int64_t transaction_id)
 {
 	unsigned long flags = 0;
@@ -1265,10 +1265,10 @@ void lwis_transaction_fence_trigger(struct lwis_client *client, struct dma_fence
 		/* It means the transaction is already executed or is canceled. */
 		lwis_debug_dev_info(
 			client->lwis_dev->dev,
-			"dma_fence %p did NOT triggered transaction id %llu, seems already triggered",
-			fence, transaction_id);
+			"lwis_fence fd-%d did NOT triggered transaction id %llu, seems already triggered",
+			fence->fd, transaction_id);
 	} else {
-		int fence_status = dma_fence_get_status_locked(fence);
+		int fence_status = lwis_fence_get_status_locked(fence);
 		if (lwis_fence_triggered_condition_ready(transaction, fence_status)) {
 			hash_del(&transaction->pending_map_node);
 			if (fence_status == LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED) {
@@ -1277,9 +1277,10 @@ void lwis_transaction_fence_trigger(struct lwis_client *client, struct dma_fence
 					spin_unlock_irqrestore(&client->transaction_lock, flags);
 					return;
 				}
-				lwis_debug_dev_info(client->lwis_dev->dev,
-						    "dma_fence %p triggered transaction id %llu",
-						    fence, transaction->info.id);
+				lwis_debug_dev_info(
+					client->lwis_dev->dev,
+					"lwis_fence fd-%d triggered transaction id %llu", fence->fd,
+					transaction->info.id);
 			} else {
 				cancel_transaction(client, &transaction, -ECANCELED,
 						   &pending_events, &pending_fences, false);

@@ -34,15 +34,6 @@ extern bool lwis_fence_debug;
 		}                                                                                  \
 	})
 
-/*
- * LWIS fences are an extension of DMA fences. These fences are created from user space
- * request. Unlike DMA fences, these can be signaled from user space writing to the `signal_fd`
- * file descriptor. LWIS fences should only be used at creation time. The management of fences
- * should be done using the generic DMA fences interface. Once created, user space will submit
- * trigger expressions with the DMA fence file descriptor and we won't even know the fence is a
- * LWIS fence. In the LWIS driver, all the fence management should be done using the DMA fence
- * API, and only use this one when creating a fence with signaling support from user space.
- */
 struct lwis_fence {
 	/* Most of the LWIS fence functionality is covered by the dma_fence structure.
 	 * This effectively "inherits" from dma_fence and means that LWIS fences can be
@@ -89,6 +80,15 @@ int lwis_dma_fence_signal_with_status(struct dma_fence *fence, int status);
 
 /* Gets the DMA fence of a LWIS fence with a fd. */
 struct dma_fence *lwis_dma_fence_get(int fd);
+
+/*
+ * Returns the current DMA-fence-formatted status of the fence. If not signaled
+ * yet, it return LWIS_FENCE_STATUS_NOT_SIGNALED(0), if successfully signaled it
+ * returns LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED(1), otherwise it returns the
+ * signal error status.
+ */
+int lwis_fence_get_status(struct lwis_fence *fence);
+int lwis_fence_get_status_locked(struct lwis_fence *fence);
 
 /* Creates all fences that do not currently exist */
 int lwis_initialize_transaction_fences(struct lwis_client *client,
