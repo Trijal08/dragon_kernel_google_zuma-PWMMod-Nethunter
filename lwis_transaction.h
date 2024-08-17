@@ -52,7 +52,7 @@ struct lwis_transaction {
 	/* Parameters for completion fences */
 	struct list_head completion_fence_list;
 	/* Precondition fence file pointer */
-	struct dma_fence *precondition_fence;
+	struct lwis_fence *precondition_fence;
 	/* Whether fences should use LWIS Fence legacy API. */
 	bool legacy_lwis_fence;
 	/*
@@ -99,7 +99,7 @@ struct lwis_pending_transaction_id {
 	/* Structure used by `dma_fence` to queue the callback. */
 	struct dma_fence_cb fence_cb;
 	/* Fence to trigger the transaction. */
-	struct dma_fence *fence;
+	struct lwis_fence *fence;
 	struct lwis_client *owner;
 	/* List node for `transaction->trigger_fences`. Used to know what callbacks need
 	 * freeing when the transactions is being freed. */
