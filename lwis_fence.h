@@ -83,12 +83,9 @@ int lwis_fence_create(struct lwis_device *lwis_dev);
  */
 struct file *lwis_fence_get(struct lwis_client *client, int fd);
 
-/*
- * Returns the current DMA-fence-formatted status of the fence. If not signaled
- * yet, it return LWIS_FENCE_STATUS_NOT_SIGNALED(0), if successfully signaled it
- * returns LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED(1), otherwise it returns the
- * signal error status.
- */
+/* Returns the current status of the fence. If not signaled yet, it return
+ * LWIS_FENCE_STATUS_NOT_SIGNALED(-1), otherwise it returns the signal error
+ * status (zero for successful signal, negative errno otherwise.) */
 int lwis_fence_get_status(struct lwis_fence *fence);
 int lwis_fence_get_status_locked(struct lwis_fence *fence);
 
