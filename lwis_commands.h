@@ -394,10 +394,20 @@ struct lwis_transaction_trigger_event {
 	int32_t precondition_fence_fd;
 };
 
-struct lwis_transaction_trigger_node {
+struct lwis_transaction_trigger_node_v5 {
 	int32_t type; //lwis_transaction_trigger_node_types
 	union {
 		int32_t fence_fd;
+		struct lwis_transaction_trigger_event event;
+	};
+};
+struct lwis_transaction_trigger_node {
+	int32_t type; //lwis_transaction_trigger_node_types
+	union {
+		struct {
+			int32_t fence_fd;
+			int32_t fence_signal_fd;
+		};
 		struct lwis_transaction_trigger_event event;
 	};
 };
@@ -411,6 +421,11 @@ enum lwis_transaction_trigger_node_operator {
 
 #define LWIS_NESTED_TRANSACTION_MAX 8
 #define LWIS_TRIGGER_NODES_MAX_NUM 16
+struct lwis_transaction_trigger_condition_v5 {
+	size_t num_nodes;
+	int32_t operator_type; //lwis_transaction_trigger_node_operator
+	struct lwis_transaction_trigger_node_v5 trigger_nodes[LWIS_TRIGGER_NODES_MAX_NUM];
+};
 struct lwis_transaction_trigger_condition {
 	size_t num_nodes;
 	int32_t operator_type; //lwis_transaction_trigger_node_operator
@@ -435,7 +450,7 @@ struct lwis_transaction_info_v2 {
 	// Input
 	int64_t trigger_event_id;
 	int64_t trigger_event_counter;
-	struct lwis_transaction_trigger_condition trigger_condition;
+	struct lwis_transaction_trigger_condition_v5 trigger_condition;
 	int32_t completion_fence_fd;
 	size_t num_io_entries;
 	struct lwis_io_entry *io_entries;
@@ -457,7 +472,7 @@ struct lwis_transaction_info_v3 {
 	// Input
 	int64_t trigger_event_id;
 	int64_t trigger_event_counter;
-	struct lwis_transaction_trigger_condition trigger_condition;
+	struct lwis_transaction_trigger_condition_v5 trigger_condition;
 	int32_t completion_fence_fd;
 	size_t num_io_entries;
 	struct lwis_io_entry *io_entries;
@@ -481,7 +496,7 @@ struct lwis_transaction_info_v4 {
 	// Input
 	int64_t trigger_event_id;
 	int64_t trigger_event_counter;
-	struct lwis_transaction_trigger_condition trigger_condition;
+	struct lwis_transaction_trigger_condition_v5 trigger_condition;
 	int32_t completion_fence_fd;
 	size_t num_io_entries;
 	struct lwis_io_entry *io_entries;
@@ -503,6 +518,36 @@ struct lwis_transaction_info_v4 {
 	int64_t submission_timestamp_ns;
 };
 
+struct lwis_transaction_info_v5 {
+	// Input
+	int64_t trigger_event_id;
+	int64_t trigger_event_counter;
+	struct lwis_transaction_trigger_condition_v5 trigger_condition;
+	// Used to indicate a completion fence should be created for this transaction.
+	// The created completion fence file descriptor is returned in this variable.
+	int32_t create_completion_fence_fd;
+	size_t num_io_entries;
+	struct lwis_io_entry *io_entries;
+	bool run_in_event_context;
+	// Use reserved to keep the original interface
+	bool reserved;
+	int64_t emit_success_event_id;
+	int64_t emit_error_event_id;
+	bool is_level_triggered;
+	bool is_high_priority_transaction;
+	char transaction_name[LWIS_MAX_NAME_STRING_LEN];
+	size_t num_nested_transactions;
+	int64_t nested_transaction_ids[LWIS_NESTED_TRANSACTION_MAX];
+	size_t num_completion_fences;
+	int32_t completion_fence_fds[LWIS_COMPLETION_FENCE_MAX];
+	// Output
+	int64_t id;
+	// Only will be set if trigger_event_id is specified.
+	// Otherwise, the value is -1.
+	int64_t current_trigger_event_counter;
+	int64_t submission_timestamp_ns;
+};
+
 struct lwis_transaction_info {
 	// Input
 	int64_t trigger_event_id;
@@ -511,6 +556,7 @@ struct lwis_transaction_info {
 	// Used to indicate a completion fence should be created for this transaction.
 	// The created completion fence file descriptor is returned in this variable.
 	int32_t create_completion_fence_fd;
+	int32_t create_completion_fence_signal_fd;
 	size_t num_io_entries;
 	struct lwis_io_entry *io_entries;
 	bool run_in_event_context;
@@ -823,6 +869,11 @@ struct lwis_cmd_transaction_info_v4 {
 	struct lwis_transaction_info_v4 info;
 };
 
+struct lwis_cmd_transaction_info_v5 {
+	struct lwis_cmd_pkt header;
+	struct lwis_transaction_info_v5 info;
+};
+
 struct lwis_cmd_transaction_info {
 	struct lwis_cmd_pkt header;
 	struct lwis_transaction_info info;
@@ -868,9 +919,15 @@ struct lwis_cmd_dpm_clk_get {
 	struct lwis_qos_setting setting;
 };
 
+struct lwis_cmd_fence_create_v0 {
+	struct lwis_cmd_pkt header;
+	int32_t fd;
+};
+
 struct lwis_cmd_fence_create {
 	struct lwis_cmd_pkt header;
 	int32_t fd;
+	int32_t signal_fd;
 };
 
 /*
