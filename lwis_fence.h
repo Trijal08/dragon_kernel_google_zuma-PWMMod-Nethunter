@@ -49,7 +49,6 @@ struct lwis_fence {
 	bool legacy_lwis_fence;
 
 	int fd;
-	int status;
 	/* Top device for printing logs */
 	struct lwis_device *lwis_top_dev;
 	/* Status wait queue for waking up userspace */
@@ -83,6 +82,12 @@ int lwis_fence_create(struct lwis_device *lwis_dev);
  *  lwis_fence_get: Get the file pointer for the lwis_fence associated with the fd.
  */
 struct file *lwis_fence_get(struct lwis_client *client, int fd);
+
+/* Returns the current status of the fence. If not signaled yet, it return
+ * LWIS_FENCE_STATUS_NOT_SIGNALED(-1), otherwise it returns the signal error
+ * status (zero for successful signal, negative errno otherwise.) */
+int lwis_fence_get_status(struct lwis_fence *fence);
+int lwis_fence_get_status_locked(struct lwis_fence *fence);
 
 /* Creates all fences that do not currently exist */
 int lwis_initialize_transaction_fences(struct lwis_client *client,
