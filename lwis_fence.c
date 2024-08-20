@@ -101,6 +101,20 @@ static int lwis_to_dma_fence_status(int lwis_fence_status)
 	}
 }
 
+static int dma_fence_status_to_errno(int dma_fence_status)
+{
+	switch (dma_fence_status) {
+	case LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED:
+		return 0;
+	case LWIS_FENCE_STATUS_NOT_SIGNALED:
+		WARN(true,
+		     "There is a bug somewhere. There is not value for 'NOT_SIGNALED', we shouldn't be here.");
+		return -EBADRQC;
+	default:
+		return dma_fence_status;
+	}
+}
+
 /*
  *  lwis_fence_write_status: Signal fence with the error code from user
  */
@@ -131,7 +145,16 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 	if (lwis_fence->legacy_lwis_fence) {
 		status = lwis_to_dma_fence_status(status);
 	}
-	ret = lwis_dma_fence_signal_with_status(&lwis_fence->dma_fence, status);
+
+	/* We cannot allow "not signaled" status. */
+	if (status == LWIS_FENCE_STATUS_NOT_SIGNALED) {
+		dev_err(lwis_fence->lwis_top_dev->dev,
+			"Cannot signaled lwis_fence with 'not signaled' status");
+		return -EINVAL;
+	}
+
+	ret = lwis_dma_fence_signal_with_status(&lwis_fence->dma_fence,
+						dma_fence_status_to_errno(status));
 	if (ret) {
 		return ret;
 	}
@@ -154,13 +177,13 @@ static unsigned int lwis_fence_poll_legacy(struct file *fp, poll_table *wait)
 	return dma_fence_is_signaled(&lwis_fence->dma_fence) ? POLLIN : 0;
 }
 
-int lwis_dma_fence_signal_with_status(struct dma_fence *fence, int status)
+int lwis_dma_fence_signal_with_status(struct dma_fence *fence, int errno)
 {
 	struct lwis_fence *lwis_fence = container_of(fence, struct lwis_fence, dma_fence);
 	int ret;
 
-	if (status != 0)
-		dma_fence_set_error(fence, status);
+	if (errno != 0)
+		dma_fence_set_error(fence, errno);
 	ret = dma_fence_signal(fence);
 
 	if (unlikely(ret == 0 && lwis_fence->legacy_lwis_fence))
