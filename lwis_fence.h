@@ -48,6 +48,15 @@ struct lwis_fence {
 	/* Whether this fence should follow the old LWIS fence API. */
 	bool legacy_lwis_fence;
 
+	/*
+	 * Pointer to hold the file whenever someone gets the LWIS fence from a file
+	 * descriptor. This will help in decrementing the reference count when putting
+	 * the fence.
+	 *
+	 * TODO: b/342031592 - This is not necessary when using the DMA fence
+	 * reference counter. It will go away in subsequent patches.
+	 */
+	struct file *fp;
 	int fd;
 	/* Top device for printing logs */
 	struct lwis_device *lwis_top_dev;
@@ -64,7 +73,6 @@ struct lwis_fence_trigger_transaction_list {
 };
 
 struct lwis_fence_pending_signal {
-	struct file *fp;
 	struct lwis_fence *fence;
 	int pending_status;
 	struct list_head node;
@@ -79,9 +87,12 @@ int lwis_fence_legacy_create(struct lwis_device *lwis_dev);
 int lwis_fence_create(struct lwis_device *lwis_dev);
 
 /*
- *  lwis_fence_get: Get the file pointer for the lwis_fence associated with the fd.
+ * lwis_fence_get: Get the file pointer for the lwis_fence associated with the
+ * fd. Return ERR_PTR in case of error.
  */
-struct file *lwis_fence_get(struct lwis_client *client, int fd);
+struct lwis_fence *lwis_fence_get(int fd);
+/* lwis_fence_put: put the reference taken in `lwis_fence_get`. */
+void lwis_fence_put(struct lwis_fence *fence);
 
 /*
  * Returns the current DMA-fence-formatted status of the fence. If not signaled
