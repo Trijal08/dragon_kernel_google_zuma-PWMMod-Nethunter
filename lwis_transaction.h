@@ -20,7 +20,6 @@
 /* LWIS forward declarations */
 struct lwis_device;
 struct lwis_client;
-struct lwis_fence;
 
 /*
  * Transaction entry. Each entry belongs to two queues:
@@ -118,7 +117,7 @@ int lwis_transaction_client_cleanup(struct lwis_client *client);
 int lwis_transaction_event_trigger(struct lwis_client *client, int64_t event_id,
 				   int64_t event_counter, int64_t event_timestamp,
 				   struct list_head *pending_events);
-void lwis_transaction_fence_trigger(struct lwis_client *client, struct lwis_fence *fence,
+void lwis_transaction_fence_trigger(struct lwis_client *client, struct dma_fence *fence,
 				    int64_t transaction_id);
 
 int lwis_transaction_cancel(struct lwis_client *client, int64_t id);
