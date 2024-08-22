@@ -60,7 +60,7 @@ struct lwis_fence {
 };
 
 struct lwis_fence_pending_signal {
-	struct dma_fence *fence;
+	struct lwis_fence *fence;
 	int pending_status;
 	struct list_head node;
 };
@@ -74,12 +74,12 @@ struct lwis_fence *lwis_fence_legacy_create(struct lwis_device *lwis_dev);
 struct lwis_fence *lwis_fence_create(struct lwis_device *lwis_dev);
 
 /*
- * Helper function to signal a `dma_fence` with a specific status value.
+ * lwis_fence_get: Get the file pointer for the lwis_fence associated with the
+ * fd. Return ERR_PTR in case of error.
  */
-int lwis_dma_fence_signal_with_status(struct dma_fence *fence, int status);
-
-/* Gets the DMA fence of a LWIS fence with a fd. */
-struct dma_fence *lwis_dma_fence_get(int fd);
+struct lwis_fence *lwis_fence_get(int fd);
+/* lwis_fence_put: put the reference taken in `lwis_fence_get`. */
+void lwis_fence_put(struct lwis_fence *fence);
 
 /*
  * Returns the current DMA-fence-formatted status of the fence. If not signaled
@@ -89,6 +89,11 @@ struct dma_fence *lwis_dma_fence_get(int fd);
  */
 int lwis_fence_get_status(struct lwis_fence *fence);
 int lwis_fence_get_status_locked(struct lwis_fence *fence);
+
+/*
+ *  lwis_fence_signal: Signals the lwis_fence with the provided error code.
+ */
+int lwis_fence_signal(struct lwis_fence *lwis_fence, int status);
 
 /* Creates all fences that do not currently exist */
 int lwis_initialize_transaction_fences(struct lwis_client *client,
@@ -107,6 +112,11 @@ bool lwis_fence_triggered_condition_ready(struct lwis_transaction *transaction, 
  *  fence and event lists.
  */
 int lwis_parse_trigger_condition(struct lwis_client *client, struct lwis_transaction *transaction);
+
+/*
+ *  lwis_fence_signal: Signals the lwis_fence with the provided error code.
+ */
+int lwis_fence_signal(struct lwis_fence *lwis_fence, int status);
 
 /*
  *  lwis_add_completion_fences_to_transaction: Prepares the transaction completion fence list.
