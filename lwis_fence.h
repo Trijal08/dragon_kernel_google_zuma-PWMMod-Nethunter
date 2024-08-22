@@ -45,6 +45,15 @@ struct lwis_fence {
 	/* Whether this fence should follow the old LWIS fence API. */
 	bool legacy_lwis_fence;
 
+	/*
+	 * Pointer to hold the file whenever someone gets the LWIS fence from a file
+	 * descriptor. This will help in decrementing the reference count when putting
+	 * the fence.
+	 *
+	 * TODO: b/342031592 - This is not necessary when using the DMA fence
+	 * reference counter. It will go away in subsequent patches.
+	 */
+	struct file *fp;
 	int fd;
 	/* Top device for printing logs */
 	struct lwis_device *lwis_top_dev;
