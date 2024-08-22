@@ -40,21 +40,14 @@ struct lwis_fence {
 	 * used as DMA fences too. */
 	struct dma_fence dma_fence;
 
-	/* Lock to protect the whole structure. */
 	spinlock_t lock;
 
 	/* Whether this fence should follow the old LWIS fence API. */
 	bool legacy_lwis_fence;
 
-	/* Two file descriptors: (1) `fd` can be used as a `dma_fence` and (2)
-	 *`signal_fd` can be used to signal the fence from user space with a `write`
-	 * syscall. */
 	int fd;
-	int signal_fd;
-
 	/* Top device for printing logs */
 	struct lwis_device *lwis_top_dev;
-
 	/* Status wait queue for waking up userspace */
 	wait_queue_head_t status_wait_queue;
 };
@@ -66,12 +59,12 @@ struct lwis_fence_pending_signal {
 };
 
 /* Create a fence with the legacy LWIS Fence API */
-struct lwis_fence *lwis_fence_legacy_create(struct lwis_device *lwis_dev);
+int lwis_fence_legacy_create(struct lwis_device *lwis_dev);
 
 /*
- *  lwis_fence_create: Create a new lwis_fence. In case of error returns an ERR_PTR.
+ *  lwis_fence_create: Create a new lwis_fence.
  */
-struct lwis_fence *lwis_fence_create(struct lwis_device *lwis_dev);
+int lwis_fence_create(struct lwis_device *lwis_dev);
 
 /*
  * lwis_fence_get: Get the file pointer for the lwis_fence associated with the
@@ -89,11 +82,6 @@ void lwis_fence_put(struct lwis_fence *fence);
  */
 int lwis_fence_get_status(struct lwis_fence *fence);
 int lwis_fence_get_status_locked(struct lwis_fence *fence);
-
-/*
- *  lwis_fence_signal: Signals the lwis_fence with the provided error code.
- */
-int lwis_fence_signal(struct lwis_fence *lwis_fence, int status);
 
 /* Creates all fences that do not currently exist */
 int lwis_initialize_transaction_fences(struct lwis_client *client,
