@@ -48,11 +48,11 @@ struct lwis_transaction {
 	int64_t id;
 	/* List of fences's fp that's referenced by the transaction */
 	uint32_t num_trigger_fences;
-	struct lwis_fence *trigger_fence[LWIS_TRIGGER_NODES_MAX_NUM];
+	struct file *trigger_fence_fps[LWIS_TRIGGER_NODES_MAX_NUM];
 	/* Parameters for completion fences */
 	struct list_head completion_fence_list;
 	/* Precondition fence file pointer */
-	struct lwis_fence *precondition_fence;
+	struct file *precondition_fence_fp;
 	/* Whether fences should use LWIS Fence legacy API. */
 	bool legacy_lwis_fence;
 	/*

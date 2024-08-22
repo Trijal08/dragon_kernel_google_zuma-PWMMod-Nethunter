@@ -298,7 +298,6 @@ static int fence_create(struct lwis_device *lwis_dev, bool legacy_fence)
 		return fd_or_err;
 	}
 
-	new_fence->fp = NULL;
 	new_fence->fd = fd_or_err;
 	new_fence->lwis_top_dev = lwis_dev->top_dev;
 	new_fence->legacy_lwis_fence = legacy_fence;
@@ -319,34 +318,33 @@ int lwis_fence_legacy_create(struct lwis_device *lwis_dev)
 	return fence_create(lwis_dev, /*legacy_fence=*/true);
 }
 
-struct lwis_fence *lwis_fence_get(int fd)
+struct file *lwis_fence_get(struct lwis_client *client, int fd)
 {
 	struct file *fence_fp;
 	struct lwis_fence *fence;
 
 	fence_fp = fget(fd);
 	if (fence_fp == NULL) {
-		return ERR_PTR(-EEXIST);
+		dev_err(client->lwis_dev->dev, "Fence fd %d results in NULL file pointer", fd);
+		return NULL;
 	}
 
 	if (fence_fp->f_op != &fence_file_ops) {
 		fput(fence_fp);
-		return ERR_PTR(-EINVAL);
+		dev_err(client->lwis_dev->dev, "Underlying structure for fd %d is not a lwis_fence",
+			fd);
+		return NULL;
 	}
 
 	fence = fence_fp->private_data;
 	if (fence->fd != fd) {
 		fput(fence_fp);
-		return ERR_PTR(-EINVAL);
+		dev_err(client->lwis_dev->dev,
+			"Invalid lwis_fence with fd %d. Contains stale data \n", fd);
+		return NULL;
 	}
-	fence->fp = fence_fp;
 
-	return fence;
-}
-
-void lwis_fence_put(struct lwis_fence *fence)
-{
-	fput(fence->fp);
+	return fence_fp;
 }
 
 static struct lwis_fence_trigger_transaction_list *transaction_list_find(struct lwis_fence *fence,
@@ -387,8 +385,10 @@ static int trigger_event_add_transaction(struct lwis_client *client,
 					 struct lwis_transaction *transaction,
 					 struct lwis_transaction_trigger_event *event)
 {
+	struct file *precondition_fence_fp = NULL;
 	struct lwis_device *lwis_dev = client->lwis_dev;
 	struct lwis_device_event_state *event_state;
+	struct lwis_fence *precondition_fence;
 	struct lwis_transaction_info *info = &transaction->info;
 	int32_t operator_type = info->trigger_condition.operator_type;
 	size_t all_signaled = info->trigger_condition.num_nodes;
@@ -402,14 +402,13 @@ static int trigger_event_add_transaction(struct lwis_client *client,
 		/* The event is currently level triggered, first we need to check if there is a
 		 * precondition fence associated with the event. */
 		if (event->precondition_fence_fd >= 0) {
-			struct lwis_fence *fence = lwis_fence_get(event->precondition_fence_fd);
-			if (IS_ERR_OR_NULL(fence)) {
-				dev_err(client->lwis_dev->dev,
-					"Unable to get fence with error (%ld)", PTR_ERR(fence));
+			precondition_fence_fp =
+				lwis_fence_get(client, event->precondition_fence_fd);
+			if (precondition_fence_fp == NULL) {
 				return -EBADF;
 			}
-			precondition_fence_status = lwis_fence_get_status(fence);
-			lwis_fence_put(fence);
+			precondition_fence = precondition_fence_fp->private_data;
+			precondition_fence_status = lwis_fence_get_status(precondition_fence);
 		}
 		/* If the event is not triggered by a precondition fence, or the precondition fence
 		 * is already signaled, queue the transaction immediately. */
@@ -433,6 +432,7 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 					 struct lwis_transaction *transaction)
 {
 	unsigned long flags;
+	struct file *fp = NULL;
 	struct lwis_fence *lwis_fence;
 	struct lwis_pending_transaction_id *pending_transaction_id;
 	struct lwis_fence_trigger_transaction_list *tx_list;
@@ -449,19 +449,18 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 		return -ENOMEM;
 	}
 
-	lwis_fence = lwis_fence_get(fence_fd);
-	if (IS_ERR_OR_NULL(lwis_fence)) {
+	fp = lwis_fence_get(client, fence_fd);
+	if (fp == NULL) {
 		kfree(pending_transaction_id);
-		dev_err(client->lwis_dev->dev, "Unable to get fence with error (%ld)",
-			PTR_ERR(lwis_fence));
 		return -EBADF;
 	}
+	lwis_fence = fp->private_data;
 
 	pending_transaction_id->id = transaction->info.id;
 
 	spin_lock_irqsave(&lwis_fence->lock, flags);
 	if (!dma_fence_is_signaled_locked(&lwis_fence->dma_fence)) {
-		transaction->trigger_fence[transaction->num_trigger_fences++] = lwis_fence;
+		transaction->trigger_fence_fps[transaction->num_trigger_fences++] = fp;
 		tx_list = transaction_list_find_or_create(lwis_fence, client);
 		list_add(&pending_transaction_id->list_node, &tx_list->list);
 		lwis_debug_dev_info(
@@ -477,12 +476,12 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 			dma_fence_get_status_locked(&lwis_fence->dma_fence));
 		if (!transaction->info.is_level_triggered) {
 			/* If level triggering is disabled, return an error. */
-			lwis_fence_put(lwis_fence);
+			fput(fp);
 			ret = -EINVAL;
 		} else {
 			int status = lwis_fence_get_status_locked(lwis_fence);
 
-			transaction->trigger_fence[transaction->num_trigger_fences++] = lwis_fence;
+			transaction->trigger_fence_fps[transaction->num_trigger_fences++] = fp;
 			/* If the transaction's trigger_condition evaluates to true, queue the
 			 * transaction to be executed immediately.
 			 */
@@ -534,11 +533,11 @@ bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
 		if (info->trigger_condition.trigger_nodes[i].event.counter == event_counter ||
 		    (info->trigger_condition.trigger_nodes[i].event.counter ==
 			     LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE &&
-		     weak_transaction->precondition_fence == NULL)) {
+		     weak_transaction->precondition_fence_fp == NULL)) {
 			is_node_signaled = true;
 		} else if (info->trigger_condition.trigger_nodes[i].event.counter ==
 			   LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE) {
-			lwis_fence = weak_transaction->precondition_fence;
+			lwis_fence = weak_transaction->precondition_fence_fp->private_data;
 			is_node_signaled = (lwis_fence != NULL &&
 					    lwis_fence_get_status(lwis_fence) ==
 						    LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED);
@@ -552,8 +551,8 @@ bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
 		if (is_node_signaled) {
 			transaction->signaled_count++;
 			list_del(&weak_transaction->event_list_node);
-			if (weak_transaction->precondition_fence) {
-				lwis_fence_put(weak_transaction->precondition_fence);
+			if (weak_transaction->precondition_fence_fp) {
+				fput(weak_transaction->precondition_fence_fp);
 			}
 			kfree(weak_transaction);
 			/* The break here assumes that this event ID only appears once in the trigger
@@ -695,13 +694,15 @@ int lwis_initialize_transaction_fences(struct lwis_client *client,
 	return 0;
 }
 
-static struct lwis_fence_pending_signal *fence_pending_signal_create(struct lwis_fence *fence)
+static struct lwis_fence_pending_signal *fence_pending_signal_create(struct lwis_fence *fence,
+								     struct file *fp)
 {
 	struct lwis_fence_pending_signal *pending_fence_signal =
 		kmalloc(sizeof(struct lwis_fence_pending_signal), GFP_ATOMIC);
 	if (!pending_fence_signal) {
 		return NULL;
 	}
+	pending_fence_signal->fp = fp;
 	pending_fence_signal->fence = fence;
 	pending_fence_signal->pending_status = LWIS_FENCE_STATUS_NOT_SIGNALED;
 	return pending_fence_signal;
@@ -713,19 +714,18 @@ static struct lwis_fence_pending_signal *fence_pending_signal_create(struct lwis
 static int add_completion_fence(struct lwis_client *client, struct lwis_transaction *transaction,
 				int fence_fd)
 {
+	struct file *fp;
 	struct lwis_fence *lwis_fence;
 	struct lwis_fence_pending_signal *fence_pending_signal;
 
-	lwis_fence = lwis_fence_get(fence_fd);
-	if (IS_ERR_OR_NULL(lwis_fence)) {
-		dev_err(client->lwis_dev->dev, "Unable to get fence with error (%ld)",
-			PTR_ERR(lwis_fence));
+	fp = lwis_fence_get(client, fence_fd);
+	if (fp == NULL) {
 		return -EBADF;
 	}
 
-	fence_pending_signal = fence_pending_signal_create(lwis_fence);
+	lwis_fence = fp->private_data;
+	fence_pending_signal = fence_pending_signal_create(lwis_fence, fp);
 	if (fence_pending_signal == NULL) {
-		lwis_fence_put(lwis_fence);
 		return -ENOMEM;
 	}
 	list_add(&fence_pending_signal->node, &transaction->completion_fence_list);
@@ -790,7 +790,7 @@ void lwis_fences_pending_signal_emit(struct lwis_device *lwis_device,
 				pending_fence->fence->fd);
 		}
 		list_del(&pending_fence->node);
-		lwis_fence_put(pending_fence->fence);
+		fput(pending_fence->fp);
 		kfree(pending_fence);
 	}
 }
