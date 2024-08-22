@@ -25,6 +25,17 @@
 bool lwis_fence_debug;
 module_param(lwis_fence_debug, bool, 0644);
 
+int lwis_fence_get_status(struct lwis_fence *lwis_fence)
+{
+	return dma_fence_get_status(&lwis_fence->dma_fence);
+}
+
+int lwis_fence_get_status_locked(struct lwis_fence *lwis_fence)
+{
+	lockdep_assert_held(&lwis_fence->lock);
+	return dma_fence_get_status_locked(&lwis_fence->dma_fence);
+}
+
 /*
  *  lwis_fence_release: Closing an instance of a LWIS fence
  */
@@ -76,7 +87,7 @@ static ssize_t lwis_fence_read_status_legacy(struct file *fp, char __user *user_
 		dev_err(lwis_fence->lwis_top_dev->dev, "Not using legacy fence. This must be a bug.");
 		return -EBADFD;
 	}
-	status = dma_to_lwis_fence_status(dma_fence_get_status(&lwis_fence->dma_fence));
+	status = dma_to_lwis_fence_status(lwis_fence_get_status(lwis_fence));
 	read_len = len - copy_to_user((void __user *)user_buffer, (void *)&status + *offset, len);
 
 	return read_len;
@@ -396,13 +407,14 @@ static int trigger_event_add_transaction(struct lwis_client *client,
 
 static void fence_signal_transaction_cb(struct dma_fence *dma_fence, struct dma_fence_cb *cb)
 {
+	struct lwis_fence *lwis_fence = container_of(dma_fence, struct lwis_fence, dma_fence);
 	struct lwis_pending_transaction_id *pending_transaction =
 		container_of(cb, struct lwis_pending_transaction_id, fence_cb);
 
 	/* Lets avoid removing this callback from the `dma_fence` down the trigger path. */
 	pending_transaction->triggered = true;
 
-	lwis_transaction_fence_trigger(pending_transaction->owner, dma_fence,
+	lwis_transaction_fence_trigger(pending_transaction->owner, lwis_fence,
 				       pending_transaction->id);
 }
 
