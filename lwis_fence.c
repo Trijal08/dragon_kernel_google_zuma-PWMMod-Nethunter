@@ -117,7 +117,7 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 
 	if (len != sizeof(status)) {
 		dev_err(lwis_fence->lwis_top_dev->dev,
-			"Signal lwis_fence fd-%d with incorrect buffer length\n", lwis_fence->fd);
+			"Signal lwis_fence %p with incorrect buffer length\n", lwis_fence);
 		return -EINVAL;
 	}
 
@@ -183,8 +183,7 @@ static void lwis_dma_fence_release(struct dma_fence *fence)
 {
 	struct lwis_fence *lwis_fence = container_of(fence, struct lwis_fence, dma_fence);
 
-	lwis_debug_dev_info(lwis_fence->lwis_top_dev->dev, "Releasing lwis_fence fd-%d",
-			    lwis_fence->fd);
+	lwis_debug_dev_info(lwis_fence->lwis_top_dev->dev, "Releasing lwis_fence %p", lwis_fence);
 
 	kfree(lwis_fence);
 }
@@ -212,8 +211,6 @@ static struct lwis_fence *fence_create(struct lwis_device *lwis_dev)
 	dma_fence_init(&new_fence->dma_fence, &lwis_fence_dma_fence_ops, &new_fence->lock,
 		       dma_fence_context_alloc(1), atomic64_inc_return(&dma_fence_sequence));
 
-	new_fence->fd = -1;
-	new_fence->signal_fd = -1;
 	new_fence->lwis_top_dev = lwis_dev->top_dev;
 	spin_lock_init(&new_fence->lock);
 	return new_fence;
@@ -229,6 +226,7 @@ struct lwis_fence_fds lwis_fence_create(struct lwis_device *lwis_dev)
 {
 	struct lwis_fence *new_fence;
 	struct sync_file *sync_file;
+	int fd, signal_fd;
 	int ret;
 
 	new_fence = fence_create(lwis_dev);
@@ -245,7 +243,7 @@ struct lwis_fence_fds lwis_fence_create(struct lwis_device *lwis_dev)
 	if (ret < 0) {
 		goto error;
 	}
-	new_fence->fd = ret;
+	fd = ret;
 	sync_file = sync_file_create(&new_fence->dma_fence);
 	if (sync_file == NULL) {
 		ret = -ENOMEM;
@@ -257,23 +255,22 @@ struct lwis_fence_fds lwis_fence_create(struct lwis_device *lwis_dev)
 	if (ret < 0) {
 		goto error_put_fd;
 	}
-	new_fence->signal_fd = ret;
+	signal_fd = ret;
 
 	/* We install the sync_file only after we know there won't be errors. */
-	fd_install(new_fence->fd, sync_file->file);
+	fd_install(fd, sync_file->file);
 
 	new_fence->legacy_lwis_fence = false;
-	lwis_debug_dev_info(lwis_dev->dev,
-			    "lwis_fence created new LWIS fence fd: %d and signal_fd: %d",
-			    new_fence->fd, new_fence->signal_fd);
+	lwis_debug_dev_info(lwis_dev->dev, "new lwis_fence=%p created fd=%d signal_fd=%d",
+			    new_fence, fd, signal_fd);
 	return (struct lwis_fence_fds){
 		.error = 0,
-		.fd = new_fence->fd,
-		.signal_fd = new_fence->signal_fd,
+		.fd = fd,
+		.signal_fd = signal_fd,
 	};
 
 error_put_fd:
-	put_unused_fd(new_fence->fd);
+	put_unused_fd(fd);
 error:
 	kfree(new_fence);
 	dev_err(lwis_dev->dev, "Failed to create a new file instance for lwis_fence\n");
@@ -319,15 +316,14 @@ struct lwis_fence_fds lwis_fence_legacy_create(struct lwis_device *lwis_dev)
 		};
 	}
 
-	new_fence->fd = fd_or_err;
 	new_fence->legacy_lwis_fence = true;
 	init_waitqueue_head(&new_fence->status_wait_queue);
 
 	lwis_debug_dev_info(lwis_dev->dev, "legacy lwis_fence created new LWIS fence fd: %d",
-			    new_fence->fd);
+			    fd_or_err);
 	return (struct lwis_fence_fds){
 		.error = 0,
-		.fd = new_fence->fd,
+		.fd = fd_or_err,
 		.signal_fd = -1,
 	};
 }
@@ -348,10 +344,6 @@ static struct dma_fence *lwis_fence_get_legacy(int fd)
 	}
 
 	fence = fence_fp->private_data;
-	if (fence->fd != fd) {
-		fput(fence_fp);
-		return ERR_PTR(-EINVAL);
-	}
 
 	dma_fence_get(&fence->dma_fence);
 
@@ -463,8 +455,8 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 
 		lwis_debug_dev_info(
 			client->lwis_dev->dev,
-			"lwis_fence fd-%d not added to transaction id %llu, fence already signaled with error code %d \n",
-			fence_fd, transaction->info.id, status);
+			"lwis_fence=%p fd=%d not added to transaction id %llu, fence already signaled with error code %d \n",
+			fence, fence_fd, transaction->info.id, status);
 
 		if (!transaction->info.is_level_triggered) {
 			/* If level triggering is disabled, return an error. */
@@ -488,8 +480,8 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 		list_add(&pending_transaction_id->node, &transaction->trigger_fences);
 		lwis_debug_dev_info(
 			client->lwis_dev->dev,
-			"lwis_fence transaction id %llu added to its trigger fence fd %d ",
-			transaction->info.id, fence_fd);
+			"lwis_fence transaction id %llu added to its trigger fence=%p fd %d ",
+			transaction->info.id, fence, fence_fd);
 	}
 
 	return 0;
@@ -732,8 +724,8 @@ static int add_completion_fence(struct lwis_client *client, struct lwis_transact
 	}
 	list_add(&fence_pending_signal->node, &transaction->completion_fence_list);
 	lwis_debug_dev_info(client->lwis_dev->dev,
-			    "lwis_fence transaction id %llu add completion fence fd %d ",
-			    transaction->info.id, fence_fd);
+			    "lwis_fence transaction id %llu add completion fence=%p fd=%d ",
+			    transaction->info.id, fence, fence_fd);
 	return 0;
 }
 
