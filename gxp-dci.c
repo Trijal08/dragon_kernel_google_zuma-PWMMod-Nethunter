@@ -17,8 +17,6 @@
 #include "gxp-pm.h"
 #include "gxp.h"
 
-#define CIRCULAR_QUEUE_WRAP_BIT BIT(15)
-
 #define MBOX_CMD_QUEUE_NUM_ENTRIES 1024
 #define MBOX_RESP_QUEUE_NUM_ENTRIES 1024
 
@@ -29,7 +27,7 @@ static int gxp_dci_mailbox_manager_execute_cmd(
 	u64 *resp_seq, u16 *resp_status)
 {
 	struct gxp_dev *gxp = client->gxp;
-	struct gxp_dci_command cmd;
+	struct gxp_dci_command cmd = {};
 	struct gxp_dci_response resp;
 	struct gxp_dci_buffer_descriptor buffer;
 	int ret;
@@ -273,10 +271,8 @@ gxp_dci_handle_awaiter_arrived(struct gcip_mailbox *mailbox,
 	 */
 	async_resp->dest_queue = NULL;
 
-	if (async_resp->eventfd) {
+	if (async_resp->eventfd)
 		gxp_eventfd_signal(async_resp->eventfd);
-		gxp_eventfd_put(async_resp->eventfd);
-	}
 
 	wake_up(async_resp->dest_queue_waitq);
 
@@ -322,10 +318,8 @@ static void gxp_dci_handle_awaiter_timedout(struct gcip_mailbox *mailbox,
 		gxp_pm_update_requested_power_states(mbx->gxp, async_resp->requested_states,
 						     off_states);
 
-		if (async_resp->eventfd) {
+		if (async_resp->eventfd)
 			gxp_eventfd_signal(async_resp->eventfd);
-			gxp_eventfd_put(async_resp->eventfd);
-		}
 
 		wake_up(async_resp->dest_queue_waitq);
 	} else {
@@ -350,6 +344,8 @@ static void gxp_dci_release_awaiter_data(void *data)
 {
 	struct gxp_dci_async_response *async_resp = data;
 
+	if (async_resp->eventfd)
+		gxp_eventfd_put(async_resp->eventfd);
 	kfree(async_resp);
 }
 
@@ -472,7 +468,7 @@ struct gxp_mailbox *gxp_dci_alloc(struct gxp_mailbox_manager *mgr,
 	struct gxp_mailbox_args mbx_args = {
 		.type = GXP_MBOX_TYPE_GENERAL,
 		.ops = &gxp_dci_gxp_mbx_ops,
-		.queue_wrap_bit = CIRCULAR_QUEUE_WRAP_BIT,
+		.queue_wrap_bit = DCI_CIRCULAR_QUEUE_WRAP_BIT,
 		.cmd_elem_size = sizeof(struct gxp_dci_command),
 		.resp_elem_size = sizeof(struct gxp_dci_response),
 	};
@@ -513,7 +509,7 @@ int gxp_dci_execute_cmd(struct gxp_mailbox *mbx, struct gxp_dci_command *cmd,
 {
 	int ret;
 
-	ret = gxp_mailbox_send_cmd(mbx, cmd, resp);
+	ret = gxp_mailbox_send_cmd(mbx, cmd, resp, 0);
 	if (ret || !resp)
 		return ret;
 
@@ -557,6 +553,8 @@ int gxp_dci_execute_cmd_async(struct gxp_mailbox *mbx,
 err_free_resp:
 	gxp_pm_update_requested_power_states(mbx->gxp, requested_states,
 					     off_states);
+	if (async_resp->eventfd)
+		gxp_eventfd_put(async_resp->eventfd);
 	kfree(async_resp);
 	return ret;
 }

@@ -31,8 +31,8 @@
 
 #define GXP_NUM_COMMON_SEGMENTS 2
 #define GXP_NUM_CORE_SEGMENTS 8
-/* 1 segment for RO and 1 for RW */
-#define GXP_NUM_CORE_DATA_SEGMENTS 2
+/* FW RO, FW RW, VD Private, Core Config, VD Config sections */
+#define GXP_NUM_CORE_DATA_SEGMENTS 5
 #define GXP_NUM_BUFFER_MAPPINGS 32
 #define GXP_SEG_HEADER_NAME_LENGTH 32
 #define GXP_NUM_SEGMENTS_PER_CORE                                                       \
@@ -80,7 +80,7 @@
  * gxp_core_dump_header (or anything within the struct that may cause a mismatch
  * with the firmware version of the debug dump header file).
  */
-#define GXP_DEBUG_DUMP_HEADER_VERSION 0
+#define GXP_DEBUG_DUMP_HEADER_VERSION 1
 
 struct gxp_timer_registers {
 	u32 comparator;

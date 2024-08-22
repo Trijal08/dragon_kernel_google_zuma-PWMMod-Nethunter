@@ -17,41 +17,45 @@
 
 #include "gxp-internal.h"
 
-#define AUR_DVFS_MIN_RATE AUR_UUD_RATE
+#define AUR_DVFS_MIN_RATE AUR_PERCENT_FREQUENCY_5_RATE
 
 struct bcl_device;
 
+/*
+ * Kernel driver to use percentage based power states going ahead. State based power states
+ * are aliased to percentage based power states for keeping the backward compatibility.
+ */
 enum aur_power_state {
 	AUR_OFF = 0,
-	AUR_UUD = 1,
-	AUR_SUD = 2,
-	AUR_UD = 3,
-	AUR_NOM = 4,
-	AUR_READY = 5,
-	AUR_UUD_PLUS = 6,
-	AUR_SUD_PLUS = 7,
-	AUR_UD_PLUS = 8,
-	AUR_PERCENT_FREQUENCY_5 = 9,
-	AUR_PERCENT_FREQUENCY_10 = 10,
-	AUR_PERCENT_FREQUENCY_15 = 11,
-	AUR_PERCENT_FREQUENCY_20 = 12,
-	AUR_PERCENT_FREQUENCY_25 = 13,
-	AUR_PERCENT_FREQUENCY_30 = 14,
-	AUR_PERCENT_FREQUENCY_35 = 15,
-	AUR_PERCENT_FREQUENCY_40 = 16,
-	AUR_PERCENT_FREQUENCY_45 = 17,
-	AUR_PERCENT_FREQUENCY_50 = 18,
-	AUR_PERCENT_FREQUENCY_55 = 19,
-	AUR_PERCENT_FREQUENCY_60 = 20,
-	AUR_PERCENT_FREQUENCY_65 = 21,
-	AUR_PERCENT_FREQUENCY_70 = 22,
-	AUR_PERCENT_FREQUENCY_75 = 23,
-	AUR_PERCENT_FREQUENCY_80 = 24,
-	AUR_PERCENT_FREQUENCY_85 = 25,
-	AUR_PERCENT_FREQUENCY_90 = 26,
-	AUR_PERCENT_FREQUENCY_95 = 27,
-	AUR_MAX_FREQUENCY = 28,
-	AUR_OVERDRIVE_FREQUENCY = 29,
+	AUR_READY = 1,
+	AUR_PERCENT_FREQUENCY_5 = 2,
+	AUR_PERCENT_FREQUENCY_10 = 3,
+	AUR_PERCENT_FREQUENCY_15 = 4,
+	AUR_PERCENT_FREQUENCY_20 = 5,
+	AUR_PERCENT_FREQUENCY_25 = 6,
+	AUR_PERCENT_FREQUENCY_30 = 7,
+	AUR_PERCENT_FREQUENCY_35 = 8,
+	AUR_PERCENT_FREQUENCY_40 = 9,
+	AUR_PERCENT_FREQUENCY_45 = 10,
+	AUR_PERCENT_FREQUENCY_50 = 11,
+	AUR_PERCENT_FREQUENCY_55 = 12,
+	AUR_PERCENT_FREQUENCY_60 = 13,
+	AUR_PERCENT_FREQUENCY_65 = 14,
+	AUR_PERCENT_FREQUENCY_70 = 15,
+	AUR_PERCENT_FREQUENCY_75 = 16,
+	AUR_PERCENT_FREQUENCY_80 = 17,
+	AUR_PERCENT_FREQUENCY_85 = 18,
+	AUR_PERCENT_FREQUENCY_90 = 19,
+	AUR_PERCENT_FREQUENCY_95 = 20,
+	AUR_MAX_FREQUENCY = 21,
+	AUR_OVERDRIVE = 22,
+	AUR_UUD = AUR_PERCENT_FREQUENCY_5,
+	AUR_UUD_PLUS = AUR_PERCENT_FREQUENCY_35,
+	AUR_SUD = AUR_PERCENT_FREQUENCY_50,
+	AUR_SUD_PLUS = AUR_PERCENT_FREQUENCY_65,
+	AUR_UD = AUR_PERCENT_FREQUENCY_75,
+	AUR_UD_PLUS = AUR_PERCENT_FREQUENCY_85,
+	AUR_NOM = AUR_MAX_FREQUENCY,
 };
 
 extern const uint aur_power_state2rate[];
@@ -66,12 +70,7 @@ enum aur_memory_power_state {
 	AUR_MEM_MAX = 6,
 };
 
-/*
- * Kernel driver to use percentage based power states going ahead. State based power states
- * are kept for supporting the backward compatibility on Amalthea and Callisto devices.
- */
-#define AUR_STATE_BASED_NUM_POWER_STATE (AUR_STATE_BASED_MAX_ALLOW_STATE + 1)
-#define AUR_NUM_POWER_STATE (AUR_PERCENTAGE_BASED_MAX_ALLOW_STATE + 1)
+#define AUR_NUM_POWER_STATE (AUR_OVERDRIVE + 1)
 #define AUR_NUM_MEMORY_POWER_STATE (AUR_MAX_ALLOW_MEMORY_STATE + 1)
 
 #define AUR_INIT_DVFS_STATE AUR_UUD
@@ -81,8 +80,7 @@ enum aur_memory_power_state {
  * aur_memory_power_state, not necessarily the state with the maximum power
  * level.
  */
-#define AUR_STATE_BASED_MAX_ALLOW_STATE AUR_UD_PLUS
-#define AUR_PERCENTAGE_BASED_MAX_ALLOW_STATE AUR_OVERDRIVE_FREQUENCY
+#define AUR_MAX_ALLOW_STATE AUR_OVERDRIVE
 #define AUR_MAX_ALLOW_MEMORY_STATE AUR_MEM_MAX
 
 #define AUR_NUM_POWER_STATE_WORKER 4
@@ -134,8 +132,8 @@ struct gxp_power_manager {
 	struct gxp_dev *gxp;
 	struct gcip_pm *pm;
 	struct mutex pm_lock;
-	uint pwr_state_req_count[AUR_STATE_BASED_NUM_POWER_STATE];
-	uint low_clkmux_pwr_state_req_count[AUR_STATE_BASED_NUM_POWER_STATE];
+	uint pwr_state_req_count[AUR_NUM_POWER_STATE];
+	uint low_clkmux_pwr_state_req_count[AUR_NUM_POWER_STATE];
 	uint mem_pwr_state_req_count[AUR_NUM_MEMORY_POWER_STATE];
 	/*
 	 * Last set CLKMUX state by asynchronous request handler.

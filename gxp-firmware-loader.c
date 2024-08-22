@@ -116,7 +116,13 @@ void gxp_firmware_loader_set_core_fw_name(struct gxp_dev *gxp,
 	struct gxp_firmware_loader_manager *mgr = gxp->fw_loader_mgr;
 
 	mutex_lock(&mgr->lock);
-	mgr->core_firmware_name = kstrdup(fw_name, GFP_KERNEL);
+
+	kfree(mgr->core_firmware_name);
+	mgr->core_firmware_name = NULL;
+
+	if (fw_name)
+		mgr->core_firmware_name = kstrdup(fw_name, GFP_KERNEL);
+
 	mutex_unlock(&mgr->lock);
 }
 
@@ -193,7 +199,6 @@ static void gxp_firmware_loader_unload_mcu_firmware(struct gxp_dev *gxp)
 	if (!gxp_is_direct_mode(gxp)) {
 		if (mgr->mcu_firmware) {
 			gxp_mcu_firmware_unload(gxp, mgr->mcu_firmware);
-			release_firmware(mgr->mcu_firmware);
 			mgr->mcu_firmware = NULL;
 		}
 		kfree(mgr->mcu_firmware_name);

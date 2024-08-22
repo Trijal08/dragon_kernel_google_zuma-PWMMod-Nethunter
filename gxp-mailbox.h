@@ -171,7 +171,8 @@ struct gxp_mailbox {
 	void __iomem *csr_reg_base;
 	void __iomem *data_reg_base;
 
-	void (*handle_irq)(struct gxp_mailbox *mailbox);
+	void __private (*handle_irq)(struct gxp_mailbox *mailbox);
+	rwlock_t handle_irq_lock;
 	struct work_struct *interrupt_handlers[GXP_MAILBOX_INT_BIT_COUNT];
 	unsigned int interrupt_virq;
 	spinlock_t cmd_tail_resp_head_lock;
@@ -246,6 +247,17 @@ void gxp_mailbox_release(struct gxp_mailbox_manager *mgr,
 
 void gxp_mailbox_reset(struct gxp_mailbox *mailbox);
 
+/* Triggers the IRQ handler of @mailbox. */
+void gxp_mailbox_handle_irq(struct gxp_mailbox *mailbox);
+
+/*
+ * Enables / disables the IRQ handler of @mailbox.
+ *
+ * If disabled, the `gxp_mailbox_handle_irq` function will become NO-OP.
+ */
+void gxp_mailbox_enable_irq_handler(struct gxp_mailbox *mailbox);
+void gxp_mailbox_disable_irq_handler(struct gxp_mailbox *mailbox);
+
 int gxp_mailbox_register_interrupt_handler(struct gxp_mailbox *mailbox,
 					   u32 int_bit,
 					   struct work_struct *handler);
@@ -264,7 +276,8 @@ void gxp_mailbox_reinit(struct gxp_mailbox *mailbox);
  * See the `gcip_mailbox_send_cmd` of `gcip-mailbox.h` or `gcip_kci_send_cmd` of `gcip-kci.h`
  * for detail.
  */
-int gxp_mailbox_send_cmd(struct gxp_mailbox *mailbox, void *cmd, void *resp);
+int gxp_mailbox_send_cmd(struct gxp_mailbox *mailbox, void *cmd, void *resp,
+			 gcip_mailbox_cmd_flags_t flags);
 
 /*
  * Executes command asynchronously. The response will be written to @resp.

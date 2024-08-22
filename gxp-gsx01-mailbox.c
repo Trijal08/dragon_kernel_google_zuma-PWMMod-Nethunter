@@ -44,7 +44,7 @@ void gxp_mailbox_chip_irq_handler(struct gxp_mailbox *mailbox)
 	gxp_mailbox_clear_interrupts(mailbox, intr_bits);
 
 	if (intr_bits & MBOX_DEVICE_TO_HOST_RESPONSE_IRQ_MASK) {
-		mailbox->handle_irq(mailbox);
+		gxp_mailbox_handle_irq(mailbox);
 		intr_bits &= ~MBOX_DEVICE_TO_HOST_RESPONSE_IRQ_MASK;
 	}
 

@@ -32,6 +32,10 @@
 
 #define SYNC_BARRIER_COUNT 16
 
+#ifndef GXP_ENABLE_PARTIAL_LAP
+#define GXP_ENABLE_PARTIAL_LAP 0
+#endif
+
 #ifndef GXP_HAS_LAP
 #define GXP_HAS_LAP 1
 #endif

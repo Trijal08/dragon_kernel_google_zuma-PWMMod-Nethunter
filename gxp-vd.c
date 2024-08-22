@@ -1658,7 +1658,9 @@ void gxp_vd_generate_debug_dump(struct gxp_dev *gxp,
 #if GXP_HAS_MCU
 void gxp_vd_release_vmbox(struct gxp_dev *gxp, struct gxp_virtual_device *vd)
 {
-	struct gxp_kci *kci = &(gxp_mcu_of(gxp)->kci);
+	struct gxp_mcu *mcu = gxp_mcu_of(gxp);
+	struct gxp_kci *kci = &mcu->kci;
+	struct gxp_uci *uci = &mcu->uci;
 	uint core_list;
 	int ret;
 
@@ -1668,6 +1670,15 @@ void gxp_vd_release_vmbox(struct gxp_dev *gxp, struct gxp_virtual_device *vd)
 	gxp_vd_unlink_offload_vmbox(gxp, vd, vd->tpu_client_id, GCIP_KCI_OFFLOAD_CHIP_TYPE_TPU);
 
 	ret = gxp_kci_release_vmbox(kci, vd->client_id);
+
+	/*
+	 * Ensures consuming all responses from the MCU to prevent a race condition that commands
+	 * were processed by the MCU and their responses were pushed to the UCI mailbox, but the
+	 * kernel driver considers those commands haven't been processed so that cancels or flushes
+	 * them later.
+	 */
+	gxp_uci_consume_responses(uci);
+
 	if (!ret)
 		goto out;
 	if (ret > 0 && KCI_RETURN_GET_ERROR_CODE(ret) == GCIP_KCI_ERROR_ABORTED) {
@@ -1678,6 +1689,23 @@ void gxp_vd_release_vmbox(struct gxp_dev *gxp, struct gxp_virtual_device *vd)
 		gxp_vd_invalidate_locked(gxp, vd, GXP_INVALIDATED_VMBOX_RELEASE_FAILED);
 		gxp_vd_generate_debug_dump(gxp, vd, core_list);
 	} else {
+		/*
+		 * If the KCI response arrived well or its error code is ABORTED, it means that the
+		 * MCU firmware guarantees that it canceled all pending UCI commands, signaled their
+		 * out-fences and returned responses of them to the kernel driver. Therefore, the
+		 * arrived handler of the UCI mailbox will process the responses.
+		 *
+		 * If @ret is negative, it's apparent that the MCU firmware didn't process the KCI
+		 * well somehow. If @ret is positive and the error code is set, but not ABORTED,
+		 * it's likely a bug that @vd is not invalid from the firmware perspective or its
+		 * VMBox was already released. That says the firmware wouldn't cancel any pending
+		 * UCI commands.
+		 *
+		 * Therefore, the meaning of this else-branch has been reached is that the kernel
+		 * driver should take care of canceling all pending commands and signaling
+		 * out-fences of them with an error.
+		 */
+		gxp_uci_cancel(vd);
 		dev_err(gxp->dev, "Failed to request releasing VMBox for client %d: %d",
 			vd->client_id, ret);
 	}

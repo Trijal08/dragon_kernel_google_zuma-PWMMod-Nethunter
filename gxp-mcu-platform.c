@@ -50,11 +50,15 @@ static int allocate_vmbox(struct gxp_dev *gxp, struct gxp_virtual_device *vd)
 	else
 		client_id = vd->domain->pasid;
 
-	ret = gxp_kci_allocate_vmbox(kci, client_id, vd->num_cores,
-				     vd->slice_index, vd->first_open);
+	ret = gxp_kci_allocate_vmbox(kci, client_id, vd->num_cores, vd->slice_index,
+				     vd->first_open);
 	if (ret) {
-		dev_err(gxp->dev,
-			"Failed to allocate VMBox for client %d, TPU client %d: %d",
+		if (ret > 0) {
+			dev_err(gxp->dev, "Received GCIP_KCI_CODE_ALLOCATE_VMBOX error code: %u.",
+				ret);
+			ret = gcip_kci_error_to_errno(gxp->dev, ret);
+		}
+		dev_err(gxp->dev, "Failed to allocate VMBox for client %d, TPU client %d: %d.",
 			client_id, vd->tpu_client_id, ret);
 		return ret;
 	}

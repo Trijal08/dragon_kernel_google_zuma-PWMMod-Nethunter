@@ -39,6 +39,7 @@
 #include "gxp-mcu.h"
 #include "gxp-monitor.h"
 #include "gxp-pm.h"
+#include "gxp-uci.h"
 #include "mobile-soc.h"
 
 #if IS_GXP_TEST
@@ -346,6 +347,9 @@ void gxp_mcu_firmware_unload(struct gxp_dev *gxp, const struct firmware *fw)
 	gcip_image_config_clear(&mcu_fw->cfg_parser);
 	mcu_fw->status = GCIP_FW_INVALID;
 	mutex_unlock(&mcu_fw->lock);
+
+	if (fw)
+		release_firmware(fw);
 }
 
 /*
@@ -480,6 +484,14 @@ static void gxp_mcu_firmware_stop_locked(struct gxp_mcu_firmware *mcu_fw)
 	/* Clear doorbell to refuse non-expected interrupts */
 	gxp_doorbell_clear(gxp, CORE_WAKEUP_DOORBELL(GXP_REG_MCU_ID));
 
+	/*
+	 * As the RKCI requests are processed asynchronously, the driver may return RKCI ACK
+	 * responses after the MCU transits to the PG state which will wake it up again. That will
+	 * eventually cause the MCU boot failure at the next run. To prevent the race condition,
+	 * disable sending RKCI ACK responses before sending SHUTDOWN KCI.
+	 */
+	gxp_kci_disable_rkci_ack(&mcu->kci);
+
 	ret = gxp_kci_shutdown(&mcu->kci);
 	if (ret)
 		dev_warn(gxp->dev, "KCI shutdown failed: %d", ret);
@@ -499,12 +511,29 @@ static void gxp_mcu_firmware_stop_locked(struct gxp_mcu_firmware *mcu_fw)
 	/* To test the case of the MCU FW sending FW_CRASH RKCI in the middle. */
 	TEST_FLUSH_KCI_WORKERS(mcu->kci);
 
+	/*
+	 * We should disable the IRQ handler before canceling the KCI works to prevent a potential
+	 * race condition that the works are scheduled while canceling them.
+	 */
+	gxp_kci_disable_irq_handler(&mcu->kci);
+
 	gxp_kci_cancel_work_queues(&mcu->kci);
 	/*
 	 * Clears up all remaining UCI/KCI commands. Otherwise, MCU may drain them improperly after
 	 * it reboots.
 	 */
 	gxp_mcu_reset_mailbox(mcu);
+
+	/*
+	 * Since the KCI mailbox has been flushed, it is safe to enable sending RKCI ACK responses
+	 * and the IRQ handler again.
+	 *
+	 * Unlike disabling, enable sending RKCI ACK responses first since the driver should do that
+	 * if the MCU firmware sends RKCI requests and IRQ has been triggered. However, this should
+	 * not happen theoretically unless the MCU has been failed to be turned off normally.
+	 */
+	gxp_kci_enable_rkci_ack(&mcu->kci);
+	gxp_kci_enable_irq_handler(&mcu->kci);
 }
 
 /*
@@ -885,6 +914,7 @@ void gxp_mcu_firmware_stop(struct gxp_mcu_firmware *mcu_fw)
 void gxp_mcu_firmware_crash_handler(struct gxp_dev *gxp,
 				    enum gcip_fw_crash_type crash_type)
 {
+	struct gxp_mcu *mcu = &to_mcu_dev(gxp)->mcu;
 	struct gxp_mcu_firmware *mcu_fw = gxp_mcu_firmware_of(gxp);
 	struct gxp_client *client;
 	struct gcip_pm *pm = gxp->power_mgr->pm;
@@ -972,6 +1002,9 @@ void gxp_mcu_firmware_crash_handler(struct gxp_dev *gxp,
 	 * being allocated.
 	 */
 
+	/* We should consume all arrived responses first before canceling pending commands. */
+	gxp_uci_consume_responses(&mcu->uci);
+
 	/*
 	 * Discard all pending/unconsumed UCI responses and change the state of all virtual devices
 	 * to GXP_VD_UNAVAILABLE. From now on, all clients cannot request new UCI commands.
@@ -980,6 +1013,7 @@ void gxp_mcu_firmware_crash_handler(struct gxp_dev *gxp,
 		if (client->has_block_wakelock && client->vd) {
 			gxp_vd_invalidate(gxp, client->vd, GXP_INVALIDATED_MCU_CRASH);
 			client->vd->mcu_crashed = true;
+			gxp_uci_cancel(client->vd);
 		}
 	}
 

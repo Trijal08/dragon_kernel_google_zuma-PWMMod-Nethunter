@@ -400,9 +400,12 @@ static int gcip_thermal_cooling_register(struct gcip_thermal *thermal, const cha
 	if (node_name)
 		node = of_find_node_by_name(NULL, node_name);
 	if (!node)
-		dev_warn(thermal->dev, "Failed to find thermal cooling node\n");
+		dev_warn(thermal->dev, "Failed to find thermal cooling node: %s\n",
+			 node_name ? node_name : "");
 
 	thermal->cdev = thermal_of_cooling_device_register(node, type, thermal, &gcip_thermal_ops);
+	/* OK to call it even if @node is NULL. */
+	of_node_put(node);
 	if (IS_ERR(thermal->cdev))
 		return PTR_ERR(thermal->cdev);
 

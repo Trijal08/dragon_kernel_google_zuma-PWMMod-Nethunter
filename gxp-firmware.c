@@ -565,6 +565,7 @@ static ssize_t load_dsp_firmware_store(struct device *dev,
 
 err_firmware_load:
 	kfree(name_buf);
+	gxp_firmware_loader_set_core_fw_name(gxp, NULL);
 	return ret;
 }
 

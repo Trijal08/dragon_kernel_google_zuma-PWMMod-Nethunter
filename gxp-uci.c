@@ -34,8 +34,6 @@
 #define TEST_FLUSH_FIRMWARE_WORK()
 #endif
 
-#define CIRCULAR_QUEUE_WRAP_BIT BIT(15)
-
 #define MBOX_CMD_QUEUE_NUM_ENTRIES 1024
 #define MBOX_RESP_QUEUE_NUM_ENTRIES 1024
 
@@ -58,7 +56,7 @@ static int gxp_uci_mailbox_manager_execute_cmd(
 	struct gxp_dev *gxp = client->gxp;
 	struct gxp_mcu_firmware *mcu_fw = gxp_mcu_firmware_of(gxp);
 	struct gxp_virtual_device *vd = client->vd;
-	struct gxp_uci_command cmd;
+	struct gxp_uci_command cmd = {};
 	struct gxp_uci_response resp;
 	int ret;
 
@@ -68,14 +66,7 @@ static int gxp_uci_mailbox_manager_execute_cmd(
 	if (!gxp_vd_has_and_use_credit(vd))
 		return -EBUSY;
 
-	/* Pack the command structure */
-	cmd.core_command_params.address = cmd_daddr;
-	cmd.core_command_params.size = cmd_size;
-	cmd.core_command_params.num_cores = num_cores;
-	/* Plus 1 to align with power states in MCU firmware. */
-	cmd.core_command_params.dsp_operating_point = power_states.power + 1;
-	cmd.core_command_params.memory_operating_point = power_states.memory;
-	cmd.type = cmd_code;
+	cmd.type = CORE_COMMAND;
 	cmd.client_id = vd->client_id;
 
 	/*
@@ -83,7 +74,7 @@ static int gxp_uci_mailbox_manager_execute_cmd(
 	 * the firmware crash handler. Otherwise, invalid IOMMU access can occur.
 	 */
 	mutex_lock(&mcu_fw->lock);
-	ret = gxp_mailbox_send_cmd(mailbox, &cmd, &resp);
+	ret = gxp_mailbox_send_cmd(mailbox, &cmd, &resp, 0);
 	mutex_unlock(&mcu_fw->lock);
 
 	/* resp.seq and resp.status can be updated even though it failed to process the command */
@@ -135,7 +126,7 @@ static void gxp_uci_mailbox_manager_release_unconsumed_async_resps(
 	list_for_each_entry (
 		cur, &vd->mailbox_resp_queues[UCI_RESOURCE_ID].wait_queue,
 		wait_list_entry) {
-		cur->wait_queue = NULL;
+		cur->processed = true;
 	}
 	vd->mailbox_resp_queues[UCI_RESOURCE_ID].wait_queue_closed = true;
 
@@ -158,6 +149,8 @@ static void gxp_uci_mailbox_manager_release_unconsumed_async_resps(
 		cur, &vd->mailbox_resp_queues[UCI_RESOURCE_ID].wait_queue,
 		wait_list_entry) {
 		gcip_mailbox_cancel_awaiter(cur->awaiter);
+		gcip_fence_array_signal(cur->out_fences, -ECANCELED);
+		gcip_fence_array_waited(cur->in_fences, IIF_IP_DSP);
 	}
 
 	/*
@@ -248,84 +241,65 @@ static void gxp_uci_set_resp_elem_seq(struct gcip_mailbox *mailbox, void *resp,
 	elem->seq = seq;
 }
 
-static int
-gxp_uci_before_enqueue_wait_list(struct gcip_mailbox *mailbox, void *resp,
-				 struct gcip_mailbox_resp_awaiter *awaiter)
+static int gxp_uci_before_enqueue_wait_list(struct gcip_mailbox *mailbox, void *resp,
+					    struct gcip_mailbox_resp_awaiter *awaiter)
 {
 	struct gxp_uci_async_response *async_resp;
 	struct mailbox_resp_queue *mailbox_resp_queue;
 	unsigned long flags;
-	int ret;
 
 	if (!awaiter)
 		return 0;
 
 	async_resp = awaiter->data;
+	async_resp->awaiter = awaiter;
 
-	if (!async_resp->vd) {
-		async_resp->awaiter = awaiter;
-		return 0;
-	}
-
-	mailbox_resp_queue = container_of(
-		async_resp->wait_queue, struct mailbox_resp_queue, wait_queue);
+	mailbox_resp_queue =
+		container_of(async_resp->wait_queue, struct mailbox_resp_queue, wait_queue);
 
 	spin_lock_irqsave(async_resp->queue_lock, flags);
 
-	if (mailbox_resp_queue->wait_queue_closed) {
+	/*
+	 * The client is pushing an UCI command and leaving at the same time which will unlikely
+	 * happen.
+	 */
+	if (unlikely(mailbox_resp_queue->wait_queue_closed)) {
+		dev_err(mailbox->dev, "The client is leaving while pushing a command");
 		spin_unlock_irqrestore(async_resp->queue_lock, flags);
 		return -EIO;
-	} else {
-		async_resp->awaiter = awaiter;
-		list_add_tail(&async_resp->wait_list_entry,
-			      async_resp->wait_queue);
 	}
 
-	ret = gcip_fence_array_submit_waiter_and_signaler(async_resp->in_fences,
-							  async_resp->out_fences, IIF_IP_DSP);
-	if (ret) {
-		dev_err(mailbox->dev, "Failed to submit waiter or signaler to fences, ret=%d", ret);
-		list_del_init(&async_resp->wait_list_entry);
-	}
-
+	list_add_tail(&async_resp->wait_list_entry, async_resp->wait_queue);
 	spin_unlock_irqrestore(async_resp->queue_lock, flags);
 
-	return ret;
+	return 0;
 }
 
 /*
  * Sets @async_resp->status to @status, removes @async_resp from the wait list, and pushes it to the
  * destination queue.
+ *
+ * If @force is true, push the response regardless of @async_resp->processed.
  */
-static void gxp_uci_push_async_response(struct gcip_mailbox *mailbox,
-					struct gxp_uci_async_response *async_resp,
-					enum gxp_response_status status)
+static void gxp_uci_push_async_response(struct gxp_uci_async_response *async_resp,
+					enum gxp_response_status status, bool force)
 {
 	unsigned long flags;
 	int errno = 0;
 
-	/*
-	 * If @vd is NULL, the command doesn't have any specific wait_queue or dest_queue to pop or
-	 * push. We can just disregard it.
-	 */
-	if (!async_resp->vd) {
-		gcip_mailbox_release_awaiter(async_resp->awaiter);
-		return;
-	}
-
 	spin_lock_irqsave(async_resp->queue_lock, flags);
 
 	/*
-	 * This function has been called twice - it is possible since
-	 * gxp_uci_handle_async_resp_arrived() may race with gxp_uci_handle_awaiter_timedout().
+	 * This function has been called twice - it is possible since canceling the command and
+	 * processing it by arrived or timedout handler can happen at the same time by the race.
 	 */
-	if (!async_resp->wait_queue) {
+	if (async_resp->processed && !force) {
 		spin_unlock_irqrestore(async_resp->queue_lock, flags);
 		return;
 	}
 
 	async_resp->status = status;
-	async_resp->wait_queue = NULL;
+	async_resp->processed = true;
 	list_del(&async_resp->wait_list_entry);
 
 	gxp_vd_release_credit(async_resp->vd);
@@ -353,6 +327,14 @@ static void gxp_uci_push_async_response(struct gcip_mailbox *mailbox,
 		gcip_fence_array_iif_set_propagate_unblock(async_resp->out_fences);
 	}
 
+	if (status == GXP_RESP_OK && async_resp->resp.code) {
+		/*
+		 * The response has arrived from MCU, but with an error. The request itself or
+		 * MCU/cores had a problem.
+		 */
+		errno = -EIO;
+	}
+
 	gcip_fence_array_signal_async(async_resp->out_fences, errno);
 	gcip_fence_array_waited_async(async_resp->in_fences, IIF_IP_DSP);
 	if (async_resp->eventfd)
@@ -369,7 +351,7 @@ gxp_uci_handle_awaiter_arrived(struct gcip_mailbox *mailbox,
 {
 	struct gxp_uci_async_response *async_resp = awaiter->data;
 
-	gxp_uci_push_async_response(mailbox, async_resp, GXP_RESP_OK);
+	gxp_uci_push_async_response(async_resp, GXP_RESP_OK, false);
 }
 
 static void
@@ -378,7 +360,7 @@ gxp_uci_handle_awaiter_timedout(struct gcip_mailbox *mailbox,
 {
 	struct gxp_uci_async_response *async_resp = awaiter->data;
 
-	gxp_uci_push_async_response(mailbox, async_resp, GXP_RESP_TIMEDOUT);
+	gxp_uci_push_async_response(async_resp, GXP_RESP_TIMEDOUT, false);
 }
 
 static void gxp_uci_release_awaiter_data(void *data)
@@ -395,8 +377,7 @@ static void gxp_uci_release_awaiter_data(void *data)
 		gxp_mcu_mem_free_data(async_resp->uci->mcu, &async_resp->additional_info_buf);
 	if (async_resp->eventfd)
 		gxp_eventfd_put(async_resp->eventfd);
-	if (async_resp->vd)
-		gxp_vd_put(async_resp->vd);
+	gxp_vd_put(async_resp->vd);
 	kfree(async_resp);
 }
 
@@ -627,7 +608,7 @@ int gxp_uci_init(struct gxp_mcu *mcu)
 	struct gxp_mailbox_args mbx_args = {
 		.type = GXP_MBOX_TYPE_GENERAL,
 		.ops = &gxp_uci_gxp_mbx_ops,
-		.queue_wrap_bit = CIRCULAR_QUEUE_WRAP_BIT,
+		.queue_wrap_bit = UCI_CIRCULAR_QUEUE_WRAP_BIT,
 		.cmd_elem_size = sizeof(struct gxp_uci_command),
 		.resp_elem_size = sizeof(struct gxp_uci_response),
 		.data = uci,
@@ -661,19 +642,39 @@ void gxp_uci_exit(struct gxp_uci *uci)
 	uci->mbx = NULL;
 }
 
-int gxp_uci_send_command(struct gxp_uci *uci, struct gxp_virtual_device *vd,
-			 struct gxp_uci_command *cmd,
-			 struct gxp_uci_additional_info *additional_info,
-			 struct gcip_fence_array *in_fences, struct gcip_fence_array *out_fences,
-			 struct list_head *wait_queue, struct list_head *resp_queue,
-			 spinlock_t *queue_lock, wait_queue_head_t *queue_waitq,
-			 struct gxp_eventfd *eventfd, gcip_mailbox_cmd_flags_t flags)
+/**
+ * gxp_uci_send_command() - Sends the command to the MCU firmware.
+ * @uci: The UCI mailbox.
+ * @vd: The virtual device sending the command.
+ * @cmd: The command to send.
+ * @additional_info: The additional information to be serialized and passed to the command.
+ * @in_fences: The fences which the command is waiting on to be unblocked.
+ * @out_fences: The fences which the command will signal.
+ * @wait_queue: The queue where the command will be located before a response arrives.
+ * @resp_queue: The queue where the command will be moved after it is processed.
+ * @queue_lock: The lock protecting @wait_queue and @dest_queue.
+ * @queue_waitq: The wait queue which will be notified when the command is processed.
+ * @eventfd: The eventfd which will be notified when the command is processed.
+ * @flags: The GCIP mailbox flags.
+ *
+ * Returns 0 on success or errno on failure.
+ */
+static int gxp_uci_send_command(struct gxp_uci *uci, struct gxp_virtual_device *vd,
+				struct gxp_uci_command *cmd,
+				struct gxp_uci_additional_info *additional_info,
+				struct gcip_fence_array *in_fences,
+				struct gcip_fence_array *out_fences, struct list_head *wait_queue,
+				struct list_head *resp_queue, spinlock_t *queue_lock,
+				wait_queue_head_t *queue_waitq, struct gxp_eventfd *eventfd,
+				gcip_mailbox_cmd_flags_t flags)
 {
 	struct gxp_uci_async_response *async_resp;
 	struct gcip_mailbox_resp_awaiter *awaiter;
+	uint32_t additional_info_address = 0;
+	uint16_t additional_info_size = 0;
 	int ret;
 
-	if (vd && !gxp_vd_has_and_use_credit(vd))
+	if (!gxp_vd_has_and_use_credit(vd))
 		return -EBUSY;
 	async_resp = kzalloc(sizeof(*async_resp), GFP_KERNEL);
 	if (!async_resp) {
@@ -682,7 +683,7 @@ int gxp_uci_send_command(struct gxp_uci *uci, struct gxp_virtual_device *vd,
 	}
 
 	async_resp->uci = uci;
-	async_resp->vd = vd ? gxp_vd_get(vd) : NULL;
+	async_resp->vd = gxp_vd_get(vd);
 	async_resp->wait_queue = wait_queue;
 	async_resp->dest_queue = resp_queue;
 	async_resp->queue_lock = queue_lock;
@@ -696,9 +697,12 @@ int gxp_uci_send_command(struct gxp_uci *uci, struct gxp_virtual_device *vd,
 		ret = gxp_uci_allocate_additional_info(async_resp, additional_info);
 		if (ret)
 			goto err_free_async_resp;
-		cmd->additional_info_address = async_resp->additional_info_buf.daddr;
-		cmd->additional_info_size = async_resp->additional_info_buf.size;
+		additional_info_address = async_resp->additional_info_buf.daddr;
+		additional_info_size = async_resp->additional_info_buf.size;
 	}
+
+	cmd->additional_info_address = additional_info_address;
+	cmd->additional_info_size = additional_info_size;
 
 	async_resp->in_fences = gcip_fence_array_get(in_fences);
 	async_resp->out_fences = gcip_fence_array_get(out_fences);
@@ -722,13 +726,11 @@ err_put_fences:
 		gxp_mcu_mem_free_data(uci->mcu, &async_resp->additional_info_buf);
 	if (async_resp->eventfd)
 		gxp_eventfd_put(async_resp->eventfd);
-	if (vd)
-		gxp_vd_put(vd);
+	gxp_vd_put(vd);
 err_free_async_resp:
 	kfree(async_resp);
 err_release_credit:
-	if (vd)
-		gxp_vd_release_credit(vd);
+	gxp_vd_release_credit(vd);
 	return ret;
 }
 
@@ -743,6 +745,25 @@ int gxp_uci_create_and_send_cmd(struct gxp_client *client, u64 cmd_seq, u32 flag
 	uint16_t *in_iif_fences, *out_iif_fences;
 	uint32_t in_iif_fences_size, out_iif_fences_size;
 	int ret;
+
+	/*
+	 * It will hold the block wakelock internally (i.e., call gcip_pm_get()) and we decided to
+	 * always decouple the pm-lock and @client->semaphore while implementing the MCU crash
+	 * handler. Therefore, we should submit waiters without holding @client->semaphore.
+	 *
+	 * The function will hold @iif_mgr->ops_sema to prevent modifying registered operators while
+	 * calling the `acquire_block_wakelock` operator and holding the block wakelock. At the same
+	 * time, there is another operator, `fence_unblocked`, which will be called when a fence has
+	 * been unblocked while holding the same semaphore and the operator will send an UCI command
+	 * which will hold @wait_list_lock. (i.e., @iif_mgr->ops_sema -> @wait_list_lock) Therefore,
+	 * this function shouldn't be called while holding @wait_list_lock. Otherwise it will hold
+	 * two locks in the reverse order and will cause a potential deadlock.
+	 */
+	ret = gcip_fence_array_submit_waiter_and_signaler(in_fences, out_fences, IIF_IP_DSP);
+	if (ret) {
+		dev_err(gxp->dev, "Failed to submit waiter or signaler to fences, ret=%d", ret);
+		return ret;
+	}
 
 	down_read(&client->semaphore);
 
@@ -774,7 +795,8 @@ int gxp_uci_create_and_send_cmd(struct gxp_client *client, u64 cmd_seq, u32 flag
 		goto err_put_in_iif_fences;
 	}
 
-	memcpy(cmd.opaque, opaque, sizeof(cmd.opaque));
+	if (opaque)
+		memcpy(cmd.opaque, opaque, sizeof(cmd.opaque));
 
 	cmd.client_id = client->vd->client_id;
 	cmd.seq = cmd_seq;
@@ -806,6 +828,11 @@ err_put_in_iif_fences:
 	kfree(in_iif_fences);
 out:
 	up_read(&client->semaphore);
+	if (ret) {
+		gcip_fence_array_signal(out_fences, ret);
+		gcip_fence_array_waited(in_fences, IIF_IP_DSP);
+	}
+
 	return ret;
 }
 
@@ -1067,11 +1094,64 @@ void gxp_uci_send_iif_unblock_noti(struct gxp_uci *uci, int iif_id)
 	cmd.iif_id = iif_id;
 	cmd.seq = gcip_mailbox_inc_seq_num(uci->mbx->mbx_impl.gcip_mbx, 1);
 
-	ret = gxp_uci_send_command(uci, NULL, &cmd, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-				   GCIP_MAILBOX_CMD_FLAGS_SKIP_ASSIGN_SEQ);
+	ret = gxp_mailbox_send_cmd(uci->mbx, &cmd, NULL, GCIP_MAILBOX_CMD_FLAGS_SKIP_ASSIGN_SEQ);
 	if (ret)
 		dev_warn(uci->gxp->dev, "Failed to notify the IIF unblock: id=%d, ret=%d", iif_id,
 			 ret);
 
 	gcip_pm_put(uci->gxp->power_mgr->pm);
+}
+
+void gxp_uci_consume_responses(struct gxp_uci *uci)
+{
+	gcip_mailbox_consume_responses(uci->mbx->mbx_impl.gcip_mbx);
+}
+
+void gxp_uci_cancel(struct gxp_virtual_device *vd)
+{
+	struct gxp_uci_async_response *cur, *nxt;
+	unsigned long flags;
+
+	/*
+	 * By setting @cur->processed to true, the responses will be prevented to be processed by
+	 * either the arrived or timedout handler even though one of those handlers is fired.
+	 * (See gxp_uci_push_async_response.)
+	 */
+	spin_lock_irqsave(&vd->mailbox_resp_queues[UCI_RESOURCE_ID].lock, flags);
+
+	list_for_each_entry(cur, &vd->mailbox_resp_queues[UCI_RESOURCE_ID].wait_queue,
+			    wait_list_entry) {
+		cur->processed = true;
+	}
+
+	spin_unlock_irqrestore(&vd->mailbox_resp_queues[UCI_RESOURCE_ID].lock, flags);
+
+	TEST_FLUSH_FIRMWARE_WORK();
+
+	/*
+	 * Cancels all pending commands and pushes CANCELED responses for them.
+	 *
+	 * Note that the arrived or timedout handlers can be still fired while canceling commands
+	 * by the race condition, but they will directly return without doing anything because of
+	 * the logic above.
+	 *
+	 * In other words, neither ARRIVED nor TIEMDOUT responses will be pushed to the dest_queue
+	 * of @vd and one refcount of @cur->awaiter held by the driver won't be released until we
+	 * push CANCELED responses and the runtime consumes them. (i.e., there will be no UAF bug.)
+	 *
+	 * Therefore, we don't need to check the return value of the `gcip_mailbox_cancel_awaiter`
+	 * function, it is always safe to push CANCELED responses to the response queue of @vd.
+	 *
+	 * Note that to prevent a potential race condition between ARRIVED and CANCELED, the caller
+	 * is expected to call the `gxp_uci_consume_responses` function first before this function
+	 * to ensure consuming all arrived responses from the MCU as described in the header file.
+	 *
+	 * Another potential race condition that processing TIMEDOUT commands as CANCELED should be
+	 * fine.
+	 */
+	list_for_each_entry_safe(cur, nxt, &vd->mailbox_resp_queues[UCI_RESOURCE_ID].wait_queue,
+				 wait_list_entry) {
+		gcip_mailbox_cancel_awaiter(cur->awaiter);
+		gxp_uci_push_async_response(cur, GXP_RESP_CANCELED, true);
+	}
 }

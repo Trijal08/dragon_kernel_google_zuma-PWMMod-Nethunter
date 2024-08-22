@@ -22,6 +22,7 @@
 #include "gxp.h"
 
 #define UCI_RESOURCE_ID 0
+#define UCI_CIRCULAR_QUEUE_WRAP_BIT BIT(15)
 
 struct gxp_mcu;
 
@@ -245,6 +246,8 @@ struct gxp_uci_async_response {
 	struct gcip_fence_array *in_fences;
 	/* Out-fences. */
 	struct gcip_fence_array *out_fences;
+	/* Will be set to true if the response has been processed. */
+	bool processed;
 };
 
 struct gxp_uci_wait_list {
@@ -289,21 +292,6 @@ int gxp_uci_reinit(struct gxp_uci *uci);
  * @uci: The UCI to be released
  */
 void gxp_uci_exit(struct gxp_uci *uci);
-
-/*
- * gxp_uci_send_command() - API for sending @cmd to MCU firmware, and
- * registering @resp_queue to put the response in after MCU firmware handle the
- * command.
- *
- * Returns 0 on success, a negative errno on failure.
- */
-int gxp_uci_send_command(struct gxp_uci *uci, struct gxp_virtual_device *vd,
-			 struct gxp_uci_command *cmd,
-			 struct gxp_uci_additional_info *additional_info,
-			 struct gcip_fence_array *in_fences, struct gcip_fence_array *out_fences,
-			 struct list_head *wait_queue, struct list_head *resp_queue,
-			 spinlock_t *queue_lock, wait_queue_head_t *queue_waitq,
-			 struct gxp_eventfd *eventfd, gcip_mailbox_cmd_flags_t flags);
 
 /**
  * gxp_uci_create_and_send_cmd() - Create and put the UCI command into the queue.
@@ -392,5 +380,30 @@ void gxp_uci_work_destroy(struct gxp_uci_cmd_work *uci_work);
  * the unblocked callback.
  */
 void gxp_uci_send_iif_unblock_noti(struct gxp_uci *uci, int iif_id);
+
+/**
+ * gxp_uci_consume_responses() - Consumes all responses arrived from the firmware.
+ *
+ * @uci: The UCI mailbox.
+ */
+void gxp_uci_consume_responses(struct gxp_uci *uci);
+
+/*
+ * gxp_uci_cancel() - Cancels all pending UCI commands in the waiting queue of @vd.
+ *
+ * @vd: The virtual device which is going to cancel all of its UCI commands.
+ *
+ * This function should be called not only when the client won't send more commands anymore, but
+ * also the MCU won't return any responses of commands of @vd anymore. For example,
+ *  - @vd released the block wakelock and the `RELEASE_VMBOX` KCI has been sent to the MCU.
+ *  - The MCU crashed and @vd had been invalidated.
+ *
+ * Also, before calling this function, it is recommended to call the `gxp_uci_consume_responses`
+ * function to prevent a race condition canceling pending commands whose responses have already
+ * arrived from the MCU, but not consumed yet. Otherwise, from the MCU perspective, the commands
+ * were processed well, but from the kernel/runtime perspective, those commands can be considered
+ * as canceled.
+ */
+void gxp_uci_cancel(struct gxp_virtual_device *vd);
 
 #endif /* __GXP_UCI_H__ */

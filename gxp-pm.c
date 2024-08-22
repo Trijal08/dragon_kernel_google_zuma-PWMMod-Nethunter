@@ -51,14 +51,7 @@ module_param_named(slow_clk, gxp_slow_clk_on_idle, bool, 0660);
 
 const uint aur_power_state2rate[] = {
 	AUR_OFF_RATE,
-	AUR_UUD_RATE,
-	AUR_SUD_RATE,
-	AUR_UD_RATE,
-	AUR_NOM_RATE,
 	AUR_READY_RATE,
-	AUR_UUD_PLUS_RATE,
-	AUR_SUD_PLUS_RATE,
-	AUR_UD_PLUS_RATE,
 	AUR_PERCENT_FREQUENCY_5_RATE,
 	AUR_PERCENT_FREQUENCY_10_RATE,
 	AUR_PERCENT_FREQUENCY_15_RATE,
@@ -79,7 +72,7 @@ const uint aur_power_state2rate[] = {
 	AUR_PERCENT_FREQUENCY_90_RATE,
 	AUR_PERCENT_FREQUENCY_95_RATE,
 	AUR_MAX_FREQUENCY_RATE,
-	AUR_OVERDRIVE_FREQUENCY_RATE,
+	AUR_OVERDRIVE_RATE,
 };
 const struct gxp_power_states off_states = { AUR_OFF, AUR_MEM_UNDEFINED, false };
 const struct gxp_power_states uud_states = { AUR_UUD, AUR_MEM_UNDEFINED, false };
@@ -89,8 +82,29 @@ const struct gxp_power_states uud_states = { AUR_UUD, AUR_MEM_UNDEFINED, false }
  * frequencies.
  */
 static const enum aur_power_state aur_state_array[] = {
-	AUR_OFF,      AUR_READY, AUR_UUD,     AUR_UUD_PLUS, AUR_SUD,
-	AUR_SUD_PLUS, AUR_UD,	 AUR_UD_PLUS, AUR_NOM
+	AUR_OFF,
+	AUR_READY,
+	AUR_PERCENT_FREQUENCY_5,
+	AUR_PERCENT_FREQUENCY_10,
+	AUR_PERCENT_FREQUENCY_15,
+	AUR_PERCENT_FREQUENCY_20,
+	AUR_PERCENT_FREQUENCY_25,
+	AUR_PERCENT_FREQUENCY_30,
+	AUR_PERCENT_FREQUENCY_35,
+	AUR_PERCENT_FREQUENCY_40,
+	AUR_PERCENT_FREQUENCY_45,
+	AUR_PERCENT_FREQUENCY_50,
+	AUR_PERCENT_FREQUENCY_55,
+	AUR_PERCENT_FREQUENCY_60,
+	AUR_PERCENT_FREQUENCY_65,
+	AUR_PERCENT_FREQUENCY_70,
+	AUR_PERCENT_FREQUENCY_75,
+	AUR_PERCENT_FREQUENCY_80,
+	AUR_PERCENT_FREQUENCY_85,
+	AUR_PERCENT_FREQUENCY_90,
+	AUR_PERCENT_FREQUENCY_95,
+	AUR_MAX_FREQUENCY,
+	AUR_OVERDRIVE,
 };
 static const uint aur_memory_state_array[] = {
 	AUR_MEM_UNDEFINED, AUR_MEM_MIN,	      AUR_MEM_VERY_LOW, AUR_MEM_LOW,
@@ -422,8 +436,8 @@ static int gxp_pm_req_state_locked(struct gxp_dev *gxp,
 {
 	uint i;
 
-	if (state > AUR_STATE_BASED_MAX_ALLOW_STATE) {
-		dev_err(gxp->dev, "Invalid state %d\n", state);
+	if (state > AUR_MAX_ALLOW_STATE) {
+		dev_err(gxp->dev, "Invalid state %d.\n", state);
 		return -EINVAL;
 	}
 	if (gxp->power_mgr->curr_state == AUR_OFF) {
@@ -505,11 +519,10 @@ static void gxp_pm_revoke_power_state_vote(struct gxp_dev *gxp,
 		pwr_state_req_count =
 			gxp->power_mgr->low_clkmux_pwr_state_req_count;
 
-	for (i = 0; i < AUR_STATE_BASED_NUM_POWER_STATE; i++) {
+	for (i = 0; i < AUR_NUM_POWER_STATE; i++) {
 		if (aur_state_array[i] == revoked_state) {
 			if (pwr_state_req_count[i] == 0)
-				dev_err(gxp->dev, "Invalid state %d\n",
-					revoked_state);
+				dev_err(gxp->dev, "Invalid state %d\n", revoked_state);
 			else
 				pwr_state_req_count[i]--;
 			return;
@@ -533,7 +546,7 @@ static void gxp_pm_vote_power_state(struct gxp_dev *gxp,
 		pwr_state_req_count =
 			gxp->power_mgr->low_clkmux_pwr_state_req_count;
 
-	for (i = 0; i < AUR_STATE_BASED_NUM_POWER_STATE; i++) {
+	for (i = 0; i < AUR_NUM_POWER_STATE; i++) {
 		if (aur_state_array[i] == state) {
 			pwr_state_req_count[i]++;
 			return;
@@ -549,7 +562,7 @@ static void gxp_pm_get_max_voted_power_state(struct gxp_dev *gxp,
 	int i;
 
 	*state = AUR_OFF;
-	for (i = AUR_STATE_BASED_NUM_POWER_STATE - 1; i >= 0; i--) {
+	for (i = AUR_NUM_POWER_STATE - 1; i >= 0; i--) {
 		if (gxp->power_mgr->pwr_state_req_count[i] > 0) {
 			*low_clkmux_vote = false;
 			*state = aur_state_array[i];
@@ -562,7 +575,7 @@ static void gxp_pm_get_max_voted_power_state(struct gxp_dev *gxp,
 		 * frequency CLKMUX vote counts.
 		 */
 		*low_clkmux_vote = true;
-		for (i = AUR_STATE_BASED_NUM_POWER_STATE - 1; i >= 0; i--) {
+		for (i = AUR_NUM_POWER_STATE - 1; i >= 0; i--) {
 			if (gxp->power_mgr->low_clkmux_pwr_state_req_count[i] > 0) {
 				*state = aur_state_array[i];
 				break;
@@ -601,7 +614,8 @@ static void gxp_pm_req_pm_qos_async(struct work_struct *work)
 
 	mutex_lock(&req_pm_qos_work->gxp->power_mgr->pm_lock);
 	if (req_pm_qos_work->gxp->power_mgr->curr_state != AUR_OFF)
-		gxp_soc_pm_set_request(req_pm_qos_work->gxp, req_pm_qos_work->pm_value);
+		gxp_soc_pm_set_request(req_pm_qos_work->gxp, MEMORY_INT_QOS_REQ,
+				       req_pm_qos_work->pm_value);
 	req_pm_qos_work->using = false;
 	mutex_unlock(&req_pm_qos_work->gxp->power_mgr->pm_lock);
 }
