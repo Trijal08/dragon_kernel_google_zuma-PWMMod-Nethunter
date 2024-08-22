@@ -74,20 +74,13 @@ struct lwis_fence_pending_signal {
 	struct list_head node;
 };
 
-/*
- * lwis_fence_create: Create a new lwis_fence. Returns `lwis_fence_fds` with new
- * file descriptors and error information.
- */
-struct lwis_fence_fds {
-	/* Return error. Zero on success, negative errno otherwise. */
-	int error;
-	/* New fence file descriptors. */
-	int fd;
-	int signal_fd;
-};
-struct lwis_fence_fds lwis_fence_create(struct lwis_device *lwis_dev);
 /* Create a fence with the legacy LWIS Fence API */
-struct lwis_fence_fds lwis_fence_legacy_create(struct lwis_device *lwis_dev);
+struct lwis_fence *lwis_fence_legacy_create(struct lwis_device *lwis_dev);
+
+/*
+ *  lwis_fence_create: Create a new lwis_fence. In case of error returns an ERR_PTR.
+ */
+struct lwis_fence *lwis_fence_create(struct lwis_device *lwis_dev);
 
 /*
  * Helper function to signal a `dma_fence` with a specific status value.
