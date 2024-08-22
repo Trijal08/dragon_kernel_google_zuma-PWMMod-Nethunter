@@ -8,13 +8,10 @@
  * published by the Free Software Foundation.
  */
 
-#include "linux/container_of.h"
 #include <linux/anon_inodes.h>
 #include <linux/file.h>
 #include <linux/mm.h>
 #include <linux/poll.h>
-#include <linux/dma-fence.h>
-#include <linux/types.h>
 
 #include "lwis_device_top.h"
 #include "lwis_commands.h"
@@ -151,17 +148,51 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 int lwis_fence_signal(struct lwis_fence *lwis_fence, int status)
 {
 	unsigned long flags;
+	struct lwis_fence_trigger_transaction_list *tx_list;
+	/* Temporary vars for hash table traversal */
+	struct hlist_node *n;
+	int i;
+
+	if (!lwis_fence) {
+		return -EFAULT;
+	}
+
+	if (status == LWIS_FENCE_STATUS_NOT_SIGNALED) {
+		/* Do not allow signaling with not-signaled status code. */
+		dev_err(lwis_fence->lwis_top_dev->dev,
+			"Cannot signal lwis_fence with invalid status : %d\n", status);
+		return -EINVAL;
+	}
 
 	spin_lock_irqsave(&lwis_fence->lock, flags);
-	/* TODO: b/342031592 - Replace `lwis_fence->status` with `dma_fence->error`. */
+
+	if (lwis_fence->status != LWIS_FENCE_STATUS_NOT_SIGNALED) {
+		/* Return error if fence is already signaled */
+		dev_err(lwis_fence->lwis_top_dev->dev,
+			"Cannot signal a lwis_fence fd-%d already signaled, status is %d\n",
+			lwis_fence->fd, lwis_fence->status);
+		spin_unlock_irqrestore(&lwis_fence->lock, flags);
+		return -EINVAL;
+	}
 	lwis_fence->status = status;
 	lwis_debug_dev_info(lwis_fence->lwis_top_dev->dev,
 			    "lwis_fence fd %d signaled with status: %d", lwis_fence->fd,
 			    lwis_fence->status);
 	spin_unlock_irqrestore(&lwis_fence->lock, flags);
 
-	dma_fence_set_error(&lwis_fence->dma_fence, status);
-	return dma_fence_signal(&lwis_fence->dma_fence);
+	wake_up_interruptible(&lwis_fence->status_wait_queue);
+
+	hash_for_each_safe (lwis_fence->transaction_list, i, n, tx_list, node) {
+		hash_del(&tx_list->node);
+		lwis_transaction_fence_trigger(tx_list->owner, lwis_fence, &tx_list->list);
+		if (!list_empty(&tx_list->list)) {
+			dev_err(lwis_fence->lwis_top_dev->dev,
+				"Fail to trigger all transactions\n");
+		}
+		kfree(tx_list);
+	}
+
+	return 0;
 }
 
 /*
@@ -190,77 +221,15 @@ static unsigned int lwis_fence_poll(struct file *fp, poll_table *wait)
 	return 0;
 }
 
-static const char *lwis_fence_get_driver_name(struct dma_fence *fence)
-{
-	return "lwis";
-}
-
-static const char *lwis_fence_get_timeline_name(struct dma_fence *fence)
-{
-	return "unbound";
-}
-
-static void lwis_dma_fence_release(struct dma_fence *fence)
-{
-	/* TODO: b/342031592 - Once we move to using the dma_fence refcounter, we can
-	 * populate this. For now, we will continue using lwis_fence reference counter
-	 * and releasing. */
-}
-
-static struct dma_fence_ops lwis_fence_dma_fence_ops = {
-	.use_64bit_seqno = true,
-	.get_driver_name = lwis_fence_get_driver_name,
-	.get_timeline_name = lwis_fence_get_timeline_name,
-	.release = lwis_dma_fence_release,
-};
-
-static atomic64_t dma_fence_sequence = ATOMIC64_INIT(0);
-
-static void lwis_fence_signal_cb(struct dma_fence *dma_fence, struct dma_fence_cb *cb)
-{
-	struct lwis_fence *lwis_fence = container_of(dma_fence, struct lwis_fence, dma_fence);
-	struct lwis_fence_trigger_transaction_list *tx_list;
-	/* Temporary vars for hash table traversal */
-	struct hlist_node *n;
-	int i;
-
-	/* DMA fences take the lock before calling the callbacks. */
-	lockdep_assert_held(&lwis_fence->lock);
-
-	wake_up_interruptible(&lwis_fence->status_wait_queue);
-
-	hash_for_each_safe (lwis_fence->transaction_list, i, n, tx_list, node) {
-		hash_del(&tx_list->node);
-		lwis_transaction_fence_trigger(tx_list->owner, lwis_fence, &tx_list->list);
-		if (!list_empty(&tx_list->list)) {
-			dev_err(lwis_fence->lwis_top_dev->dev,
-				"Fail to trigger all transactions\n");
-		}
-		kfree(tx_list);
-	}
-}
-
 int lwis_fence_create(struct lwis_device *lwis_dev)
 {
 	int fd_or_err;
-	int ret;
 	struct lwis_fence *new_fence;
 
 	/* Allocate a new instance of lwis_fence struct */
 	new_fence = kmalloc(sizeof(struct lwis_fence), GFP_KERNEL);
 	if (!new_fence) {
 		return -ENOMEM;
-	}
-
-	/* Init DMA fence */
-	dma_fence_init(&new_fence->dma_fence, &lwis_fence_dma_fence_ops, &new_fence->lock,
-		       dma_fence_context_alloc(1), atomic64_inc_return(&dma_fence_sequence));
-	ret = dma_fence_add_callback(&new_fence->dma_fence, &new_fence->dma_fence_signal_cb,
-				     lwis_fence_signal_cb);
-	if (ret != 0) {
-		dev_err(lwis_dev->dev, "Failed to add a new dma_fence callback for lwis_fence\n");
-		kfree(new_fence);
-		return ret;
 	}
 
 	/* Open a new fd for the new fence */
