@@ -8,6 +8,8 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/dev_printk.h>
+#include <linux/errno.h>
 #include <linux/container_of.h>
 #include <linux/err.h>
 #include <linux/anon_inodes.h>
@@ -84,19 +86,16 @@ static ssize_t lwis_fence_read_status_legacy(struct file *fp, char __user *user_
 }
 
 /*
- *  dma_to_lwis_fence_status: Gets the DMA fence status and convert it back to
- *  LWIS fence status API.
+ *  lwis_status_to_errno: Gets a LWIS fence status and converts it to an errno value.
  */
-static int lwis_to_dma_fence_status(int lwis_fence_status)
+static int lwis_status_to_errno(int lwis_fence_status)
 {
-	switch (lwis_fence_status) {
-	case LWIS_FENCE_V0_STATUS_NOT_SIGNALED:
-		return LWIS_FENCE_STATUS_NOT_SIGNALED;
-	case 0:
-		return LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED;
-	case 1:
+	if (lwis_fence_status == 1) {
 		return -ECANCELED;
-	default:
+	} else if (lwis_fence_status > 0) {
+		/* If we got any other C++ canonical error value, lets convert it to an error. */
+		return -ERANGE;
+	} else {
 		return lwis_fence_status;
 	}
 }
@@ -109,6 +108,7 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 {
 	int ret = 0;
 	int status = 0;
+	int errno;
 	struct lwis_fence *lwis_fence = fp->private_data;
 
 	if (!lwis_fence) {
@@ -127,11 +127,25 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 		return -EFAULT;
 	}
 
-	/* Set lwis_fence's status if not signaled */
 	if (lwis_fence->legacy_lwis_fence) {
-		status = lwis_to_dma_fence_status(status);
+		if (status == LWIS_FENCE_V0_STATUS_NOT_SIGNALED) {
+			dev_err(lwis_fence->lwis_top_dev->dev,
+				"Cannot signal lwis_fence with 'not signaled' status.");
+			return -EINVAL;
+		}
+		errno = lwis_status_to_errno(status);
+	} else {
+		errno = status;
 	}
-	ret = lwis_dma_fence_signal_with_status(&lwis_fence->dma_fence, status);
+
+	if (errno > 0 || errno < -MAX_ERRNO) {
+		dev_err(lwis_fence->lwis_top_dev->dev,
+			"Wrong errno=%d value. lwis_fence must be signaled with errno values.",
+			errno);
+		return -EINVAL;
+	}
+
+	ret = lwis_dma_fence_signal_with_status(&lwis_fence->dma_fence, errno);
 	if (ret) {
 		return ret;
 	}
@@ -154,13 +168,13 @@ static unsigned int lwis_fence_poll_legacy(struct file *fp, poll_table *wait)
 	return dma_fence_is_signaled(&lwis_fence->dma_fence) ? POLLIN : 0;
 }
 
-int lwis_dma_fence_signal_with_status(struct dma_fence *fence, int status)
+int lwis_dma_fence_signal_with_status(struct dma_fence *fence, int errno)
 {
 	struct lwis_fence *lwis_fence = container_of(fence, struct lwis_fence, dma_fence);
 	int ret;
 
-	if (status != 0)
-		dma_fence_set_error(fence, status);
+	if (errno != 0)
+		dma_fence_set_error(fence, errno);
 	ret = dma_fence_signal(fence);
 
 	if (unlikely(ret == 0 && lwis_fence->legacy_lwis_fence))
