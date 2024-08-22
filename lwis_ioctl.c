@@ -1922,21 +1922,21 @@ err_exit:
 static int cmd_fence_create_v0(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
 			       struct lwis_cmd_fence_create_v0 __user *u_msg)
 {
+	struct lwis_fence_fds fence_fds;
 	struct lwis_cmd_fence_create_v0 fence_create;
-	struct lwis_fence *fence;
 
 	if (copy_from_user((void *)&fence_create, (void __user *)u_msg, sizeof(fence_create))) {
 		dev_err(lwis_dev->dev, "failed to copy from user\n");
 		return -EFAULT;
 	}
 
-	fence = lwis_fence_legacy_create(lwis_dev);
-	if (IS_ERR(fence)) {
-		header->ret_code = PTR_ERR(fence);
+	fence_fds = lwis_fence_legacy_create(lwis_dev);
+	if (fence_fds.error != 0) {
+		header->ret_code = fence_fds.error;
 		return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
 	}
 
-	fence_create.fd = fence->fd;
+	fence_create.fd = fence_fds.fd;
 	fence_create.header.ret_code = 0;
 	return copy_pkt_to_user(lwis_dev, u_msg, (void *)&fence_create, sizeof(fence_create));
 }
@@ -1944,22 +1944,22 @@ static int cmd_fence_create_v0(struct lwis_device *lwis_dev, struct lwis_cmd_pkt
 static int cmd_fence_create(struct lwis_device *lwis_dev, struct lwis_cmd_pkt *header,
 			    struct lwis_cmd_fence_create __user *u_msg)
 {
+	struct lwis_fence_fds fence_fds;
 	struct lwis_cmd_fence_create fence_create;
-	struct lwis_fence *fence;
 
 	if (copy_from_user((void *)&fence_create, (void __user *)u_msg, sizeof(fence_create))) {
 		dev_err(lwis_dev->dev, "failed to copy from user\n");
 		return -EFAULT;
 	}
 
-	fence = lwis_fence_create(lwis_dev);
-	if (IS_ERR(fence)) {
-		header->ret_code = PTR_ERR(fence);
+	fence_fds = lwis_fence_create(lwis_dev);
+	if (fence_fds.error != 0) {
+		header->ret_code = fence_fds.error;
 		return copy_pkt_to_user(lwis_dev, u_msg, (void *)header, sizeof(*header));
 	}
 
-	fence_create.fd = fence->fd;
-	fence_create.signal_fd = fence->signal_fd;
+	fence_create.fd = fence_fds.fd;
+	fence_create.signal_fd = fence_fds.signal_fd;
 	fence_create.header.ret_code = 0;
 	return copy_pkt_to_user(lwis_dev, u_msg, (void *)&fence_create, sizeof(fence_create));
 }
