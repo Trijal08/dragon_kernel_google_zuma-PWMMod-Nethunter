@@ -25,21 +25,6 @@
 bool lwis_fence_debug;
 module_param(lwis_fence_debug, bool, 0644);
 
-static int lwis_fence_release(struct inode *node, struct file *fp);
-static ssize_t lwis_fence_read_status(struct file *fp, char __user *user_buffer, size_t len,
-				      loff_t *offset);
-static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_buffer, size_t len,
-				       loff_t *offset);
-static unsigned int lwis_fence_poll(struct file *fp, poll_table *wait);
-
-static const struct file_operations fence_file_ops = {
-	.owner = THIS_MODULE,
-	.release = lwis_fence_release,
-	.read = lwis_fence_read_status,
-	.write = lwis_fence_write_status,
-	.poll = lwis_fence_poll,
-};
-
 int lwis_fence_get_status(struct lwis_fence *lwis_fence)
 {
 	return dma_fence_get_status(&lwis_fence->dma_fence);
@@ -54,19 +39,11 @@ int lwis_fence_get_status_locked(struct lwis_fence *lwis_fence)
 /*
  *  lwis_fence_release: Closing an instance of a LWIS fence
  */
-static int lwis_fence_release(struct inode *node, struct file *fp)
+static int lwis_fence_file_release(struct inode *node, struct file *fp)
 {
 	struct lwis_fence *lwis_fence = fp->private_data;
+	dma_fence_put(&lwis_fence->dma_fence);
 
-	lwis_debug_dev_info(lwis_fence->lwis_top_dev->dev, "Releasing lwis_fence fd-%d",
-			    lwis_fence->fd);
-
-	if (!dma_fence_is_signaled(&lwis_fence->dma_fence)) {
-		dev_err(lwis_fence->lwis_top_dev->dev,
-			"lwis_fence fd-%d release without being signaled", lwis_fence->fd);
-	}
-
-	kfree(lwis_fence);
 	return 0;
 }
 
@@ -171,14 +148,6 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 	return len;
 }
 
-int lwis_fence_signal(struct lwis_fence *lwis_fence, int status)
-{
-	if (status != 0)
-		dma_fence_set_error(&lwis_fence->dma_fence, status);
-	wake_up_interruptible(&lwis_fence->status_wait_queue);
-	return dma_fence_signal(&lwis_fence->dma_fence);
-}
-
 /*
  *  lwis_fence_poll: Poll status function of LWIS fence
  */
@@ -194,6 +163,26 @@ static unsigned int lwis_fence_poll(struct file *fp, poll_table *wait)
 	return dma_fence_is_signaled(&lwis_fence->dma_fence) ? POLLIN : 0;
 }
 
+static const struct file_operations fence_file_ops = {
+	.owner = THIS_MODULE,
+	.release = lwis_fence_file_release,
+	.read = lwis_fence_read_status,
+	.write = lwis_fence_write_status,
+	.poll = lwis_fence_poll,
+};
+
+int lwis_fence_signal(struct lwis_fence *lwis_fence, int status)
+{
+	int ret;
+
+	if (status != 0)
+		dma_fence_set_error(&lwis_fence->dma_fence, status);
+	ret = dma_fence_signal(&lwis_fence->dma_fence);
+
+	wake_up_interruptible(&lwis_fence->status_wait_queue);
+	return ret;
+}
+
 static const char *lwis_fence_get_driver_name(struct dma_fence *fence)
 {
 	return "lwis";
@@ -206,9 +195,12 @@ static const char *lwis_fence_get_timeline_name(struct dma_fence *fence)
 
 static void lwis_dma_fence_release(struct dma_fence *fence)
 {
-	/* TODO: b/342031592 - Once we move to using the dma_fence refcounter, we can
-	 * populate this. For now, we will continue using lwis_fence reference counter
-	 * and releasing. */
+	struct lwis_fence *lwis_fence = container_of(fence, struct lwis_fence, dma_fence);
+
+	lwis_debug_dev_info(lwis_fence->lwis_top_dev->dev, "Releasing lwis_fence fd-%d",
+			    lwis_fence->fd);
+
+	kfree(lwis_fence);
 }
 
 static struct dma_fence_ops lwis_fence_dma_fence_ops = {
@@ -244,7 +236,6 @@ static int fence_create(struct lwis_device *lwis_dev, bool legacy_fence)
 		return fd_or_err;
 	}
 
-	new_fence->fp = NULL;
 	new_fence->fd = fd_or_err;
 	new_fence->lwis_top_dev = lwis_dev->top_dev;
 	new_fence->legacy_lwis_fence = legacy_fence;
@@ -285,14 +276,17 @@ struct lwis_fence *lwis_fence_get(int fd)
 		fput(fence_fp);
 		return ERR_PTR(-EINVAL);
 	}
-	fence->fp = fence_fp;
+
+	dma_fence_get(&fence->dma_fence);
+
+	fput(fence_fp);
 
 	return fence;
 }
 
 void lwis_fence_put(struct lwis_fence *fence)
 {
-	fput(fence->fp);
+	dma_fence_put(&fence->dma_fence);
 }
 
 static int trigger_event_add_transaction(struct lwis_client *client,
