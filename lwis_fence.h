@@ -91,7 +91,7 @@ struct lwis_fence_fds lwis_fence_legacy_create(struct lwis_device *lwis_dev);
 /*
  * Helper function to signal a `dma_fence` with a specific status value.
  */
-int lwis_dma_fence_signal_with_status(struct dma_fence *fence, int errno);
+int lwis_dma_fence_signal_with_status(struct dma_fence *fence, int status);
 
 /* Gets the DMA fence of a LWIS fence with a fd. */
 struct dma_fence *lwis_dma_fence_get(int fd);
