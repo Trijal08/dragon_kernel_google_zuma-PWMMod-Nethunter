@@ -344,13 +344,7 @@ struct lwis_echo {
 #define LWIS_OVERFLOW_IRQ_EVENT_FLAG (1ULL << 59)
 
 // Status code for unsignaled LWIS fence
-enum lwis_fence_v0_status {
-	LWIS_FENCE_V0_STATUS_NOT_SIGNALED = -1,
-};
-enum lwis_fence_status {
-	LWIS_FENCE_STATUS_NOT_SIGNALED = 0,
-	LWIS_FENCE_STATUS_SUCCESSFULLY_SIGNALED = 1,
-};
+#define LWIS_FENCE_STATUS_NOT_SIGNALED -1
 
 // Interval in ms for the Heartbeat Event if enabled
 #define LWIS_HEARTBEAT_EVENT_INTERVAL_MS 10
