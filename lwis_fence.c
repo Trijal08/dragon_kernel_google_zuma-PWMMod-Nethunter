@@ -26,8 +26,8 @@ bool lwis_fence_debug;
 module_param(lwis_fence_debug, bool, 0644);
 
 static int lwis_fence_release(struct inode *node, struct file *fp);
-static ssize_t lwis_fence_read_status(struct file *fp, char __user *user_buffer, size_t len,
-				      loff_t *offset);
+static ssize_t lwis_fence_get_status(struct file *fp, char __user *user_buffer, size_t len,
+				     loff_t *offset);
 static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_buffer, size_t len,
 				       loff_t *offset);
 static unsigned int lwis_fence_poll(struct file *fp, poll_table *wait);
@@ -35,37 +35,19 @@ static unsigned int lwis_fence_poll(struct file *fp, poll_table *wait);
 static const struct file_operations fence_file_ops = {
 	.owner = THIS_MODULE,
 	.release = lwis_fence_release,
-	.read = lwis_fence_read_status,
+	.read = lwis_fence_get_status,
 	.write = lwis_fence_write_status,
 	.poll = lwis_fence_poll,
 };
 
-/*
- *  lwis_to_dma_fence_status: Gets the DMA fence status and convert it back to
- *  LWIS fence status API.
- */
-static int lwis_to_dma_fence_status(int dma_fence_status)
+static int get_fence_status(struct lwis_fence *lwis_fence)
 {
-	/* Coming from the dma_fence_get_status doc. */
-	switch (dma_fence_status) {
-	case 0:
-		return LWIS_FENCE_STATUS_NOT_SIGNALED;
-	case 1:
-		return 0;
-	default:
-		return dma_fence_status;
-	}
-}
-
-int lwis_fence_get_status(struct lwis_fence *lwis_fence)
-{
-	return lwis_to_dma_fence_status(dma_fence_get_status(&lwis_fence->dma_fence));
-}
-
-int lwis_fence_get_status_locked(struct lwis_fence *lwis_fence)
-{
-	lockdep_assert_held(&lwis_fence->lock);
-	return lwis_to_dma_fence_status(dma_fence_get_status_locked(&lwis_fence->dma_fence));
+	int status;
+	unsigned long flags;
+	spin_lock_irqsave(&lwis_fence->lock, flags);
+	status = lwis_fence->status;
+	spin_unlock_irqrestore(&lwis_fence->lock, flags);
+	return status;
 }
 
 /*
@@ -84,7 +66,7 @@ static int lwis_fence_release(struct inode *node, struct file *fp)
 	lwis_debug_dev_info(lwis_fence->lwis_top_dev->dev, "Releasing lwis_fence fd-%d",
 			    lwis_fence->fd);
 
-	if (!dma_fence_is_signaled(&lwis_fence->dma_fence)) {
+	if (lwis_fence->status == LWIS_FENCE_STATUS_NOT_SIGNALED) {
 		dev_err(lwis_fence->lwis_top_dev->dev,
 			"lwis_fence fd-%d release without being signaled", lwis_fence->fd);
 	}
@@ -113,8 +95,8 @@ static int lwis_fence_release(struct inode *node, struct file *fp)
 /*
  *  lwis_fence_get_status: Read the LWIS fence's status
  */
-static ssize_t lwis_fence_read_status(struct file *fp, char __user *user_buffer, size_t len,
-				      loff_t *offset)
+static ssize_t lwis_fence_get_status(struct file *fp, char __user *user_buffer, size_t len,
+				     loff_t *offset)
 {
 	int status = 0;
 	struct lwis_fence *lwis_fence = fp->private_data;
@@ -129,7 +111,7 @@ static ssize_t lwis_fence_read_status(struct file *fp, char __user *user_buffer,
 		len = max_len;
 	}
 
-	status = lwis_fence_get_status(lwis_fence);
+	status = get_fence_status(lwis_fence);
 	if (lwis_fence->legacy_lwis_fence) {
 		status = status == -ECANCELED ? 1 : status;
 	}
@@ -152,7 +134,7 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 		return -EFAULT;
 	}
 
-	if (len != sizeof(status)) {
+	if (len != sizeof(lwis_fence->status)) {
 		dev_err(lwis_fence->lwis_top_dev->dev,
 			"Signal lwis_fence fd-%d with incorrect buffer length\n", lwis_fence->fd);
 		return -EINVAL;
@@ -175,8 +157,17 @@ static ssize_t lwis_fence_write_status(struct file *fp, const char __user *user_
 
 int lwis_fence_signal(struct lwis_fence *lwis_fence, int status)
 {
-	if (status != 0)
-		dma_fence_set_error(&lwis_fence->dma_fence, status);
+	unsigned long flags;
+
+	spin_lock_irqsave(&lwis_fence->lock, flags);
+	/* TODO: b/342031592 - Replace `lwis_fence->status` with `dma_fence->error`. */
+	lwis_fence->status = status;
+	lwis_debug_dev_info(lwis_fence->lwis_top_dev->dev,
+			    "lwis_fence fd %d signaled with status: %d", lwis_fence->fd,
+			    lwis_fence->status);
+	spin_unlock_irqrestore(&lwis_fence->lock, flags);
+
+	dma_fence_set_error(&lwis_fence->dma_fence, status);
 	return dma_fence_signal(&lwis_fence->dma_fence);
 }
 
@@ -185,6 +176,8 @@ int lwis_fence_signal(struct lwis_fence *lwis_fence, int status)
  */
 static unsigned int lwis_fence_poll(struct file *fp, poll_table *wait)
 {
+	unsigned long flags;
+	int status = 0;
 	struct lwis_fence *lwis_fence = fp->private_data;
 	if (!lwis_fence) {
 		return POLLERR;
@@ -192,7 +185,16 @@ static unsigned int lwis_fence_poll(struct file *fp, poll_table *wait)
 
 	poll_wait(fp, &lwis_fence->status_wait_queue, wait);
 
-	return dma_fence_is_signaled(&lwis_fence->dma_fence) ? POLLIN : 0;
+	spin_lock_irqsave(&lwis_fence->lock, flags);
+	status = lwis_fence->status;
+	spin_unlock_irqrestore(&lwis_fence->lock, flags);
+
+	/* Check if the fence is already signaled */
+	if (status != LWIS_FENCE_STATUS_NOT_SIGNALED) {
+		return POLLIN;
+	}
+
+	return 0;
 }
 
 static const char *lwis_fence_get_driver_name(struct dma_fence *fence)
@@ -280,6 +282,7 @@ static int fence_create(struct lwis_device *lwis_dev, bool legacy_fence)
 	new_fence->fd = fd_or_err;
 	new_fence->lwis_top_dev = lwis_dev->top_dev;
 	new_fence->legacy_lwis_fence = legacy_fence;
+	new_fence->status = LWIS_FENCE_STATUS_NOT_SIGNALED;
 	spin_lock_init(&new_fence->lock);
 	init_waitqueue_head(&new_fence->status_wait_queue);
 	lwis_debug_dev_info(lwis_dev->dev, "lwis_fence created new LWIS fence fd: %d",
@@ -387,7 +390,7 @@ static int trigger_event_add_transaction(struct lwis_client *client,
 				return -EBADF;
 			}
 			precondition_fence = precondition_fence_fp->private_data;
-			precondition_fence_status = lwis_fence_get_status(precondition_fence);
+			precondition_fence_status = get_fence_status(precondition_fence);
 		}
 		/* If the event is not triggered by a precondition fence, or the precondition fence
 		 * is already signaled, queue the transaction immediately. */
@@ -437,7 +440,7 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 	pending_transaction_id->id = transaction->info.id;
 
 	spin_lock_irqsave(&lwis_fence->lock, flags);
-	if (!dma_fence_is_signaled_locked(&lwis_fence->dma_fence)) {
+	if (lwis_fence->status == LWIS_FENCE_STATUS_NOT_SIGNALED) {
 		transaction->trigger_fence_fps[transaction->num_trigger_fences++] = fp;
 		tx_list = transaction_list_find_or_create(lwis_fence, client);
 		list_add(&pending_transaction_id->list_node, &tx_list->list);
@@ -450,21 +453,18 @@ static int trigger_fence_add_transaction(int fence_fd, struct lwis_client *clien
 		lwis_debug_dev_info(
 			client->lwis_dev->dev,
 			"lwis_fence fd-%d not added to transaction id %llu, fence already signaled with error code %d \n",
-			fence_fd, transaction->info.id,
-			dma_fence_get_status_locked(&lwis_fence->dma_fence));
+			fence_fd, transaction->info.id, lwis_fence->status);
 		if (!transaction->info.is_level_triggered) {
 			/* If level triggering is disabled, return an error. */
 			fput(fp);
 			ret = -EINVAL;
 		} else {
-			int status = lwis_fence_get_status_locked(lwis_fence);
-
 			transaction->trigger_fence_fps[transaction->num_trigger_fences++] = fp;
 			/* If the transaction's trigger_condition evaluates to true, queue the
 			 * transaction to be executed immediately.
 			 */
-			if (lwis_fence_triggered_condition_ready(transaction, status)) {
-				if (status != 0) {
+			if (lwis_fence_triggered_condition_ready(transaction, lwis_fence->status)) {
+				if (lwis_fence->status != 0) {
 					transaction->resp->error_code = -ECANCELED;
 				}
 				transaction->queue_immediately = true;
@@ -517,7 +517,7 @@ bool lwis_event_triggered_condition_ready(struct lwis_transaction *transaction,
 			   LWIS_EVENT_COUNTER_ON_NEXT_OCCURRENCE) {
 			lwis_fence = weak_transaction->precondition_fence_fp->private_data;
 			is_node_signaled =
-				(lwis_fence != NULL && lwis_fence_get_status(lwis_fence) == 0);
+				(lwis_fence != NULL && get_fence_status(lwis_fence) == 0);
 			lwis_debug_info(
 				"TransactionId %lld: event 0x%llx (%lld), precondition fence %d %s signaled",
 				info->id, event_id, event_counter,
