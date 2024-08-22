@@ -121,6 +121,10 @@ int lwis_fence_signal(struct lwis_fence *lwis_fence, int status);
 int lwis_add_completion_fences_to_transaction(struct lwis_client *client,
 					      struct lwis_transaction *transaction);
 
+/* lwis_fence_pending_signal_create: Creates and returns a lwis_fence_pending_signal list entry */
+struct lwis_fence_pending_signal *lwis_fence_pending_signal_create(struct lwis_fence *fence,
+								   struct file *fp);
+
 /*
  *  lwis_fences_pending_signal_emit: Signal all lwis_fence_pending_signals in the pending_fences list
  */
