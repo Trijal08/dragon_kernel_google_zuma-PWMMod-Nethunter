@@ -26,4 +26,10 @@ config DEBUG_PANEL_TEST
 	help
 	  Select this option to enable support for panel test modules
 
+config COMMON_PANEL_TEST
+	tristate "Support for common panel test module"
+	depends on DEBUG_PANEL_TEST
+	help
+	  Select this option to enable support for the common panel test
+
 endmenu
