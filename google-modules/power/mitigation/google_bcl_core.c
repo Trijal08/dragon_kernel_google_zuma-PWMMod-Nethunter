@@ -1147,11 +1147,9 @@ static int intf_pmic_init(struct bcl_device *bcl_dev)
 {
 	int ret;
 	u8 val, retval;
-	unsigned int uvlo1_lvl, uvlo2_lvl, batoilo_lvl, batoilo2_lvl, lvl;
+	unsigned int uvlo1_lvl, uvlo2_lvl, batoilo_lvl, lvl;
 
 	bcl_dev->batt_psy = google_get_power_supply(bcl_dev);
-	batoilo_reg_read(bcl_dev->intf_pmic_dev, bcl_dev->ifpmic, BATOILO2, &lvl);
-	batoilo2_lvl = BO_STEP * lvl + bcl_dev->batt_irq_conf1.batoilo_lower_limit;
 	batoilo_reg_read(bcl_dev->intf_pmic_dev, bcl_dev->ifpmic, BATOILO1, &lvl);
 	batoilo_lvl = BO_STEP * lvl + bcl_dev->batt_irq_conf1.batoilo_lower_limit;
 	uvlo_reg_read(bcl_dev->intf_pmic_dev, bcl_dev->ifpmic, UVLO1, &uvlo1_lvl);
@@ -1181,6 +1179,9 @@ static int intf_pmic_init(struct bcl_device *bcl_dev)
 		}
 	}
 	if (bcl_dev->ifpmic == MAX77779) {
+		unsigned int batoilo2_lvl;
+		batoilo_reg_read(bcl_dev->intf_pmic_dev, bcl_dev->ifpmic, BATOILO2, &lvl);
+		batoilo2_lvl = BO_STEP * lvl + bcl_dev->batt_irq_conf1.batoilo_lower_limit;
 		ret = google_bcl_register_zone(bcl_dev, UVLO1, "vdroop1", bcl_dev->vdroop1_pin,
 				       	       VD_BATTERY_VOLTAGE - uvlo1_lvl - THERMAL_HYST_LEVEL,
 				       	       gpio_to_irq(bcl_dev->vdroop1_pin), IF_PMIC, true);
@@ -1366,7 +1367,7 @@ static int google_set_intf_pmic(struct bcl_device *bcl_dev, struct platform_devi
 	struct device_node *np = bcl_dev->device->of_node;
 
 	ret = of_property_read_u32(np, "google,ifpmic", &retval);
-	bcl_dev->ifpmic = (retval == M77759) ? MAX77759 : MAX77779;
+	bcl_dev->ifpmic = (retval == MAX77779) ? MAX77779 : MAX77759;
 
 	bcl_dev->intf_pmic_dev = max77779_get_dev(bcl_dev->device, "google,charger");
 	if (!bcl_dev->intf_pmic_dev) {
