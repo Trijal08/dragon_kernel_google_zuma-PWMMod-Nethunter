@@ -571,6 +571,8 @@ static void exynos_ufs_set_features(struct ufs_hba *hba)
 
 	/* caps */
 	hba->caps = UFSHCD_CAP_CLK_GATING;
+	hba->caps |= UFSHCD_CAP_WB_EN;
+	hba->caps |= UFSHCD_CAP_WB_WITH_CLK_SCALING;
 	if (ufs->ah8_ahit == 0)
 		hba->caps |= UFSHCD_CAP_HIBERN8_WITH_CLK_GATING;
 
