@@ -35,7 +35,7 @@
 #include "dwc3-exynos-ldo.h"
 #include "exynos-otg.h"
 #if IS_ENABLED(CONFIG_USB_XHCI_GOOG_DMA)
-#include "xhci-goog-dma.h"
+#include <../host/xhci-goog-dma.h>
 #endif
 
 static const struct of_device_id exynos_dwc3_match[] = {
