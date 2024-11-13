@@ -1,0 +1,2 @@
+source "shusky/Kconfig.ext.shusky"
+source "zuma/Kconfig.ext.zuma"
