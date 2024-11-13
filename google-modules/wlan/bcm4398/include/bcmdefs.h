@@ -123,6 +123,8 @@
 	__pragma(warning(push))
 #else
 #define GCC_DIAGNOSTIC_PUSH_SUPPRESS_FN_TYPE()
+	_Pragma("GCC diagnostic push")			 \
+	_Pragma("GCC diagnostic ignored \"-Wcast-function-type\"")
 #endif   /* Diagnostic macros not defined */
 
 /* Macros to allow Coverity modeling contructs in source code */
