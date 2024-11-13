@@ -43,7 +43,7 @@ int max77759_clr_irq(struct bcl_device *bcl_dev, int idx)
 	u8 chg_int = 0;
 	int ret;
 
-	if (idx == NOT_USED)
+	if (idx != NOT_USED)
 		irq_val = idx;
 	else {
 		if (max77759_get_irq(bcl_dev, &irq_val) != 0)
