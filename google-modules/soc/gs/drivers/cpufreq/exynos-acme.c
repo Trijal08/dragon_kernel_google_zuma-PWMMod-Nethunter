@@ -21,6 +21,7 @@
 #include <linux/pm_opp.h>
 #include <linux/suspend.h>
 #include <linux/platform_device.h>
+#include <linux/tensor_aio.h>
 
 #include <soc/google/cal-if.h>
 #include <soc/google/ect_parser.h>
@@ -159,7 +160,8 @@ static int scale(struct exynos_cpufreq_domain *domain,
  * TJ and TSKIN are the two actors that could apply thermal pressure independently
  */
 static void apply_thermal_pressure(struct exynos_cpufreq_domain *domain,
-				   unsigned long thermal_pressure, int thermal_actor)
+				   unsigned long thermal_pressure, int thermal_actor,
+				   unsigned int capped_freq)
 {
 	cpumask_t *maskp;
 	unsigned long arch_thermal_pressure;
@@ -169,6 +171,11 @@ static void apply_thermal_pressure(struct exynos_cpufreq_domain *domain,
 		return;
 
 	maskp = &domain->cpus;
+
+	if (IS_ENABLED(CONFIG_ARM_TENSOR_AIO_DEVFREQ)) {
+		tensor_aio_cpufreq_pressure(cpumask_any(maskp), capped_freq);
+		return;
+	}
 
 	spin_lock(&domain->thermal_update_lock);
 	if (domain->thermal_pressure[thermal_actor] != thermal_pressure) {
@@ -238,7 +245,7 @@ static void exynos_cpufreq_set_tj_pressure_cb(struct cpumask *maskp, int cdev_in
 	cpufreq_cpu_put(policy);
 
 	thermal_pressure = (max_capacity <= capacity) ? 0 : max_capacity - capacity;
-	apply_thermal_pressure(domain, thermal_pressure, TJ);
+	apply_thermal_pressure(domain, thermal_pressure, TJ, tj_freq);
 }
 
 /*********************************************************************
@@ -365,7 +372,7 @@ static int exynos_cpufreq_verify(struct cpufreq_policy_data *new_policy)
 		capacity = new_policy->max * max_capacity;
 		capacity /= new_policy->cpuinfo.max_freq;
 		thermal_pressure = max_capacity - capacity;
-		apply_thermal_pressure(domain, thermal_pressure, TSKIN);
+		apply_thermal_pressure(domain, thermal_pressure, TSKIN, new_policy->max);
 	}
 	return ret;
 }
