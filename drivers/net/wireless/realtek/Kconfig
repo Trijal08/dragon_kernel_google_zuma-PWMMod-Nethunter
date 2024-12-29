@@ -17,4 +17,7 @@ source "drivers/net/wireless/realtek/rtlwifi/Kconfig"
 source "drivers/net/wireless/realtek/rtl8xxxu/Kconfig"
 source "drivers/net/wireless/realtek/rtw88/Kconfig"
 
+# AirCrack NG Drivers
+source "drivers/net/wireless/realtek/rtl8812au/Kconfig"
+
 endif # WLAN_VENDOR_REALTEK
