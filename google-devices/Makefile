@@ -7,4 +7,5 @@
 # with `-I$(KERNEL_SRC)/../google-modules/SOME_MODULE`, inclusion works as-is.
 export KERNEL_SRC := $(srctree)/google-modules
 
+obj-y += akita/display/
 obj-y += shusky/display/
