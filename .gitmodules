@@ -6,3 +6,7 @@
 	path = drivers/net/wireless/realtek/rtl8812au
 	url = https://github.com/Trijal08/rtl8812au.git
 	branch = v5.6.4.2
+[submodule "google-devices/akita"]
+	path = google-devices/akita
+	url = https://github.com/GrapheneOS/kernel_devices_google_akita.git
+	branch = 15
