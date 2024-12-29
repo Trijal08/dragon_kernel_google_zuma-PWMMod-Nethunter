@@ -2,3 +2,7 @@
 	path = KernelSU-Next
 	url = https://github.com/rifsxd/KernelSU-Next.git
 	branch = next-susfs-a14-5.15
+[submodule "google-devices/akita"]
+	path = google-devices/akita
+	url = https://github.com/GrapheneOS/kernel_devices_google_akita.git
+	branch = 15
