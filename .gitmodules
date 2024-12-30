@@ -1,3 +1,7 @@
+[submodule "KernelSU-Next"]
+	path = KernelSU-Next
+	url = https://github.com/Trijal08/KernelSU-Next.git
+	branch = next-susfs-v1.5.3-lite
 [submodule "drivers/net/wireless/realtek/rtl8812au"]
 	path = drivers/net/wireless/realtek/rtl8812au
 	url = https://github.com/Trijal08/rtl8812au.git
